@@ -1,12 +1,20 @@
 #include <gtl/phmap.hpp>
 #include <iostream>
 #include <windows.h>
-#include "XLCALL.H"
+#include "xlcall.h"
 #include <chrono>
 #include <iostream>
 #include <thread>
+#include "Types/String.hpp"
+#include "Types/Number.hpp"
+#include "Types/Int.hpp"
+#include "Types/Nil.hpp"
+#include "Register/Arg.hpp"
+#include "Register/Function.hpp"
+#include "Commands/Alert.hpp"
 
-using namespace std::chrono_literals;
+using namespace std::literals;
+using namespace xll::literals;
 
 wchar_t* new_xll12string(const wchar_t* text) {
     size_t len;
@@ -33,12 +41,25 @@ void addOper(LPXLOPER12 ptr, std::unique_ptr<XLOPER12> oper) {
 extern "C" {
 
 // The actual function that returns 42
-__declspec(dllexport) LPXLOPER12 WINAPI MakeNum(double d) {
+__declspec(dllexport) LPXLOPER12 WINAPI MakeNum(xll::Number const* d, xll::String const* d2) {
 
     // auto* result = new XLOPER12;
     // result->xltype = xltypeNum;
     // result->val.num = 42;
-    std::this_thread::sleep_for(2000ms);
+    // auto str = xll::String(d);
+    //std::string str = *d;
+    //std::cout << str << std::endl;
+    // auto str = *d + ", "_xs + *d2;
+    // if (str == "Hello, World"_xs)
+    //     std::cout << str << std::endl;
+
+    // auto opt = d->optional();
+    // opt.transform([](xll::String str) { std::cout << str << std::endl; return str; });
+
+    double v = *d;
+    std::cout << *d << std::endl;
+
+    // std::this_thread::sleep_for(2000ms);
 
     auto result = std::make_unique<XLOPER12>();
     result->xltype = xltypeNum | xlbitDLLFree;
@@ -61,31 +82,22 @@ __declspec(dllexport) void WINAPI xlAutoFree12(LPXLOPER12 px)
 
 }
 
-
 // Add-in initialization function
 __declspec(dllexport) int WINAPI xlAutoOpen(void) {
     XLOPER12 xDLLName;
-    XLOPER12 xFuncName;
-    XLOPER12 xTypeText;
-    XLOPER12 xWSFuncName;
-    XLOPER12 xFuncArgs;
     XLOPER12 xRegisterResult;
+
+    auto arg = xll::Arg<xll::String>("BLAH"_xs, "BLAH_Help"_xs);
+
+    xll::alert("Test!"_xs, xll::Alert::Question);
 
     // Get the path of this XLL
     Excel12(xlGetName, &xDLLName, 0);
 
-     xFuncName.xltype = xltypeStr;
-    xFuncName.val.str = new_xll12string(L"MakeNum");
-
-     xTypeText.xltype = xltypeStr;
-    xTypeText.val.str = new_xll12string(L"UB$");
-
-     xWSFuncName.xltype = xltypeStr;
-    xWSFuncName.val.str = new_xll12string(L"MAKE_NUM");
-
-     xFuncArgs.xltype = xltypeStr;
-    xFuncArgs.val.str = new_xll12string(L"Arg");
-
+    auto xFuncName = xll::String("MakeNum");
+    auto xTypeText = xll::String("UQQ$");
+    auto xWSFuncName = xll::String("MAKE_NUM");
+    auto xFuncArgs = xll::String("召唤 with активный");
 
     LPXLOPER12 args[5] = {&xDLLName, &xFuncName, &xTypeText, &xWSFuncName, &xFuncArgs};
     Excel12v(xlfRegister, &xRegisterResult, 5, args);
