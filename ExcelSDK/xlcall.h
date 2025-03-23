@@ -240,20 +240,20 @@ typedef struct xloper12
 ** Used for xltype field of XLOPER and XLOPER12 structures
 */
 
-#define xltypeNum        0x0001
-#define xltypeStr        0x0002
-#define xltypeBool       0x0004
-#define xltypeRef        0x0008
-#define xltypeErr        0x0010
-#define xltypeFlow       0x0020
-#define xltypeMulti      0x0040
-#define xltypeMissing    0x0080
-#define xltypeNil        0x0100
-#define xltypeSRef       0x0400
-#define xltypeInt        0x0800
+#define xltypeNum        0x0001 // 1
+#define xltypeStr        0x0002 // 2
+#define xltypeBool       0x0004 // 4
+#define xltypeRef        0x0008 // 8
+#define xltypeErr        0x0010 // 16
+#define xltypeFlow       0x0020 // 32
+#define xltypeMulti      0x0040 // 64
+#define xltypeMissing    0x0080 // 128
+#define xltypeNil        0x0100 // 256
+#define xltypeSRef       0x0400 // 1024
+#define xltypeInt        0x0800 // 2048
 
-#define xlbitXLFree      0x1000
-#define xlbitDLLFree     0x4000
+#define xlbitXLFree      0x1000 // 4096
+#define xlbitDLLFree     0x4000 // 16384
 
 #define xltypeBigData	(xltypeStr | xltypeInt)
 

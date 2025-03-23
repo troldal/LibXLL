@@ -4,6 +4,10 @@
 
 #pragma once
 
+#include <memory>
+#include <optional>
+#include <stdexcept>
+#include <string>
 #include <string_view>
 #include <xlcall.h>
 
@@ -21,10 +25,24 @@ namespace xll
         // Default constructor
         String() : String("") {}
 
+        String(const char* str) : String(std::string_view(str)) {}  // NOLINT
+
         String(std::string_view str) : XLOPER12()  // NOLINT
         {
             xltype  = xltypeStr;
             val.str = make_string(str).release();
+        }
+
+        explicit String(const XLOPER12& v) : XLOPER12()
+        {
+            if (v.xltype != xltypeStr) {
+                xltype = xltypeNil;
+                return;
+            }
+
+            std::string str = to_string(v.val.str);
+            xltype          = xltypeStr;
+            val.str         = make_string(str).release();
         }
 
         String(const String& other) : XLOPER12(static_cast<XLOPER12>(other))
@@ -139,6 +157,32 @@ namespace xll
         explicit operator bool() const { return xltype == xltypeStr; }
 
     private:
+
+        static std::string to_string(XCHAR const* str)
+        {
+            int size = WideCharToMultiByte(CP_UTF8,        // Code page
+                               0,              // Flags
+                               &str[1],    // Source wide string
+                               str[0],     // Source length
+                               nullptr,        // Destination buffer (null for size calculation)
+                               0,              // Destination buffer size
+                               nullptr,        // Default char
+                               nullptr         // Used default char flag
+);
+
+            if (size == 0) throw std::runtime_error("String conversion failed");
+
+            // Create the output string with the required size
+            std::string text(size, '\0');
+
+            // Convert the wide string to UTF-8
+            if (WideCharToMultiByte(CP_UTF8, 0, &str[1], str[0], text.data(), size, nullptr, nullptr) == 0) {
+                throw std::runtime_error("String conversion failed");
+            }
+
+            return text;
+        }
+
         static std::unique_ptr<XCHAR[]> make_string(std::string_view str)
         {
             if (str.empty()) {

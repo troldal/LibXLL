@@ -4,6 +4,10 @@
 
 #pragma once
 
+namespace xll
+{
+    class Number;
+}
 namespace xll::traits {
 
     template <typename T>
@@ -31,6 +35,11 @@ struct arg_traits;
 
     template <>
     struct arg_traits<String> {
+        static constexpr std::string_view excel_type = "Q";
+    };
+
+    template <>
+    struct arg_traits<Number> {
         static constexpr std::string_view excel_type = "Q";
     };
 
