@@ -11,7 +11,7 @@ namespace xll
     {
         XLOPER12 name {};
         Excel12(xlGetName, &name, 0);
-        xll::String result = String(name);
+        xll::String result = xll::String(name);
         Excel12(xlFree, nullptr, 1, &name);
         return result;
     }

@@ -42,7 +42,7 @@ xll::AddInManagerInfo dllName([] { return xll::String("Awesome Add-In"); });
 extern "C" {
 
 // The actual function that returns 42
-    __declspec(dllexport) xll::Number const* WINAPI MakeNum(xll::Number const* d, xll::String const* d2)
+    __declspec(dllexport) xll::String const* WINAPI MakeNum(xll::Number const* d, xll::String const* d2)
     {
 
 
@@ -64,6 +64,12 @@ extern "C" {
 
         xll::Nil nil1;
         xll::Nil nil2;
+
+        auto str1 = xll::String("42");
+        auto str2 = xll::String("43");
+        static auto str3 = str1 + str2;
+
+        std::cerr << str3 << std::endl;
 
 
 
@@ -89,7 +95,7 @@ extern "C" {
         //result.xltype |= xlbitDLLFree;
 
         //return xll::MemoryManager::Instance().add(result);
-        return &num3;
+        return &str3;
 
         // auto result     = std::make_unique<XLOPER12>();
         // result->xltype  = xltypeNum | xlbitDLLFree;
