@@ -17,7 +17,8 @@ namespace xll
         AddInManagerInfo(std::function<xll::String()>&& f) { s_func = std::move(f); }
         static xll::String Execute()
         {
-            return s_func();
+            if (s_func) return s_func();
+            return xll::String("NONAME");
         }
     };
 

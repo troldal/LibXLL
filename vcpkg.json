@@ -5,5 +5,8 @@
   "dependencies" : [ {
     "name" : "gtl",
     "version>=" : "1.2.0"
+  }, {
+    "name" : "mdspan",
+    "version>=" : "0.6.0"
   } ]
 }

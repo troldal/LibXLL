@@ -38,7 +38,7 @@ namespace xll::impl
         requires is_excel_type<ValueType>
     class Base : public XLOPER12
     {
-        TDerived        derived() { return static_cast<TDerived&>(*this); }
+        TDerived&        derived() { return static_cast<TDerived&>(*this); }
         TDerived const& derived() const { return static_cast<TDerived const&>(*this); }
 
     protected:
@@ -271,6 +271,19 @@ namespace xll::impl
         {
             return xltype != xltypeNil;
         }
+
+        static TDerived* lift(XLOPER12* op)
+        {
+            return static_cast<TDerived*>(op);
+        }
+
+        static TDerived& lift(XLOPER12& op)
+        {
+            return static_cast<TDerived&>(op);
+        }
+
+        XLOPER12& operator*() { return *this; }
+
     };
 
     template<typename TDerived, size_t ValueType, size_t... OtherTypes>

@@ -5,6 +5,7 @@
 #pragma once
 
 #include "Base.hpp"
+#include "Nil.hpp"
 
 namespace xll
 {
@@ -15,5 +16,28 @@ namespace xll
 
     public:
         using BASE::BASE;
+
+        Missing() = default;
+
+        Missing(const Missing& t)
+        {
+            xltype = xltypeMissing;
+        }
+
+        Missing& operator=(const Missing& t)
+        {
+            xltype = xltypeMissing;
+            return *this;
+        }
+
+        friend bool operator==(const Missing& lhs, const Missing& rhs)
+        {
+            return true;
+        }
+
+        operator xll::Nil() const // NOLINT
+        {
+            return {};
+        }
     };
 }    // namespace xll
