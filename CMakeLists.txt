@@ -5,8 +5,11 @@ set(CMAKE_CXX_STANDARD 23)
 
 find_path(GTL_INCLUDE_DIRS "gtl")
 
-add_library(ExcelSDK STATIC ExcelSDK/XLCALL.CPP)
-target_include_directories(ExcelSDK PUBLIC ExcelSDK)
+#add_library(ExcelSDK STATIC ExcelSDK/XLCALL.CPP)
+#target_include_directories(ExcelSDK PUBLIC ExcelSDK)
+add_library(ExcelSDK INTERFACE)
+target_include_directories(ExcelSDK INTERFACE ExcelSDK)
+
 
 set(CLANG_WARNINGS
 #        -Wall
@@ -34,7 +37,7 @@ find_package(mdspan CONFIG REQUIRED)
 
 add_library(LibXLL SHARED demo.cpp)
 target_link_libraries(LibXLL PUBLIC ExcelSDK)
-target_link_libraries(LibXLL PUBLIC std::mdspan)
+#target_link_libraries(LibXLL PUBLIC std::mdspan)
 #target_include_directories(LibXLL PRIVATE ${GTL_INCLUDE_DIRS})
 #target_compile_options(LibXLL PRIVATE "/J" "/utf-8" "/bigobj")
 

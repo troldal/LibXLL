@@ -21,6 +21,8 @@ extern "C" inline int __declspec(dllexport) WINAPI xlAutoOpen(void)
 
         xll::Register(fun.args.modulePath, fun.args.procedureName, fun.args.argTypes, fun.args.functionName, fun.args.argNames);
 
+        xll::alert("Success!");
+
         // for (auto& [key, arg] : AddIn::Map) {
         //     ensure(Register(arg));
         // }

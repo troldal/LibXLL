@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <xlcall_cpp.h>
+
 namespace xll
 {
 
