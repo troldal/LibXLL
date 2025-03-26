@@ -66,7 +66,11 @@ namespace xll
 
         ~Array()
         {
-            // for (xll::Variant& item : *this) item.~Variant();
+            for (xll::Variant& item : *this) {
+                item.~Variant();
+                item = xll::Variant();
+            }
+
             delete[] val.array.lparray;
             val.array.lparray = nullptr;
             xltype  = xltypeNil;

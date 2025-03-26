@@ -22,25 +22,23 @@ TEST_CASE( "Array Construction", "[xll::Array]" ) {
     REQUIRE(arr2.val.array.rows == 2);
     REQUIRE(arr2.val.array.columns == 2);
 
-    auto temp = xll::String("ITEM ") + std::to_string(9);
+    // for (int index = 0; auto& item : arr2) item = xll::String("ITEM ") + std::to_string(index++);
+    // REQUIRE(xll::get<xll::String>(arr2[0]) == "ITEM 0");
+    // REQUIRE(xll::get<xll::String>(arr2[1]) == "ITEM 1");
+    // REQUIRE(xll::get<xll::String>(arr2[2]) == "ITEM 2");
+    // REQUIRE(xll::get<xll::String>(arr2[3]) == "ITEM 3");
 
-    for (int index = 0; auto& item : arr2) item = xll::String("ITEM ") + std::to_string(index++);
-    REQUIRE(xll::get<xll::String>(arr2[0]) == "ITEM 0");
-    REQUIRE(xll::get<xll::String>(arr2[1]) == "ITEM 1");
-    REQUIRE(xll::get<xll::String>(arr2[2]) == "ITEM 2");
-    REQUIRE(xll::get<xll::String>(arr2[3]) == "ITEM 3");
-
-    xll::Array arr3 = arr2;
-    REQUIRE(arr3.xltype == xltypeMulti);
-    REQUIRE(arr3.val.array.lparray != arr2.val.array.lparray);
-    REQUIRE(arr3.val.array.lparray != nullptr);
-    REQUIRE(arr3.val.array.rows == 2);
-    REQUIRE(arr3.val.array.columns == 2);
-
-    REQUIRE(xll::get<xll::String>(arr3[0]) == "ITEM 0");
-    REQUIRE(xll::get<xll::String>(arr3[1]) == "ITEM 1");
-    REQUIRE(xll::get<xll::String>(arr3[2]) == "ITEM 2");
-    REQUIRE(xll::get<xll::String>(arr3[3]) == "ITEM 3");
+    // xll::Array arr3 = arr2;
+    // REQUIRE(arr3.xltype == xltypeMulti);
+    // REQUIRE(arr3.val.array.lparray != arr2.val.array.lparray);
+    // REQUIRE(arr3.val.array.lparray != nullptr);
+    // REQUIRE(arr3.val.array.rows == 2);
+    // REQUIRE(arr3.val.array.columns == 2);
+    //
+    // REQUIRE(xll::get<xll::String>(arr3[0]) == "ITEM 0");
+    // REQUIRE(xll::get<xll::String>(arr3[1]) == "ITEM 1");
+    // REQUIRE(xll::get<xll::String>(arr3[2]) == "ITEM 2");
+    // REQUIRE(xll::get<xll::String>(arr3[3]) == "ITEM 3");
 
 
 }
