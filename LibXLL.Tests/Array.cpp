@@ -2,9 +2,8 @@
 // Created by kenne on 25/03/2025.
 //
 
-#include <windows.h>
 #include <catch2/catch_test_macros.hpp>
-#include <xlcall.h>
+#include <xlcall.hpp>
 #include "../Types/Array.hpp"
 
 TEST_CASE( "Array Construction", "[xll::Array]" ) {
@@ -22,6 +21,8 @@ TEST_CASE( "Array Construction", "[xll::Array]" ) {
     REQUIRE(arr2.val.array.lparray != nullptr);
     REQUIRE(arr2.val.array.rows == 2);
     REQUIRE(arr2.val.array.columns == 2);
+
+    auto temp = xll::String("ITEM ") + std::to_string(9);
 
     for (int index = 0; auto& item : arr2) item = xll::String("ITEM ") + std::to_string(index++);
     REQUIRE(xll::get<xll::String>(arr2[0]) == "ITEM 0");

@@ -2,9 +2,8 @@
 // Created by kenne on 25/03/2025.
 //
 
-#include <windows.h>
 #include <catch2/catch_test_macros.hpp>
-#include <xlcall.h>
+#include <xlcall.hpp>
 #include "../Types/Variant.hpp"
 
 TEST_CASE( "Variant Construction", "[xll::Variant]" ) {
@@ -50,6 +49,7 @@ TEST_CASE( "Variant Construction", "[xll::Variant]" ) {
     REQUIRE(var8.xltype == xltypeMissing);
     REQUIRE(xll::holds_alternative<xll::Missing>(var8) == true);
     REQUIRE(xll::get<xll::Missing>(var8) == xll::Missing());
+
 }
 
 TEST_CASE( "Variant Assignment", "[xll::Variant]" )

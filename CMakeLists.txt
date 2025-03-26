@@ -3,73 +3,36 @@ project(LibXLL)
 
 set(CMAKE_CXX_STANDARD 23)
 
-find_path(GTL_INCLUDE_DIRS "gtl")
-
-#add_library(ExcelSDK STATIC ExcelSDK/XLCALL.CPP)
-#target_include_directories(ExcelSDK PUBLIC ExcelSDK)
-add_library(ExcelSDK INTERFACE)
-target_include_directories(ExcelSDK INTERFACE ExcelSDK)
-
-
 set(CLANG_WARNINGS
-#        -Wall
-#        -Wextra # reasonable and standard
-#        -Wshadow # warn the user if a variable declaration shadows one from a parent context
-#        -Wnon-virtual-dtor # warn the user if a class with virtual functions has a non-virtual destructor. This helps
-#        # catch hard to track down memory errors
-#        -Wold-style-cast # warn for c-style casts
-#        -Wcast-align # warn for potential performance problem casts
-#        -Wunused # warn on anything being unused
-#        -Woverloaded-virtual # warn if you overload (not override) a virtual function
-#        -Wpedantic # warn if non-standard C++ is used
-#        -Wconversion # warn on type conversions that may lose data
-#        -Wsign-conversion # warn on sign conversions
-#        -Wnull-dereference # warn if a null dereference is detected
-#        -Wdouble-promotion # warn if float is implicit promoted to double
-#        -Wformat=2 # warn on security issues around functions that format output (ie printf)
-#        -Wimplicit-fallthrough # warn on statements that fallthrough without an explicit annotation
+        -Wall
+        -Wextra # reasonable and standard
+        -Wshadow # warn the user if a variable declaration shadows one from a parent context
+        -Wnon-virtual-dtor # warn the user if a class with virtual functions has a non-virtual destructor.
+        -Wold-style-cast # warn for c-style casts
+        -Wcast-align # warn for potential performance problem casts
+        -Wunused # warn on anything being unused
+        -Woverloaded-virtual # warn if you overload (not override) a virtual function
+        -Wpedantic # warn if non-standard C++ is used
+        -Wconversion # warn on type conversions that may lose data
+        -Wsign-conversion # warn on sign conversions
+        -Wnull-dereference # warn if a null dereference is detected
+        -Wdouble-promotion # warn if float is implicit promoted to double
+        -Wformat=2 # warn on security issues around functions that format output (ie printf)
+        -Wimplicit-fallthrough # warn on statements that fallthrough without an explicit annotation
 
+        # Silence unnecessary warnings
         -Wno-switch-bool
 )
 
-find_package(mdspan CONFIG REQUIRED)
+add_subdirectory(LibXLL.Library)
 
+if(PROJECT_IS_TOP_LEVEL)
+    add_subdirectory(LibXLL.Demos)
+    add_subdirectory(LibXLL.Tests)
+endif()
 
-add_library(LibXLL SHARED demo.cpp)
-target_link_libraries(LibXLL PUBLIC ExcelSDK)
-#target_link_libraries(LibXLL PUBLIC std::mdspan)
-#target_include_directories(LibXLL PRIVATE ${GTL_INCLUDE_DIRS})
 #target_compile_options(LibXLL PRIVATE "/J" "/utf-8" "/bigobj")
 
-# If compiler is Clang:
-if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    target_compile_options(LibXLL PRIVATE ${CLANG_WARNINGS})
-endif ()
-
-
-set_target_properties(LibXLL PROPERTIES OUTPUT_NAME "example" SUFFIX ".xll")
-
-add_executable(LibXLLTest demo_exe.cpp)
-target_link_libraries(LibXLLTest PUBLIC LibXLL)
-target_link_libraries(LibXLLTest PRIVATE std::mdspan)
-
-Include(FetchContent)
-FetchContent_Declare(
-        Catch2
-        GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-        GIT_TAG        v3.8.0 # or a later release
-)
-
-FetchContent_MakeAvailable(Catch2)
-
-add_executable(tests LibXLL.Tests/String.cpp LibXLL.Tests/Variant.cpp LibXLL.Tests/Array.cpp)
-target_link_libraries(tests PRIVATE Catch2::Catch2WithMain ExcelSDK)
-
-
-#find_package(Catch2 CONFIG REQUIRED)
-## These tests can use the Catch2-provided main
-#add_executable(tests LibXLL.Tests/String.cpp)
-#target_link_libraries(tests PRIVATE Catch2::Catch2 Catch2::Catch2WithMain)
 
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer -g -O1")
 # C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\Llvm\x64\bin\clang-cl.exe

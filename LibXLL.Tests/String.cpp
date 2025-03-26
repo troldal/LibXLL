@@ -2,9 +2,9 @@
 // Created by kenne on 24/03/2025.
 //
 
-#include <windows.h>
+//#include <windows.h>
 #include <catch2/catch_test_macros.hpp>
-#include <xlcall.h>
+#include <xlcall.hpp>
 #include "../Types/String.hpp"
 
 TEST_CASE( "String Construction", "[xll::String]" ) {

@@ -2,11 +2,5 @@
   "name" : "libxll",
   "version-string" : "1.0.0",
   "builtin-baseline" : "5c41ff21f6feda702a7d5a1afc765f88d25783c5",
-  "dependencies" : [ {
-    "name" : "gtl",
-    "version>=" : "1.2.0"
-  }, {
-    "name" : "mdspan",
-    "version>=" : "0.6.0"
-  } ]
+  "dependencies" : [ ]
 }
