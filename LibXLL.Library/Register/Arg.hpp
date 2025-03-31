@@ -43,7 +43,7 @@ namespace xll
         String m_type;
         String m_name;
         String m_help;
-        String m_init;
+        // String m_init;
 
     public:
         Arg(String arg_name, String arg_help)
@@ -55,12 +55,12 @@ namespace xll
         [[nodiscard]] String type() const  { return m_type; }
         [[nodiscard]] String name() const { return m_name; }
         [[nodiscard]] String help() const { return m_help; }
-        [[nodiscard]] String init() const { return m_init; }
+        // [[nodiscard]] String init() const { return m_init; }
 
-        [[nodiscard]] std::tuple<String, String, String, String> as_tuple() const
-        {
-            return std::make_tuple(m_type, m_name, m_help, m_init);
-        }
+        // [[nodiscard]] std::tuple<String, String, String, String> as_tuple() const
+        // {
+        //     return std::make_tuple(m_type, m_name, m_help, m_init);
+        // }
 
     };
 }    // namespace xll

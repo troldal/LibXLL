@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "Macros/Defines.hpp"
 #include "Types/Array.hpp"
 #include "Types/Bool.hpp"
 #include "Types/Error.hpp"

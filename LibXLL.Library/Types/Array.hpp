@@ -6,8 +6,13 @@
 
 #include "Variant.hpp"
 #include <span>
-// #include <mdspan>
-#include <experimental/mdspan>
+#ifdef _MSC_VER
+    #include <mdspan>
+    namespace mds = std;
+#else
+    #include <experimental/mdspan>
+    namespace mds = std::experimental;
+#endif
 
 namespace xll
 {
@@ -63,14 +68,9 @@ namespace xll
             }
         }
 
-
         ~Array()
         {
-            for (xll::Variant& item : *this) {
-                item.~Variant();
-                item = xll::Variant();
-            }
-
+            for (auto& item : *this) item.~Variant();
             delete[] val.array.lparray;
             val.array.lparray = nullptr;
             xltype  = xltypeNil;
@@ -174,8 +174,8 @@ namespace xll
 
         xll::Variant operator[](int row, int col) const {
             if ((row + 1) > val.array.rows  || (col + 1) > val.array.columns) throw std::out_of_range("Array index out of range");
-            using ext_t = std::experimental::extents<uint32_t, std::dynamic_extent, std::dynamic_extent>;
-            auto m = std::experimental::mdspan<xll::Variant, ext_t>(
+            using ext_t = mds::extents<uint32_t, std::dynamic_extent, std::dynamic_extent>;
+            auto m = mds::mdspan<xll::Variant, ext_t>(
                 static_cast<xll::Variant*>(val.array.lparray),
                 val.array.rows,
                 val.array.columns);

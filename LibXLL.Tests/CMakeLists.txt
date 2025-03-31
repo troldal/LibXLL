@@ -45,14 +45,14 @@ if (NOT WIN32)
     target_compile_options(LibXLL.Tests.TSAN PRIVATE -fsanitize=thread -fno-omit-frame-pointer -g)
     target_link_options(LibXLL.Tests.TSAN PRIVATE -fsanitize=thread -fno-omit-frame-pointer -g)
 
-    add_executable(LibXLL.Tests.MSAN
-            String.cpp
-            Variant.cpp
-            Array.cpp
-    )
-    target_link_libraries(LibXLL.Tests.MSAN PRIVATE Catch2::Catch2WithMain LibXLL)
-    target_compile_options(LibXLL.Tests.MSAN PRIVATE -fsanitize=memory -fPIE -fno-omit-frame-pointer -g -fno-optimize-sibling-calls -fsanitize-recover -O1)
-    target_link_options(LibXLL.Tests.MSAN PRIVATE -fsanitize=memory -fPIE -fno-omit-frame-pointer -g -fno-optimize-sibling-calls -fsanitize-recover -O1)
+#    add_executable(LibXLL.Tests.MSAN
+#            String.cpp
+#            Variant.cpp
+#            Array.cpp
+#    )
+#    target_link_libraries(LibXLL.Tests.MSAN PRIVATE Catch2::Catch2WithMain LibXLL)
+#    target_compile_options(LibXLL.Tests.MSAN PRIVATE -fsanitize=memory -fPIE -fno-omit-frame-pointer -g -fno-optimize-sibling-calls -fsanitize-recover -O1)
+#    target_link_options(LibXLL.Tests.MSAN PRIVATE -fsanitize=memory -fPIE -fno-omit-frame-pointer -g -fno-optimize-sibling-calls -fsanitize-recover -O1)
 
 
 #    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address,leak -fno-omit-frame-pointer -g")

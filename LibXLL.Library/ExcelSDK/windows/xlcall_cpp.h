@@ -16,6 +16,12 @@
 #include <windows.h>
 #endif
 
+#ifdef _MSC_VER
+#define FORCE_SYMBOL
+#else
+#define FORCE_SYMBOL __attribute__((used))
+#endif
+
 #include "xlcall.h"
 
 /*
@@ -61,7 +67,7 @@ __forceinline void FetchExcel12EntryPt(void)
 extern "C"
 #endif	
 __declspec(dllexport)
-inline void pascal SetExcel12EntryPt(EXCEL12PROC pexcel12New)
+inline FORCE_SYMBOL void pascal SetExcel12EntryPt(EXCEL12PROC pexcel12New)
 {
 	FetchExcel12EntryPt();
 	if (pexcel12 == NULL)
@@ -69,8 +75,11 @@ inline void pascal SetExcel12EntryPt(EXCEL12PROC pexcel12New)
 		pexcel12 = pexcel12New;
 	}
 }
+#ifdef _MSC_VER
+#pragma comment(linker, "/INCLUDE:SetExcel12EntryPt")
+#endif
 
-inline int _cdecl Excel12(int xlfn, LPXLOPER12 operRes, int count, ...)
+inline FORCE_SYMBOL int _cdecl Excel12(int xlfn, LPXLOPER12 operRes, int count, ...)
 {
 
 	LPXLOPER12 rgxloper12[cxloper12Max];
@@ -100,8 +109,11 @@ inline int _cdecl Excel12(int xlfn, LPXLOPER12 operRes, int count, ...)
 	return(mdRet);
 	
 }
+#ifdef _MSC_VER
+#pragma comment(linker, "/INCLUDE:Excel12")
+#endif
 
-inline int pascal Excel12v(int xlfn, LPXLOPER12 operRes, int count, LPXLOPER12 opers[])
+inline FORCE_SYMBOL int pascal Excel12v(int xlfn, LPXLOPER12 operRes, int count, LPXLOPER12 opers[])
 {
 
 	int mdRet;
@@ -118,3 +130,6 @@ inline int pascal Excel12v(int xlfn, LPXLOPER12 operRes, int count, LPXLOPER12 o
 	return(mdRet);
 
 }
+#ifdef _MSC_VER
+#pragma comment(linker, "/INCLUDE:Excel12v")
+#endif

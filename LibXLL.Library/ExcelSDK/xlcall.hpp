@@ -10,4 +10,5 @@
     #include "windows/xlcall_cpp.h"
 #else
     #include "unix/xlcall.h"
+    #include "unix/xlcall_cpp.h"
 #endif

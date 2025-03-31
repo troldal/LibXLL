@@ -43,4 +43,14 @@ struct arg_traits;
         static constexpr std::string_view excel_type = "Q";
     };
 
+    template <>
+    struct arg_traits<Array> {
+        static constexpr std::string_view excel_type = "Q";
+    };
+
+    template <>
+    struct arg_traits<Variant> {
+        static constexpr std::string_view excel_type = "Q";
+    };
+
 }

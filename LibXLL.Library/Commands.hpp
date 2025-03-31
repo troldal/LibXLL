@@ -4,4 +4,5 @@
 
 #pragma once
 
+#include "Macros/Defines.hpp"
 #include "xlCommands/Alert.hpp"

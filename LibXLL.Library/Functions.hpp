@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "Macros/Defines.hpp"
 #include "xlFunctions/Coerce.hpp"
 #include "xlFunctions/GetName.hpp"
 #include "xlFunctions/Register.hpp"

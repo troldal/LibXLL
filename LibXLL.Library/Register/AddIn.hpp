@@ -4,49 +4,20 @@
 
 #pragma once
 
-namespace xll {
+#include "Function.hpp"
+#include "Registry.hpp"
 
-    /// <summary>
-    /// Store argument add-in data for xlfRegister
-    /// </summary>
-//    struct AddIn {
-//        // add-ins indexed by Excel name
-//        static inline std::map<OPER, Args> Map;
-//
-//        AddIn(const Args& args) noexcept
-//        {
-//            const OPER& key = args.FunctionText();
-//            auto i = Map.insert_or_assign(key, args);
-//            if (!i.second) {
-//                std::basic_string<TCHAR> msg{ TEXT("AddIn previously defined: ") };
-//                // msg.append(key.val.str + 1, key.val.str[0]);
-//                MessageBox(GetForegroundWindow(), msg.c_str(), 0, MB_OK);
-//            }
-//        }
-//
-//        static size_t Erase(const OPER& key)
-//        {
-//            return Map.erase(key);
-//        }
-//
-//        // Get arguments using Excel function text name.
-//        static Args* Arguments(const OPER& name)
-//        {
-//            auto i = Map.find(name);
-//
-//            return i != Map.end() ? &i->second : nullptr;
-//        }
-//        // Get arguments using register id.
-//        static Args* Arguments(double regid)
-//        {
-//            for (auto& args : Map) {
-//                if (args.second.RegisterId().val.num == regid) {
-//                    return &args.second;
-//                }
-//            }
-//
-//            return nullptr;
-//        }
-//    };
+namespace xll
+{
 
-} // xll namespace
+    class AddIn
+    {
+    public:
+        template<typename TFunc>
+        explicit AddIn(TFunc& f)
+        {
+            xll::Registry::instance().add(f);
+        }
+    };
+
+}    // namespace xll

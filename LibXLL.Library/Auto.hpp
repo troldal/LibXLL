@@ -4,11 +4,11 @@
 
 #pragma once
 
+#include "Utils/Pipe.hpp"
 
+#include "Macros/Defines.hpp"
 #include "Auto/AddInManagerInfo.hpp"
 #include "Auto/Auto.hpp"
-#include "Auto/AutoAdd.hpp"
 #include "Auto/AutoClose.hpp"
 #include "Auto/AutoFree.hpp"
 #include "Auto/AutoOpen.hpp"
-#include "Auto/AutoRemove.hpp"

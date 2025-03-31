@@ -282,6 +282,11 @@ namespace xll::impl
             return static_cast<TDerived&>(op);
         }
 
+        static const TDerived& lift(const XLOPER12& op)
+        {
+            return static_cast<const TDerived&>(op);
+        }
+
         XLOPER12& operator*() { return *this; }
 
     };

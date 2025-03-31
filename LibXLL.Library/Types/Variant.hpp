@@ -32,6 +32,10 @@ namespace xll
 
     template<typename T>
         requires impl::is_valid_type<T>
+    const T& get(const Variant& v);
+
+    template<typename T>
+        requires impl::is_valid_type<T>
     bool holds_alternative(const Variant& v);
 
     template<class... Ts>
@@ -40,7 +44,7 @@ namespace xll
         using Ts::operator()...;
     };
 
-    class Variant : public XLOPER12
+        class Variant : public XLOPER12
     {
     public:
         Variant() : XLOPER12() { xltype = xltypeNum; }
@@ -51,6 +55,46 @@ namespace xll
         {
             T::lift(*static_cast<XLOPER12*>(this)) = T();
             xll::get<T>(*this) = t;
+        }
+
+        Variant(const Variant& v) : Variant()
+        {
+            xltype = v.xltype;
+
+            if (xll::holds_alternative<xll::Bool>(v))
+                xll::get<xll::Bool>(*this) = xll::get<xll::Bool>(v);
+            else if (xll::holds_alternative<xll::Error>(v))
+                xll::get<xll::Error>(*this) = xll::get<xll::Error>(v);
+            else if (xll::holds_alternative<xll::Int>(v))
+                xll::get<xll::Int>(*this) = xll::get<xll::Int>(v);
+            else if (xll::holds_alternative<xll::Number>(v))
+                xll::get<xll::Number>(*this) = xll::get<xll::Number>(v);
+            else if (xll::holds_alternative<xll::String>(v))
+                xll::get<xll::String>(*this) = xll::get<xll::String>(v);
+            else if (xll::holds_alternative<xll::Nil>(v))
+                xll::get<xll::Nil>(*this) = xll::get<xll::Nil>(v);
+            else if (xll::holds_alternative<xll::Missing>(v))
+                xll::get<xll::Missing>(*this) = xll::get<xll::Missing>(v);
+        }
+
+        Variant(Variant&& v) noexcept : Variant()
+        {
+            xltype = v.xltype;
+
+            if (xll::holds_alternative<xll::Bool>(v))
+                xll::get<xll::Bool>(*this) = xll::get<xll::Bool>(v);
+            else if (xll::holds_alternative<xll::Error>(v))
+                xll::get<xll::Error>(*this) = xll::get<xll::Error>(v);
+            else if (xll::holds_alternative<xll::Int>(v))
+                xll::get<xll::Int>(*this) = xll::get<xll::Int>(v);
+            else if (xll::holds_alternative<xll::Number>(v))
+                xll::get<xll::Number>(*this) = xll::get<xll::Number>(v);
+            else if (xll::holds_alternative<xll::String>(v))
+                xll::get<xll::String>(*this) = xll::get<xll::String>(v);
+            else if (xll::holds_alternative<xll::Nil>(v))
+                xll::get<xll::Nil>(*this) = xll::get<xll::Nil>(v);
+            else if (xll::holds_alternative<xll::Missing>(v))
+                xll::get<xll::Missing>(*this) = xll::get<xll::Missing>(v);
         }
 
         ~Variant()
@@ -69,13 +113,57 @@ namespace xll
                 xll::get<xll::Nil>(*this).~Nil();
             else if (xll::holds_alternative<xll::Missing>(*this))
                 xll::get<xll::Missing>(*this).~Missing();
-            else
-                throw std::bad_cast();
+
+            static_cast<XLOPER12&>(*this) = XLOPER12();
+        }
+
+        Variant& operator=(const Variant& v)
+        {
+            xltype = v.xltype;
+
+            if (xll::holds_alternative<xll::Bool>(v))
+                xll::get<xll::Bool>(*this) = xll::get<xll::Bool>(v);
+            else if (xll::holds_alternative<xll::Error>(v))
+                xll::get<xll::Error>(*this) = xll::get<xll::Error>(v);
+            else if (xll::holds_alternative<xll::Int>(v))
+                xll::get<xll::Int>(*this) = xll::get<xll::Int>(v);
+            else if (xll::holds_alternative<xll::Number>(v))
+                xll::get<xll::Number>(*this) = xll::get<xll::Number>(v);
+            else if (xll::holds_alternative<xll::String>(v))
+                xll::get<xll::String>(*this) = xll::get<xll::String>(v);
+            else if (xll::holds_alternative<xll::Nil>(v))
+                xll::get<xll::Nil>(*this) = xll::get<xll::Nil>(v);
+            else if (xll::holds_alternative<xll::Missing>(v))
+                xll::get<xll::Missing>(*this) = xll::get<xll::Missing>(v);
+
+            return *this;
+        }
+
+        Variant& operator=(Variant&& v) noexcept
+        {
+            xltype = v.xltype;
+
+            if (xll::holds_alternative<xll::Bool>(v))
+                xll::get<xll::Bool>(*this) = xll::get<xll::Bool>(v);
+            else if (xll::holds_alternative<xll::Error>(v))
+                xll::get<xll::Error>(*this) = xll::get<xll::Error>(v);
+            else if (xll::holds_alternative<xll::Int>(v))
+                xll::get<xll::Int>(*this) = xll::get<xll::Int>(v);
+            else if (xll::holds_alternative<xll::Number>(v))
+                xll::get<xll::Number>(*this) = xll::get<xll::Number>(v);
+            else if (xll::holds_alternative<xll::String>(v))
+                xll::get<xll::String>(*this) = xll::get<xll::String>(v);
+            else if (xll::holds_alternative<xll::Nil>(v))
+                xll::get<xll::Nil>(*this) = xll::get<xll::Nil>(v);
+            else if (xll::holds_alternative<xll::Missing>(v))
+                xll::get<xll::Missing>(*this) = xll::get<xll::Missing>(v);
+
+            return *this;
         }
 
         template<typename T>
             requires impl::is_valid_type<T>
-        Variant& operator=(T t)
+        Variant& operator=(const T& t)
         {
             this->~Variant();
             static_cast<XLOPER12&>(*this) = XLOPER12();
@@ -83,6 +171,17 @@ namespace xll
             xll::get<T>(*this) = t;
             return *this;
         }
+
+        // template<typename T>
+        //     requires impl::is_valid_type<T>
+        // Variant& operator=(T&& t) noexcept
+        // {
+        //     this->~Variant();
+        //     static_cast<XLOPER12&>(*this) = XLOPER12();
+        //     T::lift(*static_cast<XLOPER12*>(this)) = T();
+        //     xll::get<T>(*this) = t;
+        //     return *this;
+        // }
 
         [[nodiscard]]
         auto index() const
@@ -115,6 +214,15 @@ namespace xll
         if (holds_alternative<T>(v) == false) throw std::bad_variant_access();
         return T::lift(*static_cast<XLOPER12*>(&v));
     }
+
+    template<typename T>
+        requires impl::is_valid_type<T>
+    const T& get(const Variant& v)
+    {
+        if (holds_alternative<T>(v) == false) throw std::bad_variant_access();
+        return T::lift(*static_cast<const XLOPER12*>(&v));
+    }
+
 
     template<typename Visitor>
     auto visit(Visitor&& vis, Variant& va)
