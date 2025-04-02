@@ -34,16 +34,9 @@ typedef int (*EXCEL12PROC) (int xlfn, int coper, LPXLOPER12 *rgpxloper12, LPXLOP
 // inline HMODULE hmodule;
 // inline EXCEL12PROC pexcel12;
 
-__attribute__((used)) void FetchExcel12EntryPt(void)
+inline __attribute__((used)) void FetchExcel12EntryPt(void)
 {
-	// if (pexcel12 == NULL)
-	// {
-	// 	hmodule = GetModuleHandle(NULL);
-	// 	if (hmodule != NULL)
-	// 	{
-	// 		pexcel12 = (EXCEL12PROC) GetProcAddress(hmodule, EXCEL12ENTRYPT);
-	// 	}
-	// }
+	// Stub for compiling on Linux.
 }
 
 /*
@@ -63,62 +56,17 @@ extern "C"
 __attribute__((dllexport))
 inline __attribute__((used)) void SetExcel12EntryPt(EXCEL12PROC pexcel12New)
 {
-	// FetchExcel12EntryPt();
-	// if (pexcel12 == NULL)
-	// {
-	// 	pexcel12 = pexcel12New;
-	// }
+	// Stub for compiling on Linux.
 }
 
 inline __attribute__((used)) int Excel12(int xlfn, LPXLOPER12 operRes, int count, ...)
 {
-
-	// LPXLOPER12 rgxloper12[cxloper12Max];
-	// va_list ap;
-	// int ioper;
-	// int mdRet;
-	//
-	// FetchExcel12EntryPt();
-	// if (pexcel12 == NULL)
-	// {
-	// 	mdRet = xlretFailed;
-	// }
-	// else
-	// {
-	// 	mdRet = xlretInvCount;
-	// 	if ((count >= 0)  && (count <= cxloper12Max))
-	// 	{
-	// 		va_start(ap, count);
-	// 		for (ioper = 0; ioper < count ; ioper++)
-	// 		{
-	// 			rgxloper12[ioper] = va_arg(ap, LPXLOPER12);
-	// 		}
-	// 		va_end(ap);
-	// 		mdRet = (pexcel12)(xlfn, count, &rgxloper12[0], operRes);
-	// 	}
-	// }
-	// return(mdRet);
-
+	// Stub for compiling on Linux.
 	return 0;
-	
 }
 
 inline __attribute__((used)) int Excel12v(int xlfn, LPXLOPER12 operRes, int count, LPXLOPER12 opers[])
 {
-
-//	int mdRet;
-//
-//	FetchExcel12EntryPt();
-//	if (pexcel12 == NULL)
-//	{
-//		mdRet = xlretFailed;
-//	}
-//	else
-//	{
-//		mdRet = (pexcel12)(xlfn, count, &opers[0], operRes);
-//	}
-//	return(mdRet);
-
+	// Stub for compiling on Linux.
 	return 0;
-
 }

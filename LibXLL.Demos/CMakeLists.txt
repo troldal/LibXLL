@@ -13,7 +13,7 @@ endif ()
 
 
 add_executable(exeDemo exeDemo.cpp)
-target_link_libraries(exeDemo PUBLIC xllDemo)
+target_link_libraries(exeDemo PUBLIC LibXLL)
 
 
 include(../cmake/CompilerWarnings.cmake)
@@ -57,6 +57,16 @@ if (NOT WIN32)
     target_link_libraries(exeDemo.TSAN PUBLIC xllDemo.TSAN)
     target_compile_options(exeDemo.TSAN PRIVATE -fsanitize=thread -fPIE -pie -g)
     target_link_options(exeDemo.TSAN PRIVATE -fsanitize=thread -fPIE -pie -g)
+
+    add_library(xllDemo.MSAN SHARED xllDemo.cpp)
+    target_link_libraries(xllDemo.MSAN PUBLIC LibXLL)
+    target_compile_options(xllDemo.MSAN PRIVATE -fsanitize=memory -fPIC -fno-omit-frame-pointer -g -fno-optimize-sibling-calls -fsanitize-recover -O1)
+    target_link_options(xllDemo.MSAN PRIVATE -fsanitize=memory -fPIC -fno-omit-frame-pointer -g -fno-optimize-sibling-calls -fsanitize-recover -O1)
+
+    add_executable(exeDemo.MSAN exeDemo.cpp)
+    target_link_libraries(exeDemo.MSAN PUBLIC xllDemo.MSAN)
+    target_compile_options(exeDemo.MSAN PRIVATE -fsanitize=memory -fPIE -fno-omit-frame-pointer -g -fno-optimize-sibling-calls -fsanitize-recover -O1)
+    target_link_options(exeDemo.MSAN PRIVATE -fsanitize=memory -fPIE -fno-omit-frame-pointer -g -fno-optimize-sibling-calls -fsanitize-recover -O1)
 
 #    add_executable(LibXLL.Tests.TSAN
 #            String.cpp

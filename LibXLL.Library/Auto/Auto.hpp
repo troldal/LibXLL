@@ -41,11 +41,12 @@
 
 #pragma once
 
+#include "../Utils/Concepts.hpp"
 #include <Register/Registry.hpp>
 #include <functional>
 #include <tl/expected.hpp>
-#include <memory>
-#include <type_traits>
+
+#include <Register/Function.hpp>
 
 namespace xll
 {
@@ -53,11 +54,13 @@ namespace xll
     struct Close{};
     struct Add{};
     struct Remove{};
+    struct Free{};
 
     template<typename>
     class Auto
     {
-        using TFunction = std::function<tl::expected<std::monostate, std::string>()>;
+        // using TFunction = std::function<tl::expected<std::monostate, std::string>()>;
+        using TFunction = std::function<void()>;
         inline static std::vector<TFunction> functions {};
 
         inline static std::vector<TFunction>                        s_before {};
@@ -126,28 +129,46 @@ namespace xll
             return *this;
         }
 
-        static tl::expected<std::monostate, std::string> Execute()
-        {
-            for (const auto& func : functions)
-                if (auto result = func(); !result) return result;
+        // static tl::expected<std::monostate, std::string> Execute()
+        // {
+        //     for (const auto& func : functions)
+        //         if (auto result = func(); !result) return result;
+        //
+        //     return std::monostate {};
+        // }
+        //
+        // template<typename TPhase>
+        // static tl::expected<std::monostate, std::string> Execute()
+        // {
+        //     static_assert(std::same_as<TPhase, BeforeTag> || std::same_as<TPhase, AfterTag>);
+        //
+        //     if constexpr (std::same_as<TPhase, BeforeTag>)
+        //         for (const auto& func : s_before)
+        //             if (auto result = func(); !result) return result;
+        //
+        //     if constexpr (std::same_as<TPhase, AfterTag>)
+        //         for (const auto& func : s_after)
+        //             if (auto result = func(); !result) return result;
+        //
+        //     return std::monostate {};
+        // }
 
-            return std::monostate {};
+        static void Execute()
+        {
+            for (const auto& func : functions) func();
+
         }
 
         template<typename TPhase>
-        static tl::expected<std::monostate, std::string> Execute()
+        static void Execute()
         {
             static_assert(std::same_as<TPhase, BeforeTag> || std::same_as<TPhase, AfterTag>);
 
             if constexpr (std::same_as<TPhase, BeforeTag>)
-                for (const auto& func : s_before)
-                    if (auto result = func(); !result) return result;
+                for (const auto& func : s_before) func();
 
             if constexpr (std::same_as<TPhase, AfterTag>)
-                for (const auto& func : s_after)
-                    if (auto result = func(); !result) return result;
-
-            return std::monostate {};
+                for (const auto& func : s_after) func();
         }
 
         static void HandleError(const std::string& err)
@@ -174,24 +195,25 @@ namespace xll
         return [rhs]<typename TAuto>(Auto<TAuto>&& lhs) { return lhs.OnError(rhs); };
     }
 
-    using AutoOpen = Auto<Open>;
-    using AutoAdd = Auto<Add>;
-    using AutoClose = Auto<Close>;
-    using AutoRemove = Auto<Remove>;
+    using OnOpen = Auto<Open>;
+    using OnAdd = Auto<Add>;
+    using OnClose = Auto<Close>;
+    using OnRemove = Auto<Remove>;
+    using OnFree = Auto<Free>;
 
     template<typename TEvent, typename TFunc>
     int xlAuto(const std::string& funcName, TFunc&& func)
     {
         try {
             xll::Registry::instance().register_all();
-            if (!xll::Auto<TEvent>::template Execute<typename xll::Auto<TEvent>::BeforeTag>()) return XLL_FAILURE;
+            xll::Auto<TEvent>::template Execute<typename xll::Auto<TEvent>::BeforeTag>();
 
             func();
             // if (!Auto<Add>::Call()) {
             //     return FALSE;
             // }
 
-            if (!xll::Auto<TEvent>::template Execute<typename xll::Auto<TEvent>::AfterTag>()) return XLL_FAILURE;
+            xll::Auto<TEvent>::template Execute<typename xll::Auto<TEvent>::AfterTag>();
         }
         catch (const std::exception& ex) {
             xll::Auto<TEvent>::HandleError(ex.what());
@@ -205,20 +227,6 @@ namespace xll
         return XLL_SUCCESS;
     }
 
-    // Helper trait to detect unique_ptr
-    template<typename>
-    struct is_unique_ptr : std::false_type
-    {
-    };
-
-    template<typename T, typename D>
-    struct is_unique_ptr<std::unique_ptr<T, D>> : std::true_type
-    {
-    };
-
-    template<typename T>
-    inline constexpr bool is_unique_ptr_v = is_unique_ptr<T>::value;
-
     inline auto AutoFree()
     {
         return []<typename T>(T&& arg) {
@@ -226,7 +234,7 @@ namespace xll
                 arg->xltype |= xlbitDLLFree;
                 return arg;
             }
-            else if constexpr (is_unique_ptr_v<std::remove_reference_t<T>>) {
+            else if constexpr (is_unique_ptr<std::remove_reference_t<T>>) {
                 arg->xltype |= xlbitDLLFree;
                 return arg.release();
             }
@@ -241,6 +249,59 @@ namespace xll
 
 
 }    // namespace xll
+
+extern "C" inline XLL_EXPORTS int XLLAPI xlAutoOpen()
+{
+    return xll::xlAuto<xll::Open>("xlAutoOpen", [] {
+        for (const auto& fn : xll::Function::functionArgs) {
+            xll::Variant id = xll::Register(xll::impl::All(fn));
+            if (not holds_alternative<xll::Number>(id)) {
+                throw std::runtime_error(std::format("[xlAutoOpen]: Failed to register function {}", fn.functionName.to_string()));
+            }
+        }
+    });
+}
+
+#ifdef _MSC_VER
+#pragma comment(linker, "/INCLUDE:xlAutoOpen")
+#endif
+
+extern "C" inline XLL_EXPORTS int XLLAPI xlAutoClose()
+{
+    return xll::xlAuto<xll::Close>("xlAutoClose", []{});
+    // try {
+    //     xll::Registry::instance().register_all();
+    //     if (!xll::Auto<xll::Close>::Execute<xll::Auto<xll::Close>::BeforeTag>()) return XLL_FAILURE;
+    //
+    //     // if (!Auto<CloseBefore>::Call()) {
+    //     //     return FALSE;
+    //     // }
+    //     //
+    //     // for (const auto& [key, args] : AddIn::Map) {
+    //     //     Excel12(xlfSetName, key);
+    //     // }
+    //     //
+    //     // if (!Auto<Close>::Call()) {
+    //     //     return FALSE;
+    //     // }
+    //
+    //     if (!xll::Auto<xll::Close>::Execute<xll::Auto<xll::Close>::AfterTag>()) return XLL_FAILURE;
+    // }
+    // catch (const std::exception& ex) {
+    //     xll::Auto<xll::Close>::HandleError(ex.what());
+    //     return XLL_FAILURE;
+    // }
+    // catch (...) {
+    //     xll::Auto<xll::Close>::HandleError("Unknown error in xlAutoOpen");
+    //     return XLL_FAILURE;
+    // }
+    //
+    // return XLL_SUCCESS;
+}
+
+#ifdef _MSC_VER
+#pragma comment(linker, "/INCLUDE:xlAutoClose")
+#endif
 
 extern "C" inline XLL_EXPORTS int XLLAPI xlAutoAdd()
 {
@@ -259,4 +320,48 @@ extern "C" inline XLL_EXPORTS int XLLAPI xlAutoRemove()
 
 #ifdef _MSC_VER
 #pragma comment(linker, "/INCLUDE:xlAutoRemove")
+#endif
+
+extern "C" inline XLL_EXPORTS void XLLAPI xlAutoFree12(LPXLOPER12 px)
+{
+    xll::Registry::instance().register_all();
+    xll::Auto<xll::Free>::Execute<xll::Auto<xll::Free>::BeforeTag>();
+
+    if (not px->xltype & xlbitDLLFree) return;
+
+    px->xltype &= ~xlbitDLLFree;
+    switch (px->xltype) {
+        case xltypeMulti:
+            delete reinterpret_cast<xll::Array*>(px);
+        break;
+        case xltypeBool:
+            delete reinterpret_cast<xll::Bool*>(px);
+        break;
+        case xltypeErr:
+            delete reinterpret_cast<xll::Error*>(px);
+        break;
+        case xltypeInt:
+            delete reinterpret_cast<xll::Int*>(px);
+        break;
+        case xltypeMissing:
+            delete reinterpret_cast<xll::Missing*>(px);
+        break;
+        case xltypeNil:
+            delete reinterpret_cast<xll::Nil*>(px);
+        break;
+        case xltypeNum:
+            delete reinterpret_cast<xll::Number*>(px);
+        break;
+        case xltypeStr:
+            delete reinterpret_cast<xll::String*>(px);
+        break;
+        default:
+            break;
+    }
+
+    xll::Auto<xll::Free>::Execute<xll::Auto<xll::Free>::AfterTag>();
+}
+
+#ifdef _MSC_VER
+#pragma comment(linker, "/INCLUDE:xlAutoFree12")
 #endif

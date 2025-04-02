@@ -14,4 +14,5 @@
 #include "Types/Number.hpp"
 #include "Types/String.hpp"
 #include "Types/Variant.hpp"
+#include "Types/Expected.hpp"
 

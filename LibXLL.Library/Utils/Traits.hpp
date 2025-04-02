@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include "../Types/Array.hpp"
+
 namespace xll
 {
     class Number;

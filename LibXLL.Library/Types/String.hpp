@@ -124,6 +124,11 @@ namespace xll
             return *this;
         }
 
+        [[nodiscard]] std::string to_string() const
+        {
+            return to_string(val.str);
+        }
+
         friend String operator+(const String& lhs, const String& rhs)
         {
             const std::string result = to_string(lhs.value()) + to_string(rhs.value());

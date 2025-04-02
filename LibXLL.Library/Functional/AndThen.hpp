@@ -1,0 +1,21 @@
+//
+// Created by kenne on 01/04/2025.
+//
+
+#pragma once
+
+#include <utility>
+#include "../Types/Variant.hpp"
+#include "../Types/Expected.hpp"
+
+
+namespace xll {
+
+  template<typename TFunction>
+  auto and_then(TFunction&& f)
+  {
+    return [f = std::forward<TFunction>(f)]<impl::is_valid_type TValue>(const xll::Expected<TValue>& ex) {
+      return ex.and_then(f);
+    };
+  }
+}

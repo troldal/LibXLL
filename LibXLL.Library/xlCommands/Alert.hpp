@@ -5,6 +5,7 @@
 #pragma once
 
 #include "../Types/String.hpp"
+#include "../Types/Int.hpp"
 #include <xlcall.hpp>
 
 #include <utility>

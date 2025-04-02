@@ -44,7 +44,7 @@ namespace xll
         using Ts::operator()...;
     };
 
-        class Variant : public XLOPER12
+    class Variant : public XLOPER12
     {
     public:
         Variant() : XLOPER12() { xltype = xltypeNum; }

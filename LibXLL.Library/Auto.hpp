@@ -9,6 +9,3 @@
 #include "Macros/Defines.hpp"
 #include "Auto/AddInManagerInfo.hpp"
 #include "Auto/Auto.hpp"
-#include "Auto/AutoClose.hpp"
-#include "Auto/AutoFree.hpp"
-#include "Auto/AutoOpen.hpp"

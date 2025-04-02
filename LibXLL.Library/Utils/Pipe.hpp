@@ -25,11 +25,11 @@ namespace xll
         return std::invoke(std::forward<Function>(f), std::forward<T>(t));
     }
 
-    // template<typename T, template<typename> class TFunction>
-    //     requires (not std::ranges::range<T> and std::invocable<TFunction<T>, T>)
-    // constexpr auto operator|(T t, TFunction<T> f) -> std::invoke_result_t<TFunction<T>, T>
-    // {
-    //     return std::invoke(std::forward<TFunction<T>>(f), std::forward<T>(t));
-    // }
+    template<typename T, template<typename> class TFunction>
+        requires (not std::ranges::range<T> and std::invocable<TFunction<T>, T>)
+    constexpr auto operator|(const T& t, TFunction<T> f) -> std::invoke_result_t<TFunction<T>, T>
+    {
+        return std::invoke(std::forward<TFunction<T>>(f), std::forward<T>(t));
+    }
 
 }    // namespace xll

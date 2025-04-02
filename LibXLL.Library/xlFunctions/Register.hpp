@@ -4,6 +4,9 @@
 
 #pragma once
 
+#include "../Types/Number.hpp"
+#include "../Types/Variant.hpp"
+
 namespace xll
 {
     template<typename... Args>
