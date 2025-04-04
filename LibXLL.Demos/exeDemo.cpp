@@ -11,52 +11,29 @@
 #include <iostream>
 #include <thread>
 #include <vector>
+#include <ranges>
 #include <OpenXLL.hpp>
 
 // extern "C" xll::Number* XLLAPI MakeNum(xll::Number const* d, xll::Number const* arr);
 // extern "C" void XLLAPI xlAutoFree12(LPXLOPER12 px);
 
 int main() {
-    // // Set the end time 60 seconds from now.
-    // auto start_time = std::chrono::steady_clock::now();
-    // auto end_time = start_time + std::chrono::seconds(10);
-    //
-    // // Lambda function to be executed by each thread.
-    // auto threadFunc = [=]() {
-    //     while (std::chrono::steady_clock::now() < end_time) {
-    //         auto result = MakeNum(nullptr, nullptr);
-    //         //std::cerr << result->to<double>() << std::endl;
-    //         if (result->xltype & xlbitDLLFree) {
-    //             xlAutoFree12(result);
-    //         }
-    //     }
-    // };
-    //
-    // // Create and launch 8 threads.
-    // std::vector<std::thread> threads;
-    // for (int i = 0; i < 1; ++i) {
-    //     threads.emplace_back(threadFunc);
-    // }
-    //
-    // // Wait for all threads to finish.
-    // for (auto &t : threads) {
-    //     t.join();
-    // }
 
-    xll::Expected<xll::Number> var = xll::Number(42);
-    // var = xll::ErrName;
-    auto val =
-        var | xll::and_then([](const xll::Number& num) { return xll::Expected<xll::Number>(num + 2); })
-            | xll::transform([](const xll::Number& num) { return num + 2; })
-            | xll::transform_error([](const xll::Error& err) { return xll::ErrNull; });
+    using namespace xll::literals;
 
+    auto value = xll::Array<xll::Expected<xll::String>>();
+    value = xll::Array<xll::Expected<xll::String>>(4,1);
+    auto value2 = value;
+    //value = value2;
 
-    xll::Expected<xll::String> var2 = xll::String("Blah!");
-    var2 = xll::ErrName;
+    xll::Int invalid;
+    invalid.xltype = xltypeNil;
 
-    auto copy = var2;
+    // Invalid copy construction
+    auto i = xll::Int(invalid);
 
-    auto str = xll::Expected<xll::String>();
+    //for (auto& e : value) e = "Blah"_xs;
+
 
     return 0;
 }

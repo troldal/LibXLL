@@ -57,11 +57,16 @@ auto f =
     | xll::Help("https://docs.xlthermo.com");
 XLL_REGISTER(f);
 
-XLL_FUNCTION xll::Expected<xll::String>* XLLAPI MakeNum(xll::Expected<xll::Number> const* arg)
+XLL_FUNCTION xll::Array<xll::Expected<xll::Number>>* XLLAPI MakeNum(xll::Array<xll::Expected<xll::Number>> const* arg)
 {
     // auto result = std::make_unique<xll::Number>(42);
-    auto result =
-        *arg | xll::transform([](xll::Number const& arg) { return xll::String("Valid"); })
-             | xll::transform_error([](xll::Error const& arg) { return xll::String("Invalid"); });
+    // auto result =
+    //     *arg | xll::transform([](xll::Number const& arg) { return xll::String("Valid"); })
+    //          | xll::transform_error([](xll::Error const& arg) { return xll::String("Invalid"); });
+
+    auto result = *arg;
+    for (auto& elem : result)
+        elem = elem | xll::transform([](const xll::Number& num) { return num + 2;});
+
     return result | xll::AutoFree();
 }

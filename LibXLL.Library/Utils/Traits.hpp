@@ -13,7 +13,7 @@ namespace xll
 namespace xll::traits {
 
     template <typename T>
-struct arg_traits;
+    struct arg_traits;
 
     template <>
     struct arg_traits<bool> {
@@ -45,8 +45,8 @@ struct arg_traits;
         static constexpr std::string_view excel_type = "Q";
     };
 
-    template <>
-    struct arg_traits<Array> {
+    template <typename T>
+    struct arg_traits<Array<T>> {
         static constexpr std::string_view excel_type = "Q";
     };
 

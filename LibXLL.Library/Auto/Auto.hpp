@@ -42,9 +42,11 @@
 #pragma once
 
 #include "../Utils/Concepts.hpp"
+#include <Macros/Defines.hpp>
 #include <Register/Registry.hpp>
 #include <functional>
 #include <tl/expected.hpp>
+#include "../xlFunctions/Register.hpp"
 
 #include <Register/Function.hpp>
 
@@ -246,8 +248,6 @@ namespace xll
             }
         };
     }
-
-
 }    // namespace xll
 
 extern "C" inline XLL_EXPORTS int XLLAPI xlAutoOpen()
@@ -332,7 +332,7 @@ extern "C" inline XLL_EXPORTS void XLLAPI xlAutoFree12(LPXLOPER12 px)
     px->xltype &= ~xlbitDLLFree;
     switch (px->xltype) {
         case xltypeMulti:
-            delete reinterpret_cast<xll::Array*>(px);
+            delete reinterpret_cast<xll::Array<xll::Variant>*>(px);
         break;
         case xltypeBool:
             delete reinterpret_cast<xll::Bool*>(px);

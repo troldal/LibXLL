@@ -326,19 +326,19 @@ typedef struct xloper12
 extern "C" {
 #endif
 
-int _cdecl Excel4(int xlfn, LPXLOPER operRes, int count,... ); 
+// int _cdecl Excel4(int xlfn, LPXLOPER operRes, int count,... );
 /* followed by count LPXLOPERs */
 
-int pascal Excel4v(int xlfn, LPXLOPER operRes, int count, LPXLOPER opers[]);
+// int pascal Excel4v(int xlfn, LPXLOPER operRes, int count, LPXLOPER opers[]);
 
 int pascal XLCallVer(void);
 
 long pascal LPenHelper(int wCode, VOID *lpv);
 
-int _cdecl Excel12(int xlfn, LPXLOPER12 operRes, int count,... );
+// int _cdecl Excel12(int xlfn, LPXLOPER12 operRes, int count,... );
 /* followed by count LPXLOPER12s */
 
-int pascal Excel12v(int xlfn, LPXLOPER12 operRes, int count, LPXLOPER12 opers[]);
+// int pascal Excel12v(int xlfn, LPXLOPER12 operRes, int count, LPXLOPER12 opers[]);
 
 #ifdef __cplusplus
 }

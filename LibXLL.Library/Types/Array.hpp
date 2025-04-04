@@ -19,6 +19,7 @@ namespace xll
 
     enum class ArrayShape { Empty, Singular, Horizontal, Vertical, TwoDimensional };
 
+    template<typename TValue>
     class Array : public XLOPER12
     {
     public:
@@ -36,8 +37,6 @@ namespace xll
             val.array.columns = static_cast<COL>(cols);
         }
 
-
-
         Array(Array&& other) noexcept : Array()
         {
             switch (other.xltype == xltypeMulti) {
@@ -46,6 +45,8 @@ namespace xll
                     other.val.array.lparray = nullptr;
                     val.array.rows = other.rows();
                     val.array.columns = other.cols();
+                    other.val.array.rows = 0;
+                    other.val.array.columns = 0;
                 }
                 break;
                 default:
@@ -60,7 +61,7 @@ namespace xll
                     val.array.lparray = make_array(other.size()).release();
                     val.array.rows = other.rows();
                     val.array.columns = other.cols();
-                    for (unsigned i = 0; i < size(); ++i) { val.array.lparray[i] = other.val.array.lparray[i]; }
+                    for (unsigned i = 0; i < size(); ++i) { static_cast<TValue&>(val.array.lparray[i]) = static_cast<TValue&>(other.val.array.lparray[i]); }
                 }
                 break;
                 default:
@@ -70,7 +71,7 @@ namespace xll
 
         ~Array()
         {
-            for (auto& item : *this) item.~Variant();
+            for (auto& item : *this) item.~TValue();
             delete[] val.array.lparray;
             val.array.lparray = nullptr;
             xltype  = xltypeNil;
@@ -84,7 +85,7 @@ namespace xll
                     val.array.lparray = make_array(other.size()).release();
                     val.array.rows = other.rows();
                     val.array.columns = other.cols();
-                    for (unsigned i = 0; i < size(); ++i) { val.array.lparray[i] = other.val.array.lparray[i]; }
+                    for (unsigned i = 0; i < size(); ++i) { static_cast<TValue&>(val.array.lparray[i]) = static_cast<TValue&>(other.val.array.lparray[i]); }
                 }
                 break;
                 default:
@@ -97,9 +98,6 @@ namespace xll
         {
             if (this == &other) return *this;
 
-            delete[] val.str;
-            val.str  = nullptr;
-
             switch (other.xltype == xltypeMulti) {
                 case true: {
                     delete[] val.array.lparray;
@@ -107,6 +105,9 @@ namespace xll
                     other.val.array.lparray = nullptr;
                     val.array.rows = other.rows();
                     val.array.columns = other.cols();
+                    other.val.array.rows = 0;
+                    other.val.array.columns = 0;
+
                 }
                 break;
                 default:
@@ -150,33 +151,43 @@ namespace xll
             val.array.columns = static_cast<COL>(cols);
         }
 
-        xll::Variant* begin()
+        TValue* begin()
         {
-            return static_cast<xll::Variant*>(val.array.lparray);
+            return static_cast<TValue*>(val.array.lparray);
         }
 
-        xll::Variant* end()
+        TValue const* begin() const
         {
-            return static_cast<xll::Variant*>(val.array.lparray + size());
+            return static_cast<TValue const*>(val.array.lparray);
         }
 
-        xll::Variant& operator[](int index) {
+        TValue* end()
+        {
+            return static_cast<TValue*>(val.array.lparray + size());
+        }
+
+        TValue const* end() const
+        {
+            return static_cast<TValue const*>(val.array.lparray + size());
+        }
+
+        TValue& operator[](int index) {
             if (index + 1 > val.array.rows * val.array.columns) throw std::out_of_range("Array index out of range");
-            auto s = std::span<xll::Variant, std::dynamic_extent>(static_cast<xll::Variant*>(val.array.lparray), val.array.rows * val.array.columns);
+            auto s = std::span<TValue, std::dynamic_extent>(static_cast<TValue*>(val.array.lparray), val.array.rows * val.array.columns);
             return s[index];
         }
 
-        const xll::Variant& operator[](int index) const {
+        const TValue& operator[](int index) const {
             if (index + 1 > val.array.rows * val.array.columns) throw std::out_of_range("Array index out of range");
-            auto s = std::span<xll::Variant, std::dynamic_extent>(static_cast<xll::Variant*>(val.array.lparray), val.array.rows * val.array.columns);
+            auto s = std::span<TValue, std::dynamic_extent>(static_cast<TValue*>(val.array.lparray), val.array.rows * val.array.columns);
             return s[index];
         }
 
-        xll::Variant operator[](int row, int col) const {
+        TValue operator[](int row, int col) const {
             if ((row + 1) > val.array.rows  || (col + 1) > val.array.columns) throw std::out_of_range("Array index out of range");
             using ext_t = mds::extents<uint32_t, std::dynamic_extent, std::dynamic_extent>;
-            auto m = mds::mdspan<xll::Variant, ext_t>(
-                static_cast<xll::Variant*>(val.array.lparray),
+            auto m = mds::mdspan<TValue, ext_t>(
+                static_cast<TValue*>(val.array.lparray),
                 val.array.rows,
                 val.array.columns);
             return m[row, col];
@@ -190,7 +201,7 @@ namespace xll
             // Allocate memory with proper size and error checking
             auto buffer = std::make_unique<XLOPER12[]>(size);
             if (!buffer) throw std::bad_alloc();
-            for (unsigned i = 0; i < size; ++i) *static_cast<xll::Variant*>(&buffer[i]) = xll::Variant();
+            for (unsigned i = 0; i < size; ++i) *static_cast<TValue*>(&buffer[i]) = TValue();
 
             return buffer;
         }

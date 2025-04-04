@@ -11,6 +11,8 @@
 #include <string>
 #include <string_view>
 #include <xlcall.hpp>
+#include <ranges>
+#include <algorithm>
 
 #ifndef _WIN32
 #include <utf8.h>
@@ -270,4 +272,36 @@ namespace xll
     {
         inline String operator""_xs(const char* str, std::size_t len) { return String(std::string_view(str, len)); }
     }    // namespace literals
+
+    inline xll::String trim(const xll::String& str)
+    {
+        auto s = str.to_string();
+
+        // Find the first non-whitespace character.
+        auto start = std::ranges::find_if_not(s, [](unsigned char ch) { return std::isspace(ch); });
+
+        // If the string is entirely whitespace, return an empty string.
+        if (start == s.end()) {
+            return "";
+        }
+
+        // Find the last non-whitespace character.
+        auto end = std::find_if_not(s.rbegin(), s.rend(), [](unsigned char ch) { return std::isspace(ch); }).base();
+
+        // Construct the trimmed string.
+        std::string result(start, end);
+
+        return xll::String(result);
+    }
+
+    inline xll::String to_upper(const xll::String& str)
+    {
+        std::string result = str.to_string();
+        std::ranges::transform(result, result.begin(), [](unsigned char c) {
+            return std::toupper(c);
+        });
+
+        return xll::String(result);
+    }
+
 }    // namespace xll

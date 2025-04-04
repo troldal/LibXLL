@@ -140,7 +140,7 @@ namespace xll {
         [[nodiscard]]
         xll::Error& error()
         {
-            if (!has_value() && xltype != xltypeErr) static_cast<xll::Error&>(*this) = xll::ErrValue;
+            if (!has_value() && xltype != xltypeErr) *this = xll::ErrValue;
             return xll::Error::lift(*static_cast<XLOPER12*>(this));
         }
 
