@@ -6,6 +6,8 @@
 
 #include "Variant.hpp"
 #include <span>
+#include <expected>
+#include "Expected.hpp"
 #ifdef _MSC_VER
     #include <mdspan>
     namespace mds = std;
@@ -23,6 +25,8 @@ namespace xll
     class Array : public XLOPER12
     {
     public:
+        using value_type = TValue;
+
         Array() : XLOPER12() { xltype = xltypeMulti; }
 
         Array(size_t rows, size_t cols) : Array()
@@ -35,6 +39,33 @@ namespace xll
             val.array.lparray = make_array(rows * cols).release();
             val.array.rows = static_cast<RW>(rows);
             val.array.columns = static_cast<COL>(cols);
+        }
+
+        /**
+         * \brief Constructs an Array from an initializer list.
+         *
+         * This constructor creates a single-row array containing the elements from
+         * the provided initializer list. It initializes the Array with the appropriate
+         * dimensions based on the number of elements in the list.
+         *
+         * \param values The initializer list of values to populate the array with.
+         * \throws std::bad_alloc if memory allocation fails.
+         */
+        Array(std::initializer_list<TValue> values) : Array()
+        {
+            if (values.size() == 0) {
+                xltype = xltypeNil;
+                return;
+            }
+
+            val.array.lparray = make_array(values.size()).release();
+            val.array.rows    = 1;
+            val.array.columns = static_cast<COL>(values.size());
+
+            auto it = values.begin();
+            for (size_t i = 0; i < values.size(); ++i, ++it) {
+                static_cast<TValue&>(val.array.lparray[i]) = *it;
+            }
         }
 
         Array(Array&& other) noexcept : Array()
@@ -193,6 +224,34 @@ namespace xll
             return m[row, col];
         }
 
+        template<template<typename> class TContainer, typename TElem>
+            requires std::convertible_to<TValue, TElem>
+        auto to() const
+        {
+            TContainer<TElem> result {};
+            result.reserve(size());
+            for (auto const& v : *this) result.push_back(v);
+            return result;
+        }
+
+        template<typename TElem>
+            requires std::convertible_to<TValue, TElem>
+        auto to() const
+        {
+            std::vector<TElem> result {};
+            result.reserve(size());
+            for (auto const& v : *this) result.push_back(v);
+            return result;
+        }
+
+        auto to() const
+        {
+            std::vector<TValue> result {};
+            result.reserve(size());
+            for (auto const& v : *this) result.push_back(v);
+            return result;
+        }
+
     private:
         static std::unique_ptr<XLOPER12[]> make_array(size_t size)
         {
@@ -207,5 +266,34 @@ namespace xll
         }
 
     };
+
+    // auto make_array(const auto& input)
+    // {
+    //     Array<typename std::remove_cvref_t<decltype(input)>::value_type> result(input.size(), 1);
+    //     for (unsigned i = 0; i < input.size(); ++i) result[i] = input[i];
+    //     return result;
+    // }
+
+    // template<template<typename> class TContainer, typename T, typename E>
+    auto make_array(const auto& input) //-> Array<Expected<Number>>
+    {
+        using T = typename std::remove_cvref_t<decltype(input)>::value_type::value_type;
+        using E = typename std::remove_cvref_t<decltype(input)>::value_type::error_type;
+
+        using value_t =
+            std::conditional_t<std::floating_point<T>, xll::Number,
+            std::conditional_t<std::integral<T>, xll::Int,
+            std::conditional_t<std::convertible_to<T, std::string>, xll::String, void>>>;
+
+        Array<Expected<value_t>> result(input.size(), 1);
+        for (unsigned i = 0; i < input.size(); ++i) {
+            if (input[i].has_value())
+                result[i].value() = *input[i];
+            else
+                result[i] = xll::ErrNull;
+        }
+        return result;
+
+    }
 
 }    // namespace xll

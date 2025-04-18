@@ -21,7 +21,6 @@ namespace xll
 
         Bool() : Bool(false) {}
 
-
         friend bool operator==(const Bool& lhs, bool rhs)
         {
             return static_cast<bool>(lhs.value()) == rhs;

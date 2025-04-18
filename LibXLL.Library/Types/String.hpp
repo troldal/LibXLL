@@ -18,8 +18,6 @@
 #include <utf8.h>
 #endif
 
-
-
 namespace xll
 {
     class String : public impl::Base<String, xltypeStr>
@@ -28,7 +26,6 @@ namespace xll
 
     public:
         using BASE::BASE;
-        //using BASE::operator=;
 
         String() : String("") {}
 
@@ -46,65 +43,92 @@ namespace xll
                     value() = make_string(to_string(v.val.str)).release();
                     break;
                 default:
-                    xltype = xltypeNil;
+                    throw std::runtime_error("XLOPER12 type not convertible to type");
             }
         }
 
         String(const String& other)
         {
-            switch (other.xltype == xltypeStr) {
-                case true:
-                    value() = make_string(to_string(other.val.str)).release();
-                break;
-                default:
-                    xltype = xltypeNil;
-            }
+            ensure(other.is_valid());
+            ensure(xltype == other.xltype);
+            value() = make_string(to_string(other.val.str)).release();
+
+            // switch (other.xltype == xltypeStr) {
+            //     case true:
+            //         value() = make_string(to_string(other.val.str)).release();
+            //     break;
+            //     default:
+            //         xltype = xltypeNil;
+            // }
         }
 
         String(String&& other) noexcept
         {
-            using std::swap;
-            switch (other.xltype == xltypeStr) {
-                case true:
-                    val.str = other.val.str;
-                    other.val.str = nullptr;
-                    //value() = make_string(to_string(other.val.str)).release();
-                    //swap(other, *this);
-                break;
-                default:
-                    xltype = xltypeNil;
-            }
+            // Can't do this, as the constructor needs to be noexcept
+            // ensure(other.is_valid());
+            // ensure(xltype == other.xltype);
+
+            xltype = xltypeStr;
+            val.str = other.val.str;
+            other.val.str = nullptr;
+
+            // using std::swap;
+            // switch (other.xltype == xltypeStr) {
+            //     case true:
+            //         val.str = other.val.str;
+            //         other.val.str = nullptr;
+            //         //value() = make_string(to_string(other.val.str)).release();
+            //         //swap(other, *this);
+            //     break;
+            //     default:
+            //         xltype = xltypeNil;
+            // }
         }
 
         ~String()
         {
             delete[] val.str;
             val.str = nullptr;
-            xltype  = xltypeNil;
         }
 
         String& operator=(const String& other)
         {
-            using std::swap;
+            ensure(is_valid());
+            ensure(other.is_valid());
+            ensure(xltype == other.xltype);
 
             if (this == &other) return *this;
             delete[] val.str;
             val.str  = nullptr;
-
-            switch (other.xltype == xltypeStr) {
-                case true:
-                    xltype = xltypeStr;
-                    value() = make_string(to_string(other.val.str)).release();
-                    break;
-                default:
-                    xltype = xltypeNil;
-            }
-
+            value() = make_string(to_string(other.val.str)).release();
             return *this;
+
+
+            // using std::swap;
+            //
+            // if (this == &other) return *this;
+            // delete[] val.str;
+            // val.str  = nullptr;
+            //
+            // switch (other.xltype == xltypeStr) {
+            //     case true:
+            //         xltype = xltypeStr;
+            //         value() = make_string(to_string(other.val.str)).release();
+            //         break;
+            //     default:
+            //         xltype = xltypeNil;
+            // }
+            //
+            // return *this;
         }
 
         String& operator=(String&& other) noexcept
         {
+            // ensure(is_valid());
+            // ensure(other.is_valid());
+            // ensure(xltype == other.xltype);
+
+
             using std::swap;
 
             if (this == &other) return *this;
@@ -112,16 +136,20 @@ namespace xll
             delete[] val.str;
             val.str  = nullptr;
 
-            switch (other.xltype == xltypeStr) {
-                case true:
-                    xltype = xltypeStr;
-                    value() = other.val.str;
-                    other.val.str = nullptr;
-                break;
-                default:
-                    xltype = xltypeNil;
+            xltype = xltypeStr;
+            value() = other.val.str;
+            other.val.str = nullptr;
 
-            }
+            // switch (other.xltype == xltypeStr) {
+            //     case true:
+            //         xltype = xltypeStr;
+            //         value() = other.val.str;
+            //         other.val.str = nullptr;
+            //     break;
+            //     default:
+            //         xltype = xltypeNil;
+            //
+            // }
 
             return *this;
         }
@@ -129,6 +157,11 @@ namespace xll
         [[nodiscard]] std::string to_string() const
         {
             return to_string(val.str);
+        }
+
+        operator std::string() const
+        {
+            return to_string();
         }
 
         friend String operator+(const String& lhs, const String& rhs)
@@ -152,7 +185,6 @@ namespace xll
             return os;
         }
 
-
         friend bool operator==(const String& lhs, const String& rhs) {
             return to_string(lhs.val.str) == to_string(rhs.val.str);
         }
@@ -165,18 +197,41 @@ namespace xll
         }
 
 
-        friend std::strong_ordering operator<=>(const String& lhs, const String& rhs)
+        friend auto operator<=>(const String& lhs, const String& rhs)
         {
             return to_string(lhs.val.str) <=> to_string(rhs.val.str);
         }
 
         template<typename TOther>
             requires (!std::same_as<String, TOther>) && std::convertible_to<TOther, std::string>
-        friend std::strong_ordering operator<=>(const String& lhs, TOther&& rhs)
+        friend auto operator<=>(const String& lhs, TOther&& rhs)
         {
             return to_string(lhs.val.str) <=> rhs;
         }
 
+        bool empty() const
+        {
+            if (val.str == nullptr) return true;
+            return std::wstring_view(&val.str[1]).empty();
+        }
+
+        size_t size() const
+        {
+            if (val.str == nullptr) return 0;
+            return std::wstring_view(&val.str[1]).size();
+        }
+
+        size_t length() const
+        {
+            if (val.str == nullptr) return 0;
+            return std::wstring_view(&val.str[1]).length();
+        }
+
+        void clear()
+        {
+            delete[] val.str;
+            val.str = nullptr;
+        }
 
 
 

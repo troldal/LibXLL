@@ -8,6 +8,7 @@
 
 namespace xll
 {
+    class Missing;
 
     class Nil : public impl::Base<Nil, xltypeNil>
     {
@@ -23,7 +24,18 @@ namespace xll
             xltype = xltypeNil;
         }
 
+        Nil(const xll::Missing&)
+        {
+            xltype = xltypeNil;
+        }
+
         Nil& operator=(const Nil&)
+        {
+            xltype = xltypeNil;
+            return *this;
+        }
+
+        Nil& operator=(const Missing&)
         {
             xltype = xltypeNil;
             return *this;

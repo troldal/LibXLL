@@ -21,18 +21,30 @@ int main() {
 
     using namespace xll::literals;
 
-    auto value = xll::Array<xll::Expected<xll::String>>();
-    value = xll::Array<xll::Expected<xll::String>>(4,1);
-    auto value2 = value;
-    //value = value2;
-
-    xll::Int invalid;
-    invalid.xltype = xltypeNil;
-
-    // Invalid copy construction
-    auto i = xll::Int(invalid);
+    // auto value = xll::Array<xll::Expected<xll::String>>();
+    // value = xll::Array<xll::Expected<xll::String>>(4,1);
+    // auto value2 = value;
+    // //value = value2;
+    //
+    // xll::Int invalid;
+    // invalid.xltype = xltypeNil;
+    //
+    // // Invalid copy construction
+    // auto i = xll::Int(invalid);
 
     //for (auto& e : value) e = "Blah"_xs;
+    using namespace xll::literals;
+
+    auto value = xll::Array<xll::String>(4,1);
+    for (auto& v : value) { v = "Hello"_xs; }
+    auto arr = value.to<std::vector, std::string>();
+
+    auto inp = xll::Expected<xll::String>("Input");
+    auto exp = inp.to_expected();
+    auto out = exp | fxt::transform([](xll::String) { return "Hello, World!"_xs; });
+
+    std::cout << *out << std::endl;
+
 
 
     return 0;

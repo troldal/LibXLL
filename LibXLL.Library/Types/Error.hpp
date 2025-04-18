@@ -22,6 +22,7 @@ namespace xll
         using BASE::BASE;
 
         // Returns a string representation of the error code
+        [[nodiscard]]
         std::string to_string() const
         {
             switch (val.err) {
@@ -40,17 +41,60 @@ namespace xll
                 case 42:
                     return "#N/A";
                 default:
-                    return "UNKNOWN_ERROR#" + std::to_string(val.err);
+                    throw std::runtime_error("Unknown error");
             }
+        }
+
+        template <std::integral T = int>
+        operator T() const
+        {
+            return error_index();
+        }
+
+        operator int() const
+        {
+            return error_index();
+        }
+
+        [[nodiscard]]
+        int error_index() const
+        {
+            ensure(xltype == xltypeErr);
+            switch (val.err) {
+                case 0:
+                    return 0;
+                case 7:
+                    return 1;
+                case 15:
+                    return 2;
+                case 23:
+                    return 3;
+                case 29:
+                    return 4;
+                case 36:
+                    return 5;
+                case 42:
+                    return 6;
+                default:
+                    throw std::runtime_error("Unknown error");
+            }
+        }
+
+        [[nodiscard]]
+        int error_id() const
+        {
+            ensure(xltype == xltypeErr);
+            return val.err;
+        }
+
+        friend bool operator==(const xll::Error& lhs, const xll::Error& rhs)
+        {
+            return lhs.value() == rhs.value();
         }
 
         // Stream output operator
         friend std::ostream& operator<<(std::ostream& os, const Error& error) { return os << error.to_string(); }
     };
-
-
-
-
 
     static const Error ErrNull  = Error([] { auto err = XLOPER12(); err.xltype = xltypeErr; err.val.err = 0; return err; }());
     static const Error ErrDiv0  = Error([] { auto err = XLOPER12(); err.xltype = xltypeErr; err.val.err = 7; return err; }());

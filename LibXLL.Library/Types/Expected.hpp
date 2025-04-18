@@ -4,14 +4,18 @@
 
 #pragma once
 
+#include <fxt.hpp>
+
 namespace xll {
 
-    template<typename TValue>
+    template<typename TValue, typename TError = xll::Error>
     class Expected : public XLOPER12
     {
-        using value_type = TValue;
-
     public:
+
+        using value_type = TValue;
+        using error_type = xll::Error;
+        using unexpected_type = xll::Error;
 
         Expected() : XLOPER12()
         {
@@ -20,33 +24,44 @@ namespace xll {
 
         Expected(const Expected& other) : XLOPER12()
         {
-            if (other.has_value())
+            if (other.has_value()) {
+                reinterpret_cast<TValue&>(*this) = TValue();
                 TValue::lift(*static_cast<XLOPER12*>(this)) = TValue::lift(static_cast<const XLOPER12&>(other));
-            else
+            }
+            else {
+                reinterpret_cast<xll::Error&>(*this) = xll::Error();
                 xll::Error::lift(*static_cast<XLOPER12*>(this)) = other.error();
+            }
         }
 
         Expected(Expected&& other) noexcept : XLOPER12()
         {
-            if (other.has_value())
+            if (other.has_value()) {
+                reinterpret_cast<TValue&>(*this) = TValue();
                 TValue::lift(*static_cast<XLOPER12*>(this)) = reinterpret_cast<TValue&&>(other);
-            else
+            }
+            else {
+                reinterpret_cast<xll::Error&>(*this) = xll::Error();
                 xll::Error::lift(*static_cast<XLOPER12*>(this)) = other.error();
+            }
         }
 
 
         Expected(const TValue& t) : XLOPER12()    // NOLINT
         {
+            reinterpret_cast<TValue&>(*this) = TValue();
             TValue::lift(*static_cast<XLOPER12*>(this)) = t;
         }
 
         Expected(TValue&& t) : XLOPER12()
         {
+            reinterpret_cast<TValue&>(*this) = TValue();
             TValue::lift(*static_cast<XLOPER12*>(this)) = std::forward<TValue>(t);
         }
 
         Expected(const xll::Error& err) : XLOPER12()    // NOLINT
         {
+            reinterpret_cast<xll::Error&>(*this) = xll::Error();
             xll::Error::lift(*static_cast<XLOPER12*>(this)) = err;
         }
 
@@ -92,6 +107,7 @@ namespace xll {
         Expected& operator=(const xll::Error& err)
         {
             this->~Expected();
+            reinterpret_cast<Error&>(*this) = Error();
             xll::Error::lift(*static_cast<XLOPER12*>(this)) = err;
             return *this;
         }
@@ -135,6 +151,30 @@ namespace xll {
         const TValue* operator->() const
         {
             return &value();
+        }
+
+        operator fxt::expected<TValue, xll::Error>() const
+        {
+            return to_expected();
+        }
+
+        operator fxt::expected<TValue, int>() const
+        {
+            return to_expected<TValue, int>();
+        }
+
+        operator fxt::expected<std::string, int>() const
+        {
+            return to_expected<std::string, int>();
+        }
+
+        template<typename T = TValue, typename E = xll::Error>
+            requires std::convertible_to<TValue, T> && std::convertible_to<xll::Error, E>
+        fxt::expected<T, E> to_expected() const
+        {
+            if (has_value())
+                return fxt::expected<T, xll::Error>(value());
+            return fxt::unexpected<E>(error());
         }
 
         [[nodiscard]]
@@ -216,5 +256,10 @@ namespace xll {
             return expected_result_type(self.value());
         }
     };
+
+    using ExpNumber = Expected<Number>;
+    using ExpString = Expected<String>;
+    using ExpInt    = Expected<Int>;
+    using ExpBool   = Expected<Bool>;
 
 }

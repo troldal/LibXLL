@@ -3,26 +3,60 @@ project(LibXLL)
 
 set(CMAKE_CXX_STANDARD 23)
 
-set(CLANG_WARNINGS
-        -Wall
-        -Wextra # reasonable and standard
-        -Wshadow # warn the user if a variable declaration shadows one from a parent context
-        -Wnon-virtual-dtor # warn the user if a class with virtual functions has a non-virtual destructor.
-        -Wold-style-cast # warn for c-style casts
-        -Wcast-align # warn for potential performance problem casts
-        -Wunused # warn on anything being unused
-        -Woverloaded-virtual # warn if you overload (not override) a virtual function
-        -Wpedantic # warn if non-standard C++ is used
-        -Wconversion # warn on type conversions that may lose data
-        -Wsign-conversion # warn on sign conversions
-        -Wnull-dereference # warn if a null dereference is detected
-        -Wdouble-promotion # warn if float is implicit promoted to double
-        -Wformat=2 # warn on security issues around functions that format output (ie printf)
-        -Wimplicit-fallthrough # warn on statements that fallthrough without an explicit annotation
 
-        # Silence unnecessary warnings
-        -Wno-switch-bool
+#==============================================================================
+# Fetch dependency manager
+#==============================================================================
+
+# download CPM.cmake
+file(
+        DOWNLOAD
+        https://github.com/cpm-cmake/CPM.cmake/releases/download/v0.40.8/CPM.cmake
+        ${CMAKE_CURRENT_BINARY_DIR}/cmake/CPM.cmake
 )
+include(${CMAKE_CURRENT_BINARY_DIR}/cmake/CPM.cmake)
+
+#==============================================================================
+# Fetch dependencies
+#==============================================================================
+
+CPMFindPackage(
+        NAME FXT
+        GITHUB_REPOSITORY troldal/FXT
+        GIT_TAG main
+        EXCLUDE_FROM_ALL
+        SYSTEM
+)
+
+#CPMFindPackage(
+#        NAME Catch2
+#        GITHUB_REPOSITORY catchorg/Catch2
+#        VERSION 3.8.0
+#        EXCLUDE_FROM_ALL
+#        SYSTEM
+#)
+
+
+#set(CLANG_WARNINGS
+#        -Wall
+#        -Wextra # reasonable and standard
+#        -Wshadow # warn the user if a variable declaration shadows one from a parent context
+#        -Wnon-virtual-dtor # warn the user if a class with virtual functions has a non-virtual destructor.
+#        -Wold-style-cast # warn for c-style casts
+#        -Wcast-align # warn for potential performance problem casts
+#        -Wunused # warn on anything being unused
+#        -Woverloaded-virtual # warn if you overload (not override) a virtual function
+#        -Wpedantic # warn if non-standard C++ is used
+#        -Wconversion # warn on type conversions that may lose data
+#        -Wsign-conversion # warn on sign conversions
+#        -Wnull-dereference # warn if a null dereference is detected
+#        -Wdouble-promotion # warn if float is implicit promoted to double
+#        -Wformat=2 # warn on security issues around functions that format output (ie printf)
+#        -Wimplicit-fallthrough # warn on statements that fallthrough without an explicit annotation
+#
+#        # Silence unnecessary warnings
+#        -Wno-switch-bool
+#)
 
 add_subdirectory(LibXLL.Library)
 

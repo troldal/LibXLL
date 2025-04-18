@@ -940,12 +940,72 @@ namespace xll::impl
             return value();
         }
 
+        /**
+         * \brief Dereference operator for accessing the underlying XLOPER12 object.
+         *
+         * This operator allows accessing the Base object as the underlying XLOPER12 object.
+         * It returns a reference to the current object cast as an XLOPER12 reference,
+         * enabling direct access to the Excel API structure.
+         *
+         * This is useful when interfacing with Excel SDK functions that require
+         * raw XLOPER12 references.
+         *
+         * \return A reference to the underlying XLOPER12 object.
+         */
+        XLOPER12& operator*() noexcept { return *this; }
 
+        /**
+         * \brief Const dereference operator for accessing the underlying XLOPER12 object.
+         *
+         * This operator allows accessing the Base object as the underlying XLOPER12 object
+         * in a const context. It returns a const reference to the current object cast as
+         * an XLOPER12 const reference.
+         *
+         * This is useful when interfacing with Excel SDK functions that require
+         * raw XLOPER12 const references.
+         *
+         * \return A const reference to the underlying XLOPER12 object.
+         */
+        const XLOPER12& operator*() const noexcept { return *this; }
 
+        /**
+         * \brief Lifts a pointer to an XLOPER12 object to a pointer to a TDerived object.
+         *
+         * This function casts a pointer to an XLOPER12 object to a pointer to a TDerived object.
+         *
+         * \param op Pointer to the XLOPER12 object.
+         * \return Pointer to the TDerived object.
+         */
         static TDerived* lift(XLOPER12* op) { return static_cast<TDerived*>(op); }
 
+        /**
+         * \brief Lifts a const pointer to an XLOPER12 object to a const pointer to a TDerived object.
+         *
+         * This function casts a const pointer to an XLOPER12 object to a const pointer to a TDerived object.
+         *
+         * \param op Const pointer to the XLOPER12 object.
+         * \return Const pointer to the TDerived object.
+         */
+        static const TDerived* lift(const XLOPER12* op) { return static_cast<const TDerived*>(op); }
+
+        /**
+         * \brief Lifts a reference to an XLOPER12 object to a reference to a TDerived object.
+         *
+         * This function casts a reference to an XLOPER12 object to a reference to a TDerived object.
+         *
+         * \param op Reference to the XLOPER12 object.
+         * \return Reference to the TDerived object.
+         */
         static TDerived& lift(XLOPER12& op) { return static_cast<TDerived&>(op); }
 
+        /**
+         * \brief Lifts a const reference to an XLOPER12 object to a const reference to a TDerived object.
+         *
+         * This function casts a const reference to an XLOPER12 object to a const reference to a TDerived object.
+         *
+         * \param op Const reference to the XLOPER12 object.
+         * \return Const reference to the TDerived object.
+         */
         static const TDerived& lift(const XLOPER12& op) { return static_cast<const TDerived&>(op); }
     };
 

@@ -1,16 +1,9 @@
 include(FetchContent)
 
-FetchContent_Declare(
-        Catch2
-        GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-        GIT_TAG v3.8.0
-)
-
-FetchContent_MakeAvailable(Catch2)
-
 add_executable(LibXLL.Tests
         String.cpp
         Bool.cpp
+        Expected.cpp
         Int.cpp
         Number.cpp
         Variant.cpp
@@ -23,6 +16,7 @@ if (NOT WIN32)
         add_executable(LibXLL.Tests.${sanitizer}
                 String.cpp
                 Bool.cpp
+                Expected.cpp
                 Int.cpp
                 Number.cpp
                 Variant.cpp

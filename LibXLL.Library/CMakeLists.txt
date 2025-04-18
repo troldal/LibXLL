@@ -11,7 +11,7 @@ target_include_directories(ExcelSDK INTERFACE ExcelSDK)
 
 add_library(LibXLL INTERFACE)
 target_include_directories(ExcelSDK INTERFACE ${CMAKE_CURRENT_LIST_DIR})
-target_link_libraries(LibXLL INTERFACE CommonUtils ExcelSDK)
+target_link_libraries(LibXLL INTERFACE CommonUtils ExcelSDK fxt::fxt)
 
 if (NOT WIN32)
     target_link_libraries(LibXLL INTERFACE LinuxUtils)

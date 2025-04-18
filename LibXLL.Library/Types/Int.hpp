@@ -83,7 +83,6 @@ namespace xll
             return *this;
         }
 
-        // Free function for non-member operator%
         template<typename TOther>
             requires (std::same_as<TOther, Int> || std::same_as<TOther, xll::Bool>)
         friend Int operator%(const Int& lhs, TOther&& rhs)
