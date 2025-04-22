@@ -46,12 +46,12 @@ namespace xll
         }
 
         template <std::integral T = int>
-        operator T() const
+        explicit operator T() const
         {
             return error_index();
         }
 
-        operator int() const
+        explicit operator int() const
         {
             return error_index();
         }

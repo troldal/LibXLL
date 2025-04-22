@@ -538,57 +538,6 @@ namespace xll
         }
 
         /**
-         * @brief Conversion operator that transforms the Expected object to a fxt::expected object.
-         *
-         * Provides an implicit conversion from xll::Expected<TValue, TError> to fxt::expected<TValue, TError>.
-         * This operator delegates to the to_expected() method without type conversion, preserving the
-         * original value and error types. This allows the Expected object to be used seamlessly in
-         * contexts that require a fxt::expected.
-         *
-         * @return A fxt::expected<TValue, TError> object containing either the value (if in success state)
-         *         or the error (if in error state)
-         *
-         * @see to_expected()
-         * @see fxt::expected
-         */
-        operator fxt::expected<TValue, TError>() const { return to_expected(); }
-
-        /**
-         * @brief Specialized conversion operator that transforms the Expected object to a fxt::expected with int error type.
-         *
-         * Provides an implicit conversion from xll::Expected<TValue, TError> to fxt::expected<TValue, int>.
-         * This operator delegates to the to_expected() method with explicit type parameters,
-         * preserving the original value type but converting the error type to int.
-         * This specialized conversion is useful when integrating with code that expects
-         * error conditions represented as integer error codes.
-         *
-         * @return A fxt::expected<TValue, int> object containing either the value (if in success state)
-         *         or the error converted to int (if in error state)
-         *
-         * @see to_expected()
-         * @see fxt::expected
-         */
-        operator fxt::expected<TValue, int>() const { return to_expected<TValue, int>(); }
-
-        /**
-         * @brief Specialized conversion operator that transforms the Expected object to a fxt::expected with std::string value and int
-         * error types.
-         *
-         * Provides an implicit conversion from xll::Expected<TValue, TError> to fxt::expected<std::string, int>.
-         * This operator delegates to the to_expected() method with explicit type parameters,
-         * converting the original value type to std::string and the error type to int.
-         * This specialized conversion is particularly useful when integrating with APIs that expect
-         * string values and integer error codes, such as in serialization or interoperability scenarios.
-         *
-         * @return A fxt::expected<std::string, int> object containing either the value converted to std::string
-         *         (if in success state) or the error converted to int (if in error state)
-         *
-         * @see to_expected()
-         * @see fxt::expected
-         */
-        operator fxt::expected<std::string, int>() const { return to_expected<std::string, int>(); }
-
-        /**
          * @brief Returns the contained value or a default value if in error state.
          *
          * This method provides a safe way to access the contained value without throwing
@@ -1056,6 +1005,136 @@ namespace xll
     constexpr auto operator|(xll::Expected<T, E>& t, TFunc&& f) -> std::invoke_result_t<TFunc, xll::Expected<T, E>&>
     {
         return std::invoke(std::forward<TFunc>(f), t);
+    }
+
+    /**
+     * @brief Creates a higher-order function for monadic binding on Expected objects.
+     *
+     * This function returns a closure that applies the provided function using the and_then
+     * method of an Expected object. It enables point-free programming style and function
+     * composition with the Expected monad, allowing operations to be chained together with
+     * the pipe operator.
+     *
+     * @tparam TFunction The type of the function to be applied to the Expected's value
+     *
+     * @param f The function to apply to the value inside an Expected if it's in a success state.
+     *          This function should take a value of type TValue and return an Expected.
+     *
+     * @return A higher-order function that takes an Expected object and applies the function f
+     *         to its value using and_then, propagating errors without invoking f
+     *
+     * @note This enables more readable composition with the pipe operator, turning
+     *       ex.and_then(f) into ex | and_then(f)
+     * @note The returned function uses perfect forwarding to preserve the function's value category
+     * @note The impl::is_valid_type concept ensures type safety with Excel-compatible types
+     *
+     * @see Expected::and_then
+     * @see operator|
+     */
+    template<typename TFunction>
+    auto and_then(TFunction&& f)
+    {
+        return [f = std::forward<TFunction>(f)]<impl::is_valid_type TValue, typename TError>(const xll::Expected<TValue, TError>& ex) {
+            return ex.and_then(f);
+        };
+    }
+
+    /**
+     * @brief Creates a higher-order function for error handling on Expected objects.
+     *
+     * This function returns a closure that applies the provided function using the or_else
+     * method of an Expected object. It enables point-free programming style and function
+     * composition with the Expected monad, providing a clean way to handle errors in a
+     * pipeline of operations.
+     *
+     * @tparam TFunction The type of the function to be applied to the Expected's error
+     *
+     * @param f The function to apply to the error inside an Expected if it's in an error state.
+     *          This function should take an error of type TError and return an Expected.
+     *
+     * @return A higher-order function that takes an Expected object and applies the function f
+     *         to its error using or_else, preserving values without invoking f
+     *
+     * @note This enables more readable composition with the pipe operator, turning
+     *       ex.or_else(f) into ex | or_else(f)
+     * @note The returned function uses perfect forwarding to preserve the function's value category
+     * @note The impl::is_valid_type concept ensures type safety with Excel-compatible types
+     *
+     * @see Expected::or_else
+     * @see operator|
+     * @see and_then for the complementary operation that handles the success case
+     */
+    template<typename TFunction>
+    auto or_else(TFunction&& f)
+    {
+        return [f = std::forward<TFunction>(f)]<impl::is_valid_type TValue>(const xll::Expected<TValue>& ex) { return ex.or_else(f); };
+    }
+
+    /**
+     * @brief Creates a higher-order function for transforming values within Expected objects.
+     *
+     * This function returns a closure that applies the provided function using the transform
+     * method of an Expected object. It enables point-free programming style and function
+     * composition with the Expected monad, allowing value transformations to be chained
+     * together with the pipe operator.
+     *
+     * @tparam TFunction The type of the function to be applied to the Expected's value
+     *
+     * @param f The function to apply to the value inside an Expected if it's in a success state.
+     *          This function should take a value of type TValue and return a new value of any type.
+     *
+     * @return A higher-order function that takes an Expected object and applies the function f
+     *         to its value using transform, propagating errors without invoking f
+     *
+     * @note This enables more readable composition with the pipe operator, turning
+     *       ex.transform(f) into ex | transform(f)
+     * @note The returned function uses perfect forwarding to preserve the function's value category
+     * @note The impl::is_valid_type concept ensures type safety with Excel-compatible types
+     * @note Unlike and_then(), this function automatically wraps the result in a new Expected
+     *
+     * @see Expected::transform
+     * @see operator|
+     * @see transform_error for the complementary operation that transforms errors
+     * @see and_then for operations that return Expected objects directly
+     */
+    template<typename TFunction>
+    auto transform(TFunction&& f)
+    {
+        return [f = std::forward<TFunction>(f)]<impl::is_valid_type TValue>(const xll::Expected<TValue>& ex) { return ex.transform(f); };
+    }
+
+    /**
+     * @brief Creates a higher-order function for transforming errors within Expected objects.
+     *
+     * This function returns a closure that applies the provided function using the transform_error
+     * method of an Expected object. It enables point-free programming style and function
+     * composition with the Expected monad, allowing error transformations to be chained
+     * together with the pipe operator.
+     *
+     * @tparam TFunction The type of the function to be applied to the Expected's error
+     *
+     * @param f The function to apply to the error inside an Expected if it's in an error state.
+     *          This function should take an error of type TError and return a new error of any type.
+     *
+     * @return A higher-order function that takes an Expected object and applies the function f
+     *         to its error using transform_error, preserving values without invoking f
+     *
+     * @note This enables more readable composition with the pipe operator, turning
+     *       ex.transform_error(f) into ex | transform_error(f)
+     * @note The returned function uses perfect forwarding to preserve the function's value category
+     * @note The impl::is_valid_type concept ensures type safety with Excel-compatible types
+     * @note Unlike or_else(), this function automatically wraps the result in a new Expected
+     *
+     * @see Expected::transform_error
+     * @see operator|
+     * @see transform for the complementary operation that transforms values
+     * @see or_else for operations that return Expected objects directly
+     */
+    template<typename TFunction>
+    auto transform_error(TFunction&& f)
+    {
+        return
+            [f = std::forward<TFunction>(f)]<impl::is_valid_type TValue>(const xll::Expected<TValue>& ex) { return ex.transform_error(f); };
     }
 
 }    // namespace xll

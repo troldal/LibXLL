@@ -8,5 +8,4 @@
 #include "Functions.hpp"
 #include "Register.hpp"
 #include "Types.hpp"
-#include "Functional.hpp"
 #include "Auto/Auto.hpp"
