@@ -20,13 +20,30 @@ include(${CMAKE_CURRENT_BINARY_DIR}/cmake/CPM.cmake)
 # Fetch dependencies
 #==============================================================================
 
-CPMFindPackage(
+if (WIN32)
+#    set(CPM_EquiLib_SOURCE "D:/Dev/XLThermo/EquiLib")
+    set(CPM_FXT_SOURCE "D:/Dev/XLThermo/FXT")
+#    set(CPM_LibXLL_SOURCE "D:/Dev/XLThermo/LibXLL")
+else ()
+#    set(CPM_EquiLib_SOURCE "/mnt/d/Dev/XLThermo/EquiLib")
+    set(CPM_FXT_SOURCE "/mnt/d/Dev/XLThermo/FXT")
+#    set(CPM_LibXLL_SOURCE "/mnt/d/Dev/XLThermo/LibXLL")
+endif ()
+
+CPMAddPackage(
         NAME FXT
         GITHUB_REPOSITORY troldal/FXT
         GIT_TAG main
-        EXCLUDE_FROM_ALL
-        SYSTEM
+        OPTIONS "FXT_USE_TL_EXPECTED OFF" "FXT_USE_TL_OPTIONAL OFF"
 )
+
+#CPMFindPackage(
+#        NAME FXT
+#        GITHUB_REPOSITORY troldal/FXT
+#        GIT_TAG main
+#        EXCLUDE_FROM_ALL
+#        SYSTEM
+#)
 
 #CPMFindPackage(
 #        NAME Catch2

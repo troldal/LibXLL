@@ -71,7 +71,7 @@ extern "C" inline XLL_EXPORTS LPXLOPER12 XLLAPI xlAddInManagerInfo12(xll::Int* a
 
     try {
         // coerce to int and check if action is 1
-        if (const auto action_ = xll::coerce<xll::Int>(action); action_.has_value() && action_ == 1) {
+        if (const auto action_ = xll::coerce<xll::Int>(action); action_ == 1) {
             o.xltype  = xltypeStr;
             o.val.str = name.val.str;
         }

@@ -177,7 +177,15 @@ namespace xll
         {
             for (const auto& func : s_onError) func(err);
         }
+
     };
+
+    template<typename TEvent, typename TFunc>
+        requires std::invocable<TFunc, xll::Auto<TEvent>>
+    constexpr auto operator|(xll::Auto<TEvent>&& t, TFunc&& f) -> std::invoke_result_t<TFunc, xll::Auto<TEvent>>
+    {
+        return std::invoke(std::forward<TFunc>(f), std::forward<xll::Auto<TEvent>>(t));
+    }
 
     template<typename TFunc>
     auto Before(TFunc&& rhs)
@@ -240,12 +248,14 @@ namespace xll
                 arg->xltype |= xlbitDLLFree;
                 return arg.release();
             }
-            else {
+            else if constexpr (not std::same_as<std::remove_reference_t<T>, xll::Function>) {
                 using U  = std::decay_t<T>;
                 auto ptr = std::make_unique<U>(std::forward<T>(arg));
                 ptr->xltype |= xlbitDLLFree;
                 return ptr.release();
             }
+
+            throw std::runtime_error("AutoFree: Cannot free this type");
         };
     }
 }    // namespace xll

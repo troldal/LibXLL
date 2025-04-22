@@ -249,7 +249,7 @@ namespace xll
             for (auto item : args.argumentHelp) result.emplace_back(item);
 
             // Addressing a bug in Excel that removes the last two characters of a string.
-            xll::get<xll::String>(result.back()) = xll::get<xll::String>(result.back()) + ". ";
+            xll::get<xll::String>(result.back()) = xll::get<xll::String>(result.back()) + "  ";
 
             return result;
         }

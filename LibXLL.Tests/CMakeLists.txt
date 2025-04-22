@@ -1,3 +1,7 @@
+add_library(Catch2ForOpenXLL STATIC Catch2/catch_amalgamated.cpp)
+target_include_directories(Catch2ForOpenXLL PUBLIC Catch2)
+
+
 include(FetchContent)
 
 add_executable(LibXLL.Tests
@@ -9,7 +13,7 @@ add_executable(LibXLL.Tests
         Variant.cpp
         Array.cpp
 )
-target_link_libraries(LibXLL.Tests PRIVATE Catch2::Catch2WithMain LibXLL)
+target_link_libraries(LibXLL.Tests PRIVATE Catch2ForOpenXLL LibXLL)
 
 if (NOT WIN32)
     foreach (sanitizer IN ITEMS address undefined thread memory)
@@ -22,7 +26,7 @@ if (NOT WIN32)
                 Variant.cpp
                 Array.cpp
         )
-        target_link_libraries(LibXLL.Tests.${sanitizer} PRIVATE Catch2::Catch2WithMain LibXLL)
+        target_link_libraries(LibXLL.Tests.${sanitizer} PRIVATE Catch2ForOpenXLL LibXLL)
         if (sanitizer STREQUAL "address")
             target_compile_options(LibXLL.Tests.${sanitizer} PRIVATE -fsanitize=${sanitizer} -fno-omit-frame-pointer -g)
             target_link_options(LibXLL.Tests.${sanitizer} PRIVATE -fsanitize=${sanitizer} -fno-omit-frame-pointer -g)

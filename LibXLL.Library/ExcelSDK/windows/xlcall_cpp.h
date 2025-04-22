@@ -22,6 +22,10 @@
 #define FORCE_SYMBOL __attribute__((used))
 #endif
 
+#if defined(__MINGW32__) || defined(__MINGW64__)
+    #define _cdecl __attribute__((__cdecl__))
+#endif
+
 #include "xlcall.h"
 
 /*
@@ -78,7 +82,6 @@ inline FORCE_SYMBOL void pascal SetExcel12EntryPt(EXCEL12PROC pexcel12New)
 // #ifdef _MSC_VER
 // #pragma comment(linker, "/INCLUDE:SetExcel12EntryPt")
 // #endif
-//#define _cdecl __attribute__((__cdecl__))
 inline FORCE_SYMBOL int _cdecl Excel12(int xlfn, LPXLOPER12 operRes, int count, ...)
 {
 

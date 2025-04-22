@@ -47,6 +47,7 @@ namespace xll
     class Variant : public XLOPER12
     {
     public:
+
         Variant() : XLOPER12() { xltype = xltypeNum; }
 
         template<typename T>

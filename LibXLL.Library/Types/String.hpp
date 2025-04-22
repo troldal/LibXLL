@@ -134,7 +134,7 @@ namespace xll
             if (this == &other) return *this;
 
             delete[] val.str;
-            val.str  = nullptr;
+            val.str = nullptr;
 
             xltype = xltypeStr;
             value() = other.val.str;

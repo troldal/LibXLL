@@ -64,6 +64,8 @@ XLL_FUNCTION xll::Array<xll::Expected<xll::Number>>* XLLAPI MakeNum(xll::Array<x
     //     *arg | xll::transform([](xll::Number const& arg) { return xll::String("Valid"); })
     //          | xll::transform_error([](xll::Error const& arg) { return xll::String("Invalid"); });
 
+    // static xll::Array<xll::Expected<xll::Number>> result;
+    // result = *arg;
     auto result = *arg;
     for (auto& elem : result)
         elem = elem | xll::transform([](const xll::Number& num) { return num + 2;});

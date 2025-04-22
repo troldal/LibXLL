@@ -43,7 +43,7 @@ namespace xll::impl
         TDerived&       derived() { return static_cast<TDerived&>(*this); }
         TDerived const& derived() const { return static_cast<TDerived const&>(*this); }
 
-        static constexpr size_t excel_type = XLType;
+
 
     protected:
         ~Base() = default;
@@ -85,6 +85,7 @@ namespace xll::impl
         }
 
     public:
+        static constexpr size_t excel_type = XLType;
         bool                  is_valid() const { return xltype == XLType; }
         static constexpr bool has_crtp_base = true;
 
@@ -253,7 +254,7 @@ namespace xll::impl
          *
          * This operator assigns the contents of another Base object to this one using move semantics.
          * It checks if the current object and the other object are the same.
-         * If they are not the same, it swaps the contents of the other object with the current object.
+         * If they are different, it swaps the contents of the other object with the current object.
          *
          * \param other The Base object to move from.
          * \requires The value_type of the Base class must be an arithmetic type.
