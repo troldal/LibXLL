@@ -58,8 +58,8 @@ namespace xll::traits
         static constexpr std::string_view excel_type = "Q";
     };
 
-    template<>
-    struct arg_traits<Variant>
+    template<typename T>
+    struct arg_traits<Variant<T>>
     {
         static constexpr std::string_view excel_type = "Q";
     };

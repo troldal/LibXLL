@@ -31,8 +31,7 @@ namespace xll
      * @see Unexpected
      */
     template<typename TValue, typename TError = xll::Error>
-        requires(not std::same_as<TValue, xll::Error> and not std::same_as<TValue, xll::Nil> and not std::same_as<TValue, xll::Missing> and
-                 not std::same_as<TValue, xll::Variant>) and
+        requires(not std::same_as<TValue, xll::Error> and not std::same_as<TValue, xll::Nil> and not std::same_as<TValue, xll::Missing>) and
                 (std::same_as<TError, xll::Error>)    // or std::same_as<TError, xll::String>)
     class Expected final : public XLOPER12
     {
@@ -429,7 +428,7 @@ namespace xll
          */
         bool has_value() const
         {
-            if (xltype == TValue::excel_type) return true;
+            if (xltype & TValue::excel_type) return true;
             return false;
         }
 

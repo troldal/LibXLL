@@ -21,12 +21,12 @@ namespace xll
         return result;
     }
 
-    inline xll::Number Register(std::vector<xll::Variant> args)
+    inline xll::Number Register(std::vector<xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number>> args)
     {
 
         std::vector<LPXLOPER12> operArray;
         operArray.reserve(args.size());
-        for (xll::Variant& var : args)
+        for (xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number>& var : args)
         {
             // Safe conversion since Variant inherits from XLOPER12.
             operArray.push_back(static_cast<LPXLOPER12>(&var));

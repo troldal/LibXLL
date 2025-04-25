@@ -33,7 +33,7 @@ namespace xll
             xll::String functionName;
             xll::String argNames;
             xll::Int    visibility = 1;
-            xll::Variant functionCategory = xll::Nil();
+            xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number> functionCategory = xll::Nil();
             xll::String shortcutKey;
             xll::String functionHelpTopic;
             xll::String functionDescription;
@@ -48,10 +48,10 @@ namespace xll
         xll::String FunctionName(const impl::FunctionArgs&);
         xll::String FunctionArguments(const impl::FunctionArgs&);
         xll::Int    FunctionVisibility(const impl::FunctionArgs&);
-        xll::Variant FunctionCategory(const impl::FunctionArgs&);
+        xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number> FunctionCategory(const impl::FunctionArgs&);
         xll::String FunctionDescription(const impl::FunctionArgs&);
         xll::String FunctionHelp(const impl::FunctionArgs&);
-        std::vector<xll::Variant> All(const impl::FunctionArgs&);
+        std::vector<xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number>> All(const impl::FunctionArgs&);
     }
 
     // template<typename TReturn>
@@ -62,10 +62,10 @@ namespace xll
         friend xll::String impl::FunctionName(const impl::FunctionArgs&);
         friend xll::String impl::FunctionArguments(const impl::FunctionArgs&);
         friend xll::Int    impl::FunctionVisibility(const impl::FunctionArgs&);
-        friend xll::Variant FunctionCategory(const impl::FunctionArgs&);
+        friend xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number> FunctionCategory(const impl::FunctionArgs&);
         friend xll::String FunctionDescription(const impl::FunctionArgs&);
         friend xll::String FunctionHelp(const impl::FunctionArgs&);
-        friend std::vector<xll::Variant> All(const impl::FunctionArgs&);
+        friend std::vector<xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number>> All(const impl::FunctionArgs&);
 
     public:
 
@@ -226,15 +226,15 @@ namespace xll
 
         inline xll::Int FunctionVisibility(const impl::FunctionArgs& args) { return args.visibility; }
 
-        inline xll::Variant FunctionCategory(const impl::FunctionArgs& args) { return args.functionCategory; }
+        inline xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number> FunctionCategory(const impl::FunctionArgs& args) { return args.functionCategory; }
 
         inline xll::String FunctionDescription(const impl::FunctionArgs& args) { return args.functionDescription; }
 
         inline xll::String FunctionHelp(const impl::FunctionArgs& args) { return args.functionHelpTopic; }
 
-        inline std::vector<xll::Variant> All(const impl::FunctionArgs& args)
+        inline std::vector<xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number>> All(const impl::FunctionArgs& args)
         {
-            auto result = std::vector<xll::Variant> {};
+            auto result = std::vector<xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number>> {};
             result.emplace_back(xll::get_name());
             result.emplace_back(ProcedureName(args));
             result.emplace_back(FunctionSignature(args));

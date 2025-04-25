@@ -264,7 +264,7 @@ extern "C" inline XLL_EXPORTS int XLLAPI xlAutoOpen()
 {
     return xll::xlAuto<xll::Open>("xlAutoOpen", [] {
         for (const auto& fn : xll::Function::functionArgs) {
-            xll::Variant id = xll::Register(xll::impl::All(fn));
+            xll::Variant<xll::Nil, xll::Number> id = xll::Register(xll::impl::All(fn));
             if (not holds_alternative<xll::Number>(id)) {
                 throw std::runtime_error(std::format("[xlAutoOpen]: Failed to register function {}", fn.functionName.to_string()));
             }
@@ -342,7 +342,7 @@ extern "C" inline XLL_EXPORTS void XLLAPI xlAutoFree12(LPXLOPER12 px)
     px->xltype &= ~xlbitDLLFree;
     switch (px->xltype) {
         case xltypeMulti:
-            delete reinterpret_cast<xll::Array<xll::Variant>*>(px);
+            delete reinterpret_cast<xll::Array<xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number>>*>(px);
         break;
         case xltypeBool:
             delete reinterpret_cast<xll::Bool*>(px);
