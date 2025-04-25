@@ -360,3 +360,10 @@ namespace xll
     }
 
 }    // namespace xll
+
+template<>
+struct std::formatter<xll::String> : std::formatter<std::string> {
+    auto format(const xll::String& str, std::format_context& ctx) const {
+        return std::formatter<std::string>::format(str.to_string(), ctx);
+    }
+};

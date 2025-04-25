@@ -471,6 +471,24 @@ namespace xll
             }
         }
 
+        operator std::vector<TValue>() const
+        {
+            std::vector<TValue> result {};
+            result.reserve(size());
+            for (auto const& v : *this) result.push_back(v);
+            return result;
+        }
+
+        template<typename TElem>
+            requires std::same_as<TElem, typename TValue::value_type>
+        operator std::vector<fxt::expected<TElem, xll::String>>() const
+        {
+            std::vector<fxt::expected<TElem, xll::String>> result {};
+            result.reserve(size());
+            for (auto const& v : *this) result.push_back(v);
+            return result;
+        }
+
         template<template<typename> class TContainer, typename TElem>
             requires std::convertible_to<TValue, TElem>
         auto to() const

@@ -537,6 +537,18 @@ namespace xll
             return fxt::unexpected<E>(error());
         }
 
+        operator fxt::expected<TValue, xll::Error>() const
+        {
+            if (has_value()) return fxt::expected<TValue, xll::Error>(value());
+            return fxt::unexpected<xll::Error>(error());
+        }
+
+        operator fxt::expected<TValue, xll::String>() const
+        {
+            if (has_value()) return fxt::expected<TValue, xll::String>(value());
+            return fxt::unexpected<xll::String>(error().to_string());
+        }
+
         /**
          * @brief Returns the contained value or a default value if in error state.
          *

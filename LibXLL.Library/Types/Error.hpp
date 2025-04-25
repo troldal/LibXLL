@@ -5,6 +5,7 @@
 #pragma once
 
 #include "Base.hpp"
+#include "String.hpp"
 
 #include <format>
 #include <string>
@@ -23,7 +24,7 @@ namespace xll
 
         // Returns a string representation of the error code
         [[nodiscard]]
-        std::string to_string() const
+        xll::String to_string() const
         {
             switch (val.err) {
                 case 0:
@@ -107,15 +108,22 @@ namespace xll
 }    // namespace xll
 
 // Standard formatter specialization
-template<>
-struct std::formatter<xll::Error> : std::formatter<std::string>
-{
-    // constexpr auto parse(std::format_parse_context& ctx) {
-    //     return ctx.begin();
-    // }
+// template<>
+// struct std::formatter<xll::Error> : std::formatter<std::string>
+// {
+//     // constexpr auto parse(std::format_parse_context& ctx) {
+//     //     return ctx.begin();
+//     // }
+//
+//     auto format(const xll::Error& error, std::format_context& ctx) const
+//     {
+//         return std::formatter<std::string>::format(error.to_string(), ctx);
+//     }
+// };
 
-    auto format(const xll::Error& error, std::format_context& ctx) const
-    {
-        return std::formatter<std::string>::format(error.to_string(), ctx);
+template<>
+struct std::formatter<xll::Error> : std::formatter<xll::String> {
+    auto format(const xll::Error& str, std::format_context& ctx) const {
+        return std::formatter<xll::String>::format(str.to_string(), ctx);
     }
 };
