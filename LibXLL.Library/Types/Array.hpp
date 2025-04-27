@@ -86,6 +86,22 @@ namespace xll
             }
         }
 
+        template<typename U, typename UBase = std::remove_cvref_t<U>>
+            requires std::constructible_from<TValue, U> && (!std::same_as<TValue, UBase>) && (!std::same_as<Array, UBase>)
+        Array(std::initializer_list<U> values) : Array()
+        {
+            if (values.size() == 0) return;
+
+            val.array.lparray = make_array(values.size()).release();
+            val.array.rows    = 1;
+            val.array.columns = static_cast<COL>(values.size());
+
+            auto it = values.begin();
+            for (size_t i = 0; i < values.size(); ++i, ++it) {
+                static_cast<TValue&>(val.array.lparray[i]) = *it;
+            }
+        }
+
         /**
          * @brief Constructs an Array from a Missing value.
          *

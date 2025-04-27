@@ -68,11 +68,11 @@ namespace xll
         Expected(const Expected& other) : XLOPER12()
         {
             if (other.has_value()) {
-                xltype                           = TValue::excel_type;
+                xltype                           = other.xltype;
                 reinterpret_cast<TValue&>(*this) = other.value();
             }
             else {
-                xltype                           = TError::excel_type;
+                xltype                           = TError().xltype;
                 reinterpret_cast<TError&>(*this) = other.error();
             }
         }
@@ -90,11 +90,11 @@ namespace xll
         Expected(Expected&& other) noexcept : XLOPER12()
         {
             if (other.has_value()) {
-                xltype                           = TValue::excel_type;
+                xltype                           = other.xltype;
                 reinterpret_cast<TValue&>(*this) = std::move(other.value());
             }
             else {
-                xltype                           = TError::excel_type;
+                xltype                           = TError().xltype;
                 reinterpret_cast<TError&>(*this) = std::move(other.error());
             }
         }
@@ -112,8 +112,17 @@ namespace xll
          */
         Expected(const TValue& t) : XLOPER12()    // NOLINT
         {
-            xltype                           = TValue::excel_type;
+            xltype                           = t.xltype;
             reinterpret_cast<TValue&>(*this) = t;
+        }
+
+        template<typename U, typename UBase = std::remove_cvref_t<U>>
+            requires std::constructible_from<TValue, U> && (!std::same_as<TValue, UBase>) && (!std::same_as<Expected, UBase>)
+        Expected(const U& u) : XLOPER12()
+        {
+            TValue value(u);
+            xltype = value.xltype;
+            reinterpret_cast<TValue&>(*this) = value;
         }
 
         /**
@@ -128,8 +137,17 @@ namespace xll
          */
         Expected(TValue&& t) : XLOPER12()
         {
-            xltype                           = TValue::excel_type;
+            xltype                           = t.xltype;
             reinterpret_cast<TValue&>(*this) = std::move(t);
+        }
+
+        template<typename U, typename UBase = std::remove_cvref_t<U>>
+            requires std::constructible_from<TValue, U> && (!std::same_as<TValue, UBase>) && (!std::same_as<Expected, UBase>)
+        Expected(U&& u) : XLOPER12()
+        {
+            TValue value(std::forward<U>(u));
+            xltype = value.xltype;
+            reinterpret_cast<TValue&>(*this) = std::move(value);
         }
 
         /**
@@ -146,7 +164,7 @@ namespace xll
         template<typename UError = TError>
         Expected(const Unexpected<UError>& unexpected) : XLOPER12()
         {
-            xltype                           = TError::excel_type;
+            xltype                           = unexpected.error().xltype;
             reinterpret_cast<TError&>(*this) = unexpected.error();
         }
 
@@ -164,7 +182,7 @@ namespace xll
         template<typename UError = TError>
         Expected(Unexpected<UError>&& unexpected) : XLOPER12()
         {
-            xltype                           = TError::excel_type;
+            xltype                           = unexpected.error().xltype;
             reinterpret_cast<TError&>(*this) = std::move(unexpected.error());
         }
 
@@ -178,7 +196,7 @@ namespace xll
          *
          * @param _ The Nil object (parameter name is intentionally unused)
          */
-        Expected(const Nil& _) : Expected(Unexpected(TError())) {}
+        // Expected(const Nil& _) : Expected(Unexpected(TError())) {}
 
         /**
          * @brief Converting constructor from a Missing object.
@@ -190,7 +208,7 @@ namespace xll
          *
          * @param _ The Missing object (parameter name is intentionally unused)
          */
-        Expected(const Missing& _) : Expected(Unexpected(TError())) {}
+        // Expected(const Missing& _) : Expected(Unexpected(TError())) {}
 
         /**
          * @brief Destructor for the Expected class.
@@ -232,11 +250,11 @@ namespace xll
 
             this->~Expected();
             if (other.has_value()) {
-                xltype                           = TValue::excel_type;
+                xltype                           = other.xltype;
                 reinterpret_cast<TValue&>(*this) = other.value();
             }
             else {
-                xltype                           = TError::excel_type;
+                xltype                           = TError().xltype;
                 reinterpret_cast<TError&>(*this) = other.error();
             }
 
@@ -265,11 +283,11 @@ namespace xll
 
             this->~Expected();
             if (other.has_value()) {
-                xltype                           = TValue::excel_type;
+                xltype                           = other.xltype;
                 reinterpret_cast<TValue&>(*this) = std::move(other.value());
             }
             else {
-                xltype                           = TError::excel_type;
+                xltype                           = TError().xltype;
                 reinterpret_cast<TError&>(*this) = std::move(other.error());
             }
 
@@ -294,8 +312,19 @@ namespace xll
             if (reinterpret_cast<void*>(this) == reinterpret_cast<void*>(&other)) return *this;
 
             this->~Expected();
-            xltype                           = TValue::excel_type;
+            xltype                           = TValue().xltype;
             reinterpret_cast<TValue&>(*this) = other;
+            return *this;
+        }
+
+        template<typename U, typename UBase = std::remove_cvref_t<U>>
+            requires std::constructible_from<TValue, U> && (!std::same_as<TValue, UBase>) && (!std::same_as<Expected, UBase>)
+        Expected& operator=(const U& other)
+        {
+            this->~Expected();
+            TValue value(other);
+            xltype                           = value.xltype;
+            reinterpret_cast<TValue&>(*this) = value;
             return *this;
         }
 
@@ -317,8 +346,19 @@ namespace xll
             if (reinterpret_cast<void*>(this) == reinterpret_cast<void*>(&other)) return *this;
 
             this->~Expected();
-            xltype                           = TValue::excel_type;
+            xltype                           = TValue().xltype;
             reinterpret_cast<TValue&>(*this) = std::move(other);
+            return *this;
+        }
+
+        template<typename U, typename UBase = std::remove_cvref_t<U>>
+            requires std::constructible_from<TValue, U> && (!std::same_as<TValue, UBase>) && (!std::same_as<Expected, UBase>)
+        Expected& operator=(U&& other)
+        {
+            this->~Expected();
+            TValue value(std::forward<U>(other));
+            xltype                           = value.xltype;
+            reinterpret_cast<TValue&>(*this) = std::move(value);
             return *this;
         }
 
@@ -341,7 +381,7 @@ namespace xll
         Expected& operator=(const Unexpected<UError>& unexpected)
         {
             this->~Expected();
-            xltype                           = TError::excel_type;
+            xltype                           = unexpected.error().xltype;
             reinterpret_cast<TError&>(*this) = unexpected.error();
             return *this;
         }
@@ -365,7 +405,7 @@ namespace xll
         Expected& operator=(Unexpected<UError>&& unexpected)
         {
             this->~Expected();
-            xltype                           = TError::excel_type;
+            xltype                           = unexpected.error().xltype;
             reinterpret_cast<TError&>(*this) = std::move(unexpected.error());
             return *this;
         }
@@ -384,13 +424,13 @@ namespace xll
          * @note This operator maintains consistency with the Nil constructor, treating Nil values
          *       as errors rather than valid values within the Expected container.
          */
-        Expected& operator=(const Nil& _)
-        {
-            this->~Expected();
-            xltype                           = TError::excel_type;
-            reinterpret_cast<TError&>(*this) = TError();
-            return *this;
-        }
+        // Expected& operator=(const Nil& _)
+        // {
+        //     this->~Expected();
+        //     xltype                           = TError().xltype;
+        //     reinterpret_cast<TError&>(*this) = TError();
+        //     return *this;
+        // }
 
         /**
          * @brief Assignment operator from a Missing object.
@@ -406,13 +446,13 @@ namespace xll
          * @note This operator maintains consistency with the Missing constructor, treating Missing values
          *       as errors rather than valid values within the Expected container.
          */
-        Expected& operator=(const Missing& _)
-        {
-            this->~Expected();
-            xltype                           = TError::excel_type;
-            reinterpret_cast<TError&>(*this) = TError();
-            return *this;
-        }
+        // Expected& operator=(const Missing& _)
+        // {
+        //     this->~Expected();
+        //     xltype                           = TError().xltype;
+        //     reinterpret_cast<TError&>(*this) = TError();
+        //     return *this;
+        // }
 
         /**
          * @brief Checks if the Expected object contains a value (is in success state).
@@ -487,8 +527,8 @@ namespace xll
         [[nodiscard]]
         TError error() const
         {
-            if (not has_value() and xltype == TError::excel_type) return reinterpret_cast<const TError&>(*this);
-            if (not has_value() and xltype != TError::excel_type) return TError();
+            if (not has_value() and xltype == TError().xltype) return reinterpret_cast<const TError&>(*this);
+            if (not has_value() and xltype != TError().xltype) return TError();
             throw std::runtime_error("Expected::error() called on expected value");
         }
 

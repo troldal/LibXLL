@@ -15,4 +15,6 @@
 #include "Types/String.hpp"
 #include "Types/Variant.hpp"
 #include "Types/Expected.hpp"
+#include "Types/SingleRef.hpp"
+#include "Types/MultiRef.hpp"
 

@@ -69,11 +69,12 @@ namespace xll
     {
     public:
 
-        static constexpr size_t excel_type = T::excel_type | (Ts::excel_type | ...);
+        // Bit pattern for the xltype field of the XLOPER12 structure
+        static constexpr size_t excel_type = xltypeMissing | T::excel_type | (Ts::excel_type | ...);
 
         Variant() : XLOPER12()
         {
-            xltype = T::excel_type;
+            xltype = T().xltype;
             reinterpret_cast<T&>(*this) = T();
         }
 
@@ -82,12 +83,26 @@ namespace xll
         Variant(const U& u) : Variant()    // NOLINT
         {
             if constexpr (std::same_as<U, xll::Missing>) {
-                xltype                             = xll::Nil::excel_type;
+                xltype                             = xll::Nil().xltype;
                 reinterpret_cast<xll::Nil&>(*this) = xll::Nil();
             }
             else {
-                xltype                      = U::excel_type;
+                xltype                      = u.xltype;
                 reinterpret_cast<U&>(*this) = u;
+            }
+        }
+
+        template<typename U>
+            requires(std::same_as<U, xll::Missing> || std::same_as<U, T> || (std::same_as<U, Ts> || ...))
+        Variant(U&& u) noexcept : Variant()   // NOLINT
+        {
+            if constexpr (std::same_as<U, xll::Missing>) {
+                xltype                             = xll::Nil().xltype;
+                reinterpret_cast<xll::Nil&>(*this) = xll::Nil();
+            }
+            else {
+                xltype                      = u.xltype;
+                reinterpret_cast<U&>(*this) = std::move(u);
             }
         }
 
@@ -241,24 +256,42 @@ namespace xll
         }
 
         template<typename U>
-        requires(std::same_as<U, xll::Missing> || std::same_as<U, T> || (std::same_as<U, Ts> || ...))
+            requires(std::same_as<U, xll::Missing> || std::same_as<U, T> || (std::same_as<U, Ts> || ...))
         Variant& operator=(const U& u)
         {
             this->~Variant();
             static_cast<XLOPER12&>(*this)          = XLOPER12();
 
             if constexpr (std::same_as<U, xll::Missing>) {
-                xltype                             = xll::Nil::excel_type;
+                xltype                             = xll::Nil().xltype;
                 reinterpret_cast<xll::Nil&>(*this) = xll::Nil();
             }
             else {
-                xltype                      = U::excel_type;
+                xltype                      = u.xltype;
                 reinterpret_cast<U&>(*this) = u;
             }
 
             return *this;
         }
 
+        template<typename U>
+            requires(std::same_as<U, xll::Missing> || std::same_as<U, T> || (std::same_as<U, Ts> || ...))
+        Variant& operator=(U&& u) noexcept
+        {
+            this->~Variant();
+            static_cast<XLOPER12&>(*this) = XLOPER12();
+
+            if constexpr (std::same_as<U, xll::Missing>) {
+                xltype                             = xll::Nil().xltype;
+                reinterpret_cast<xll::Nil&>(*this) = xll::Nil();
+            }
+            else {
+                xltype                      = u.xltype;
+                reinterpret_cast<U&>(*this) = std::move(u);
+            }
+
+            return *this;
+        }
         // template<typename T>
         //     requires impl::is_valid_type<T>
         // Variant& operator=(T&& t) noexcept
@@ -270,13 +303,13 @@ namespace xll
         //     return *this;
         // }
 
-        [[nodiscard]]
-        auto index() const
-        {
-            return xltype;
-        }
+        // [[nodiscard]]
+        // auto index() const
+        // {
+        //     return xltype;
+        // }
 
-        XLOPER12& operator*() { return static_cast<XLOPER12&>(*this); }
+        // XLOPER12& operator*() { return static_cast<XLOPER12&>(*this); }
     };
 
 
@@ -289,8 +322,7 @@ namespace xll
         if (std::same_as<U, Int> && v.xltype == xltypeInt) return true;
         if (std::same_as<U, Number> && v.xltype == xltypeNum) return true;
         if (std::same_as<U, String> && v.xltype == xltypeStr) return true;
-        if (std::same_as<U, Nil> && v.xltype == xltypeNil) return true;
-        // if (std::same_as<U, Missing> && v.xltype == xltypeMissing) return true;
+        if (std::same_as<U, Nil> && (v.xltype == xltypeNil || v.xltype == xltypeMissing)) return true;
 
         return false;
     }
