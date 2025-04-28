@@ -309,7 +309,7 @@ namespace xll
          */
         Expected& operator=(const TValue& other)
         {
-            if (reinterpret_cast<void*>(this) == reinterpret_cast<void*>(&other)) return *this;
+            if (reinterpret_cast<void*>(this) == reinterpret_cast<const void*>(&other)) return *this;
 
             this->~Expected();
             xltype                           = TValue().xltype;

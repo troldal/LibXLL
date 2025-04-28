@@ -195,6 +195,8 @@ namespace xll
 
         Variant& operator=(const Variant& v)
         {
+            this->~Variant();
+            static_cast<XLOPER12&>(*this) = XLOPER12();
             xltype = v.xltype;
 
             if constexpr ((std::same_as<xll::Bool, T> || (std::same_as<xll::Bool, Ts> || ...)))
@@ -226,6 +228,8 @@ namespace xll
 
         Variant& operator=(Variant&& v) noexcept
         {
+            this->~Variant();
+            static_cast<XLOPER12&>(*this) = XLOPER12();
             xltype = v.xltype;
 
             if constexpr ((std::same_as<xll::Bool, T> || (std::same_as<xll::Bool, Ts> || ...)))
