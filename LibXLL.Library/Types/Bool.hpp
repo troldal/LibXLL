@@ -13,15 +13,15 @@ namespace xll
     {
         using BASE = impl::Base<Bool, xltypeBool, xltypeInt, xltypeNum>;
         friend BASE;
-        static inline std::string_view type_name = "xll::Bool";
+        static constexpr std::string_view type_name = "xll::Bool";
 
     public:
         using BASE::BASE;
         using BASE::operator=;
 
-        Bool() : Bool(false) {}
+        constexpr Bool() : Bool(false) {}
 
-        friend bool operator==(const Bool& lhs, bool rhs)
+        constexpr friend bool operator==(const Bool& lhs, bool rhs)
         {
             return static_cast<bool>(lhs.value()) == rhs;
         }

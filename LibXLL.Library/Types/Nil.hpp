@@ -17,31 +17,31 @@ namespace xll
     public:
         using BASE::BASE;
 
-        Nil() = default;
+        constexpr Nil() = default;
 
-        Nil(const Nil&)
+        constexpr Nil(const Nil&)
         {
             xltype = xltypeNil;
         }
 
-        Nil(const xll::Missing&)
+        constexpr Nil(const xll::Missing&)
         {
             xltype = xltypeNil;
         }
 
-        Nil& operator=(const Nil&)
-        {
-            xltype = xltypeNil;
-            return *this;
-        }
-
-        Nil& operator=(const Missing&)
+        constexpr Nil& operator=(const Nil&)
         {
             xltype = xltypeNil;
             return *this;
         }
 
-        friend bool operator==(const Nil&, const Nil&)
+        constexpr Nil& operator=(const Missing&)
+        {
+            xltype = xltypeNil;
+            return *this;
+        }
+
+        constexpr friend bool operator==(const Nil&, const Nil&)
         {
             return true;
         }

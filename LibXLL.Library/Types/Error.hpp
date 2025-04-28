@@ -17,14 +17,14 @@ namespace xll
     {
         using BASE = impl::Base<Error, xltypeErr>;
         friend BASE;
-        static inline std::string_view type_name = "xll::Error";
+        static constexpr std::string_view type_name = "xll::Error";
 
     public:
         using BASE::BASE;
 
         // Returns a string representation of the error code
         [[nodiscard]]
-        xll::String to_string() const
+        constexpr xll::String to_string() const
         {
             switch (val.err) {
                 case 0:
@@ -47,18 +47,18 @@ namespace xll
         }
 
         template <std::integral T = int>
-        explicit operator T() const
+        constexpr explicit operator T() const
         {
             return error_index();
         }
 
-        explicit operator int() const
+        constexpr explicit operator int() const
         {
             return error_index();
         }
 
         [[nodiscard]]
-        int error_index() const
+        constexpr int error_index() const
         {
             ensure(xltype == xltypeErr);
             switch (val.err) {
@@ -82,13 +82,13 @@ namespace xll
         }
 
         [[nodiscard]]
-        int error_id() const
+        constexpr int error_id() const
         {
             ensure(xltype == xltypeErr);
             return val.err;
         }
 
-        friend bool operator==(const xll::Error& lhs, const xll::Error& rhs)
+        constexpr friend bool operator==(const xll::Error& lhs, const xll::Error& rhs)
         {
             return lhs.value() == rhs.value();
         }

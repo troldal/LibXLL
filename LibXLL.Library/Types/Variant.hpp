@@ -40,18 +40,18 @@ namespace xll
 
     template<typename U, typename T, typename... Ts>
         requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
-    bool holds_alternative(const Variant<T, Ts...>& v);
+    constexpr bool holds_alternative(const Variant<T, Ts...>& v);
 
     template<typename U, typename T, typename... Ts>
         requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
-    U& get(Variant<T, Ts...>& v);
+    constexpr U& get(Variant<T, Ts...>& v);
 
     template<typename U, typename T, typename... Ts>
         requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
-    const U& get(const Variant<T, Ts...>& v);
+    constexpr const U& get(const Variant<T, Ts...>& v);
 
     template<typename Visitor, typename T, typename... Ts>
-    auto visit(Visitor&& vis, const Variant<T, Ts...>& va);
+    constexpr auto visit(Visitor&& vis, const Variant<T, Ts...>& va);
 
     template<class... Ts>
     struct overload : Ts...
@@ -72,7 +72,7 @@ namespace xll
         // Bit pattern for the xltype field of the XLOPER12 structure
         static constexpr size_t excel_type = xltypeMissing | T::excel_type | (Ts::excel_type | ...);
 
-        Variant() : XLOPER12()
+        constexpr Variant() : XLOPER12()
         {
             xltype = T().xltype;
             reinterpret_cast<T&>(*this) = T();
@@ -80,7 +80,7 @@ namespace xll
 
         template<typename U>
             requires(std::same_as<U, xll::Missing> || std::same_as<U, T> || (std::same_as<U, Ts> || ...))
-        Variant(const U& u) : Variant()    // NOLINT
+        constexpr Variant(const U& u) : Variant()    // NOLINT
         {
             if constexpr (std::same_as<U, xll::Missing>) {
                 xltype                             = xll::Nil().xltype;
@@ -94,7 +94,7 @@ namespace xll
 
         template<typename U>
             requires(std::same_as<U, xll::Missing> || std::same_as<U, T> || (std::same_as<U, Ts> || ...))
-        Variant(U&& u) noexcept : Variant()   // NOLINT
+        constexpr Variant(U&& u) noexcept : Variant()   // NOLINT
         {
             if constexpr (std::same_as<U, xll::Missing>) {
                 xltype                             = xll::Nil().xltype;
@@ -106,7 +106,7 @@ namespace xll
             }
         }
 
-        Variant(const Variant& v) : Variant()
+        constexpr Variant(const Variant& v) : Variant()
         {
             xltype = v.xltype;
 
@@ -135,7 +135,7 @@ namespace xll
                     xll::get<xll::Nil>(*this) = xll::get<xll::Nil>(v);
         }
 
-        Variant(Variant&& v) noexcept : Variant()
+        constexpr Variant(Variant&& v) noexcept : Variant()
         {
             xltype = v.xltype;
 
@@ -164,7 +164,7 @@ namespace xll
                     xll::get<xll::Nil>(*this) = xll::get<xll::Nil>(v);
         }
 
-        ~Variant()
+        constexpr ~Variant()
         {
             if constexpr ((std::same_as<xll::Bool, T> || (std::same_as<xll::Bool, Ts> || ...)))
                 if (xll::holds_alternative<xll::Bool>(*this))
@@ -193,7 +193,7 @@ namespace xll
             static_cast<XLOPER12&>(*this) = XLOPER12();
         }
 
-        Variant& operator=(const Variant& v)
+        constexpr Variant& operator=(const Variant& v)
         {
             this->~Variant();
             static_cast<XLOPER12&>(*this) = XLOPER12();
@@ -226,7 +226,7 @@ namespace xll
             return *this;
         }
 
-        Variant& operator=(Variant&& v) noexcept
+        constexpr Variant& operator=(Variant&& v) noexcept
         {
             this->~Variant();
             static_cast<XLOPER12&>(*this) = XLOPER12();
@@ -261,7 +261,7 @@ namespace xll
 
         template<typename U>
             requires(std::same_as<U, xll::Missing> || std::same_as<U, T> || (std::same_as<U, Ts> || ...))
-        Variant& operator=(const U& u)
+        constexpr Variant& operator=(const U& u)
         {
             this->~Variant();
             static_cast<XLOPER12&>(*this)          = XLOPER12();
@@ -280,7 +280,7 @@ namespace xll
 
         template<typename U>
             requires(std::same_as<U, xll::Missing> || std::same_as<U, T> || (std::same_as<U, Ts> || ...))
-        Variant& operator=(U&& u) noexcept
+        constexpr Variant& operator=(U&& u) noexcept
         {
             this->~Variant();
             static_cast<XLOPER12&>(*this) = XLOPER12();
@@ -319,7 +319,7 @@ namespace xll
 
     template<typename U, typename T, typename... Ts>
         requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
-    bool holds_alternative(const Variant<T, Ts...>& v)
+    constexpr bool holds_alternative(const Variant<T, Ts...>& v)
     {
         if (std::same_as<U, Bool> && v.xltype == xltypeBool) return true;
         if (std::same_as<U, Error> && v.xltype == xltypeErr) return true;
@@ -333,7 +333,7 @@ namespace xll
 
     template<typename U, typename T, typename... Ts>
         requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
-    U& get(Variant<T, Ts...>& v)
+    constexpr U& get(Variant<T, Ts...>& v)
     {
         if (not holds_alternative<U>(v)) throw std::bad_variant_access();
         return reinterpret_cast<U&>(v);
@@ -341,14 +341,14 @@ namespace xll
 
     template<typename U, typename T, typename... Ts>
         requires (std::same_as<U, T> || (std::same_as<U, Ts> || ...))
-    const U& get(const Variant<T, Ts...>& v)
+    constexpr const U& get(const Variant<T, Ts...>& v)
     {
         if (not holds_alternative<U>(v)) throw std::bad_variant_access();
         return reinterpret_cast<const U&>(v);
     }
 
     template<typename Visitor, typename T, typename... Ts>
-    auto visit(Visitor&& vis, const Variant<T, Ts...>& va)
+    constexpr auto visit(Visitor&& vis, const Variant<T, Ts...>& va)
     {
         if constexpr (std::same_as<xll::Bool, T> || (std::same_as<xll::Bool, Ts> || ...))
             if (holds_alternative<xll::Bool>(va))

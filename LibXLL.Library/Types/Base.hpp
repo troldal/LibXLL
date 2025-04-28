@@ -34,7 +34,7 @@ namespace xll::impl
     class Base;
 
     template<typename TDerived, size_t ValueType, size_t... OtherTypes>
-    void swap(Base<TDerived, ValueType, OtherTypes...>& lhs, Base<TDerived, ValueType, OtherTypes...>& rhs) noexcept;
+    constexpr void swap(Base<TDerived, ValueType, OtherTypes...>& lhs, Base<TDerived, ValueType, OtherTypes...>& rhs) noexcept;
 
     template<typename TDerived, size_t XLType, size_t... OtherTypes>
         requires is_excel_type<XLType>
@@ -46,9 +46,9 @@ namespace xll::impl
 
 
     protected:
-        ~Base() = default;
+        constexpr ~Base() = default;
 
-        auto& value()
+        constexpr auto& value()
         {
             if constexpr (XLType == xltypeNum)
                 return val.num;
@@ -66,7 +66,7 @@ namespace xll::impl
                 throw std::bad_cast();    // Handle other types
         }
 
-        auto value() const
+        constexpr auto value() const
         {
             if constexpr (XLType == xltypeNum)
                 return val.num;
@@ -86,7 +86,7 @@ namespace xll::impl
 
     public:
         static constexpr size_t excel_type = XLType;
-        bool                  is_valid() const { return xltype == XLType; }
+        constexpr bool is_valid() const { return xltype == XLType; }
         static constexpr bool has_crtp_base = true;
 
         // clang-format off
@@ -102,7 +102,7 @@ namespace xll::impl
             std::conditional_t<XLType == xltypeInt, decltype(val.w), void>>>>>>>>>;
         // clang-format on
 
-        Base() : XLOPER12() { xltype = XLType; }
+        constexpr Base() : XLOPER12() { xltype = XLType; }
 
         /**
          * \brief Constructs a Base object from an XLOPER12 object.
@@ -116,7 +116,7 @@ namespace xll::impl
          * \requires The value_type of the Base class must be an arithmetic type.
          * \throws std::runtime_error if the xltype of the provided XLOPER12 object does not match the XLType of the Base class.
          */
-        explicit Base(const XLOPER12& v)    // NOLINT
+        constexpr explicit Base(const XLOPER12& v)    // NOLINT
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>>
             : Base()
         {
@@ -142,23 +142,13 @@ namespace xll::impl
          * \requires The value_type of the Base class must be an arithmetic type.
          * \throws std::runtime_error if the xltype of the other Base object does not match the XLType of the current Base class.
          */
-        Base(const Base& other)
+        constexpr Base(const Base& other)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>>
             : Base()
         {
             ensure(other.is_valid());
             ensure(xltype == other.xltype);
             value() = other.value();
-
-            // switch (other.xltype == XLType) {
-            //     case true:
-            //         xltype  = other.xltype;
-            //         value() = other.value();
-            //         break;
-            //     default:
-            //         throw std::runtime_error(std::format("Instance of {} is invalid", TDerived::type_name));
-            //         break;
-            // }
         }
 
         /**
@@ -173,7 +163,7 @@ namespace xll::impl
          * \requires The value_type of the Base class must be an arithmetic type.
          * \throws std::runtime_error if the xltype of the other Base object does not match the XLType of the current Base class.
          */
-        Base(Base&& other) noexcept
+        constexpr Base(Base&& other) noexcept
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>>
             : Base()
         {
@@ -199,7 +189,7 @@ namespace xll::impl
          */
         template<typename TValue>
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && std::convertible_to<TValue, value_type>
-        Base(TValue v) : Base()    // NOLINT
+        constexpr Base(TValue v) : Base()    // NOLINT
         {
             value() = v;
         }
@@ -219,7 +209,7 @@ namespace xll::impl
          */
         template<typename TThisDerived, size_t ThisValueType, size_t... Others>
             requires contains_value<ThisValueType, OtherTypes...>
-        Base(const Base<TThisDerived, ThisValueType, Others...>& other) : Base()    // NOLINT
+        constexpr Base(const Base<TThisDerived, ThisValueType, Others...>& other) : Base()    // NOLINT
         {
             ensure(other.is_valid());
             value() = other.template to<value_type>();
@@ -237,7 +227,7 @@ namespace xll::impl
          * \throws RuntimeError if either object is invalid or if the Excel types don't match.
          * \return Reference to this object after assignment.
          */
-        Base& operator=(const Base& other)
+        constexpr Base& operator=(const Base& other)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>>
         {
             ensure(is_valid());
@@ -260,7 +250,7 @@ namespace xll::impl
          * \requires The value_type of the Base class must be an arithmetic type.
          * \return Reference to this object after assignment.
          */
-        Base& operator=(Base&& other) noexcept
+        constexpr Base& operator=(Base&& other) noexcept
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>>
         {
             using std::swap;
@@ -287,7 +277,7 @@ namespace xll::impl
          */
         template<typename TValue>
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && std::convertible_to<TValue, value_type>
-        Base& operator=(TValue v)
+        constexpr Base& operator=(TValue v)
         {
             ensure(is_valid());
 
@@ -310,7 +300,7 @@ namespace xll::impl
          */
         template<typename TThisDerived, size_t ThisValueType, size_t... Others>
             requires contains_value<ThisValueType, OtherTypes...>
-        Base& operator=(const Base<TThisDerived, ThisValueType, Others...>& v)
+        constexpr Base& operator=(const Base<TThisDerived, ThisValueType, Others...>& v)
         {
             ensure(is_valid());
             ensure(v.is_valid());
@@ -337,7 +327,7 @@ namespace xll::impl
          * \return True if the values of the two objects are equal, false otherwise.
          */
         template<typename TOther>
-        friend bool operator==(const TDerived& lhs, const TOther& rhs)
+        constexpr friend bool operator==(const TDerived& lhs, const TOther& rhs)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && (XLType != xltypeErr) && (!std::is_fundamental_v<TOther>) &&
                      (std::convertible_to<TOther, TDerived> || contains_value<TOther::excel_type, OtherTypes...>)
         {
@@ -361,7 +351,7 @@ namespace xll::impl
          * \return True if the value of the Base object is equal to the provided value, false otherwise.
          */
         template<typename TValue>
-        friend bool operator==(const TDerived& lhs, TValue rhs)
+        constexpr friend bool operator==(const TDerived& lhs, TValue rhs)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && std::is_fundamental_v<TValue> &&
                      (XLType != xltypeErr) && std::convertible_to<TValue, value_type>
         {
@@ -386,7 +376,7 @@ namespace xll::impl
          * \return The result of the three-way comparison between the values of the two objects.
          */
         template<typename TOther>
-        friend auto operator<=>(const TDerived& lhs, const TOther& rhs)
+        constexpr friend auto operator<=>(const TDerived& lhs, const TOther& rhs)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && (XLType != xltypeErr) && (!std::is_fundamental_v<TOther>) &&
                      (std::convertible_to<TOther, TDerived> || contains_value<TOther::excel_type, OtherTypes...>)
         {
@@ -410,7 +400,7 @@ namespace xll::impl
          * \return The result of the three-way comparison between the value of the Base object and the provided value.
          */
         template<typename TValue>
-        friend auto operator<=>(const TDerived& lhs, TValue rhs)
+        constexpr friend auto operator<=>(const TDerived& lhs, TValue rhs)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && std::is_fundamental_v<TValue> &&
                      (XLType != xltypeErr) && std::convertible_to<TValue, value_type>
         {
@@ -428,7 +418,7 @@ namespace xll::impl
          * \requires The Excel type of the Base class must not be an error type.
          * \return A new TDerived object with the value of the current Base object.
          */
-        friend TDerived operator+(const TDerived& v)
+        constexpr friend TDerived operator+(const TDerived& v)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && (XLType != xltypeErr)
         {
             return TDerived(+v.value());
@@ -445,7 +435,7 @@ namespace xll::impl
          * \requires The Excel type of the Base class must not be an error type.
          * \return A new TDerived object with the negated value of the current Base object.
          */
-        friend TDerived operator-(const TDerived& v)
+        constexpr friend TDerived operator-(const TDerived& v)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && (XLType != xltypeErr)
         {
             return TDerived(-v.value());
@@ -469,7 +459,7 @@ namespace xll::impl
          * \return A new TDerived object with the result of the addition.
          */
         template<typename TOther>
-        friend TDerived operator+(const TDerived& lhs, const TOther& rhs)
+        constexpr friend TDerived operator+(const TDerived& lhs, const TOther& rhs)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && (XLType != xltypeErr) && (!std::is_fundamental_v<TOther>) &&
                      (std::convertible_to<TOther, TDerived> || contains_value<TOther::excel_type, OtherTypes...>)
         {
@@ -494,7 +484,7 @@ namespace xll::impl
          * \return A new TDerived object with the result of the addition.
          */
         template<typename TValue>
-        friend TDerived operator+(const TDerived& lhs, TValue rhs)
+        constexpr friend TDerived operator+(const TDerived& lhs, TValue rhs)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && std::is_fundamental_v<TValue> &&
                      (XLType != xltypeErr) && std::convertible_to<TValue, value_type>
         {
@@ -521,7 +511,7 @@ namespace xll::impl
          * \return A new TDerived object with the result of the subtraction.
          */
         template<typename TOther>
-        friend TDerived operator-(const TDerived& lhs, const TOther& rhs)
+        constexpr friend TDerived operator-(const TDerived& lhs, const TOther& rhs)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && (XLType != xltypeErr) && (!std::is_fundamental_v<TOther>) &&
                      (std::convertible_to<TOther, TDerived> || contains_value<TOther::excel_type, OtherTypes...>)
         {
@@ -546,7 +536,7 @@ namespace xll::impl
          * \return A new TDerived object with the result of the subtraction.
          */
         template<typename TValue>
-        friend TDerived operator-(const Base& lhs, TValue rhs)
+        constexpr friend TDerived operator-(const Base& lhs, TValue rhs)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && std::is_fundamental_v<TValue> &&
                      (XLType != xltypeErr) && std::convertible_to<TValue, value_type>
         {
@@ -573,7 +563,7 @@ namespace xll::impl
          * \return A new TDerived object with the result of the multiplication.
          */
         template<typename TOther>
-        friend TDerived operator*(const TDerived& lhs, const TOther& rhs)
+        constexpr friend TDerived operator*(const TDerived& lhs, const TOther& rhs)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && (XLType != xltypeErr) && (!std::is_fundamental_v<TOther>) &&
                      (std::convertible_to<TOther, TDerived> || contains_value<TOther::excel_type, OtherTypes...>)
         {
@@ -598,7 +588,7 @@ namespace xll::impl
          * \return A new TDerived object with the result of the multiplication.
          */
         template<typename TValue>
-        friend TDerived operator*(const TDerived& lhs, TValue rhs)
+        constexpr friend TDerived operator*(const TDerived& lhs, TValue rhs)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && std::is_fundamental_v<TValue> &&
                      (XLType != xltypeErr) && std::convertible_to<TValue, value_type>
         {
@@ -625,7 +615,7 @@ namespace xll::impl
          * \return A new TDerived object with the result of the division.
          */
         template<typename TOther>
-        friend TDerived operator/(const TDerived& lhs, const TOther& rhs)
+        constexpr friend TDerived operator/(const TDerived& lhs, const TOther& rhs)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && (XLType != xltypeErr) && (!std::is_fundamental_v<TOther>) &&
                      (std::convertible_to<TOther, TDerived> || contains_value<TOther::excel_type, OtherTypes...>)
         {
@@ -650,7 +640,7 @@ namespace xll::impl
          * \return A new TDerived object with the result of the division.
          */
         template<typename TValue>
-        friend TDerived operator/(const TDerived& lhs, TValue rhs)
+        constexpr friend TDerived operator/(const TDerived& lhs, TValue rhs)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && std::is_fundamental_v<TValue> &&
                      (XLType != xltypeErr) && std::convertible_to<TValue, value_type>
         {
@@ -676,7 +666,7 @@ namespace xll::impl
          * \return Reference to this object after the addition.
          */
         template<typename TOther>
-        TDerived& operator+=(const TOther& rhs)
+        constexpr TDerived& operator+=(const TOther& rhs)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && (XLType != xltypeErr) && (!std::is_fundamental_v<TOther>) &&
                      (std::convertible_to<TOther, TDerived> || contains_value<TOther::excel_type, OtherTypes...>)
         {
@@ -701,7 +691,7 @@ namespace xll::impl
          * \return Reference to this object after the addition.
          */
         template<typename TValue>
-        TDerived& operator+=(TValue rhs)
+        constexpr TDerived& operator+=(TValue rhs)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && std::is_fundamental_v<TValue> &&
                      (XLType != xltypeErr) && std::convertible_to<TValue, value_type>
         {
@@ -727,7 +717,7 @@ namespace xll::impl
          * \return Reference to this object after the subtraction.
          */
         template<typename TOther>
-        TDerived& operator-=(const TOther& rhs)
+        constexpr TDerived& operator-=(const TOther& rhs)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && (XLType != xltypeErr) && (!std::is_fundamental_v<TOther>) &&
                      (std::convertible_to<TOther, TDerived> || contains_value<TOther::excel_type, OtherTypes...>)
         {
@@ -752,7 +742,7 @@ namespace xll::impl
          * \return Reference to this object after the subtraction.
          */
         template<typename TValue>
-        TDerived& operator-=(TValue rhs)
+        constexpr TDerived& operator-=(TValue rhs)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && std::is_fundamental_v<TValue> &&
                      (XLType != xltypeErr) && std::convertible_to<TValue, value_type>
         {
@@ -778,7 +768,7 @@ namespace xll::impl
          * \return Reference to this object after the multiplication.
          */
         template<typename TOther>
-        TDerived& operator*=(const TOther& rhs)
+        constexpr TDerived& operator*=(const TOther& rhs)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && (XLType != xltypeErr) && (!std::is_fundamental_v<TOther>) &&
                      (std::convertible_to<TOther, TDerived> || contains_value<TOther::excel_type, OtherTypes...>)
         {
@@ -803,7 +793,7 @@ namespace xll::impl
          * \return Reference to this object after the multiplication.
          */
         template<typename TValue>
-        TDerived& operator*=(TValue rhs)
+        constexpr TDerived& operator*=(TValue rhs)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && std::is_fundamental_v<TValue> &&
                      (XLType != xltypeErr) && std::convertible_to<TValue, value_type>
         {
@@ -829,7 +819,7 @@ namespace xll::impl
          * \return Reference to this object after the division.
          */
         template<typename TOther>
-        TDerived& operator/=(const TOther& rhs)
+        constexpr TDerived& operator/=(const TOther& rhs)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && (XLType != xltypeErr) && (!std::is_fundamental_v<TOther>) &&
                      (std::convertible_to<TOther, TDerived> || contains_value<TOther::excel_type, OtherTypes...>)
         {
@@ -854,7 +844,7 @@ namespace xll::impl
          * \return Reference to this object after the division.
          */
         template<typename TValue>
-        TDerived& operator/=(TValue rhs)
+        constexpr TDerived& operator/=(TValue rhs)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && std::is_fundamental_v<TValue> &&
                      (XLType != xltypeErr) && std::convertible_to<TValue, value_type>
         {
@@ -879,7 +869,7 @@ namespace xll::impl
          * \return The value of the Base object converted to the specified type T.
          */
         template<typename T = value_type>
-        operator T() const
+        constexpr operator T() const
             requires std::is_arithmetic_v<T> && std::is_arithmetic_v<std::remove_cvref_t<value_type>> &&
                      std::convertible_to<value_type, T> && (not std::same_as<T, bool>)
         {
@@ -897,7 +887,7 @@ namespace xll::impl
          * \requires The Excel type of the Base class must not be an error type.
          * \return The boolean representation of the value of the Base object.
          */
-        explicit operator bool() const
+        constexpr explicit operator bool() const
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && (XLType != xltypeErr)
         {
             return static_cast<bool>(value());
@@ -916,7 +906,7 @@ namespace xll::impl
          * \throws std::bad_cast if the xltype of the Base object does not match the XLType of the class.
          * \return The output stream after writing the value of the Base object.
          */
-        friend std::ostream& operator<<(std::ostream& os, const Base& v)
+        constexpr friend std::ostream& operator<<(std::ostream& os, const Base& v)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>>
         {
             if (v.xltype != XLType) throw std::bad_cast();
@@ -936,7 +926,7 @@ namespace xll::impl
          */
         template<typename TValue>
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>>
-        TValue to() const
+        constexpr TValue to() const
         {
             return value();
         }
@@ -953,7 +943,7 @@ namespace xll::impl
          *
          * \return A reference to the underlying XLOPER12 object.
          */
-        XLOPER12& operator*() noexcept { return *this; }
+        constexpr XLOPER12& operator*() noexcept { return *this; }
 
         /**
          * \brief Const dereference operator for accessing the underlying XLOPER12 object.
@@ -967,7 +957,7 @@ namespace xll::impl
          *
          * \return A const reference to the underlying XLOPER12 object.
          */
-        const XLOPER12& operator*() const noexcept { return *this; }
+        constexpr const XLOPER12& operator*() const noexcept { return *this; }
 
         /**
          * \brief Lifts a pointer to an XLOPER12 object to a pointer to a TDerived object.
@@ -977,7 +967,7 @@ namespace xll::impl
          * \param op Pointer to the XLOPER12 object.
          * \return Pointer to the TDerived object.
          */
-        static TDerived* lift(XLOPER12* op) { return static_cast<TDerived*>(op); }
+        constexpr static TDerived* lift(XLOPER12* op) { return static_cast<TDerived*>(op); }
 
         /**
          * \brief Lifts a const pointer to an XLOPER12 object to a const pointer to a TDerived object.
@@ -987,7 +977,7 @@ namespace xll::impl
          * \param op Const pointer to the XLOPER12 object.
          * \return Const pointer to the TDerived object.
          */
-        static const TDerived* lift(const XLOPER12* op) { return static_cast<const TDerived*>(op); }
+        constexpr static const TDerived* lift(const XLOPER12* op) { return static_cast<const TDerived*>(op); }
 
         /**
          * \brief Lifts a reference to an XLOPER12 object to a reference to a TDerived object.
@@ -997,7 +987,7 @@ namespace xll::impl
          * \param op Reference to the XLOPER12 object.
          * \return Reference to the TDerived object.
          */
-        static TDerived& lift(XLOPER12& op) { return static_cast<TDerived&>(op); }
+        constexpr static TDerived& lift(XLOPER12& op) { return static_cast<TDerived&>(op); }
 
         /**
          * \brief Lifts a const reference to an XLOPER12 object to a const reference to a TDerived object.
@@ -1007,11 +997,11 @@ namespace xll::impl
          * \param op Const reference to the XLOPER12 object.
          * \return Const reference to the TDerived object.
          */
-        static const TDerived& lift(const XLOPER12& op) { return static_cast<const TDerived&>(op); }
+        constexpr static const TDerived& lift(const XLOPER12& op) { return static_cast<const TDerived&>(op); }
     };
 
     template<typename TDerived, size_t ValueType, size_t... OtherTypes>
-    void swap(Base<TDerived, ValueType, OtherTypes...>& lhs, Base<TDerived, ValueType, OtherTypes...>& rhs) noexcept
+    constexpr void swap(Base<TDerived, ValueType, OtherTypes...>& lhs, Base<TDerived, ValueType, OtherTypes...>& rhs) noexcept
     {
         using std::swap;
         swap(lhs.xltype, rhs.xltype);

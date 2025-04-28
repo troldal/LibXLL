@@ -17,25 +17,25 @@ namespace xll
     public:
         using BASE::BASE;
 
-        Missing() = default;
+        constexpr Missing() = default;
 
-        Missing(const Missing&)
+        constexpr Missing(const Missing&)
         {
             xltype = xltypeMissing;
         }
 
-        Missing& operator=(const Missing&)
+        constexpr Missing& operator=(const Missing&)
         {
             xltype = xltypeMissing;
             return *this;
         }
 
-        friend bool operator==(const Missing&, const Missing&)
+        constexpr friend bool operator==(const Missing&, const Missing&)
         {
             return true;
         }
 
-        operator xll::Nil() const // NOLINT
+        constexpr operator xll::Nil() const // NOLINT
         {
             return {};
         }

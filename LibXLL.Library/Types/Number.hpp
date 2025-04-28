@@ -14,12 +14,12 @@ namespace xll
     {
         using BASE = impl::Base<Number, xltypeNum, xltypeInt, xltypeBool>;
         friend BASE;
-        static inline std::string_view type_name = "xll::Number";
+        static constexpr std::string_view type_name = "xll::Number";
 
     public:
         using BASE::BASE;
         using BASE::operator=;
 
-        Number() : Number(0.0) {}
+        constexpr Number() : Number(0.0) {}
     };
 }    // namespace xll

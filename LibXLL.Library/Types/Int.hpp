@@ -17,34 +17,34 @@ namespace xll
     {
         using BASE = impl::Base<Int, xltypeInt, xltypeNum, xltypeBool>;
         friend BASE;
-        static inline std::string_view type_name = "xll::Int";
+        static constexpr std::string_view type_name = "xll::Int";
 
     public:
         using BASE::BASE;
         using BASE::operator=;
 
-        Int() : Int(0) {}
+        constexpr Int() : Int(0) {}
 
-        Int& operator++()
+        constexpr Int& operator++()
         {
             ++value();
             return *this;
         }
 
-        Int operator++(int)
+        constexpr Int operator++(int)
         {
             Int old = *this;
             ++value();
             return old;
         }
 
-        Int& operator--()
+        constexpr Int& operator--()
         {
             --value();
             return *this;
         }
 
-        Int operator--(int)
+        constexpr Int operator--(int)
         {
             Int old = *this;
             --value();
@@ -73,7 +73,7 @@ namespace xll
         // }
 
         template<typename TValue>
-        Int& operator%=(TValue rhs)
+        constexpr Int& operator%=(TValue rhs)
             requires std::convertible_to<TValue, int>
         {
             // ensure(is_valid());
@@ -85,7 +85,7 @@ namespace xll
 
         template<typename TOther>
             requires (std::same_as<TOther, Int> || std::same_as<TOther, xll::Bool>)
-        friend Int operator%(const Int& lhs, TOther&& rhs)
+        constexpr friend Int operator%(const Int& lhs, TOther&& rhs)
         {
             Int result = lhs;
             result %= std::forward<TOther>(rhs);
@@ -94,7 +94,7 @@ namespace xll
 
         template<typename TValue>
             requires std::integral<TValue>
-        friend Int operator%(const Int& lhs,TValue rhs)
+        constexpr friend Int operator%(const Int& lhs,TValue rhs)
         {
             Int result = lhs;
             result %= rhs;

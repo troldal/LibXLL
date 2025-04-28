@@ -27,16 +27,16 @@ namespace xll
     public:
         using BASE::BASE;
 
-        String() : String("") {}
+        constexpr String() : String("") {}
 
-        String(const char* str) : String(std::string_view(str)) {}    // NOLINT
+        constexpr String(const char* str) : String(std::string_view(str)) {}    // NOLINT
 
-        String(std::string_view str) : Base()    // NOLINT
+        constexpr String(std::string_view str) : Base()    // NOLINT
         {
             value() = make_string(str).release();
         }
 
-        explicit String(const XLOPER12& v)
+        constexpr explicit String(const XLOPER12& v)
         {
             switch (v.xltype == xltypeStr) {
                 case true:
@@ -47,7 +47,7 @@ namespace xll
             }
         }
 
-        String(const String& other)
+        constexpr String(const String& other)
         {
             ensure(other.is_valid());
             ensure(xltype == other.xltype);
@@ -62,7 +62,7 @@ namespace xll
             // }
         }
 
-        String(String&& other) noexcept
+        constexpr String(String&& other) noexcept
         {
             // Can't do this, as the constructor needs to be noexcept
             // ensure(other.is_valid());
@@ -85,13 +85,13 @@ namespace xll
             // }
         }
 
-        ~String()
+        constexpr ~String()
         {
             delete[] val.str;
             val.str = nullptr;
         }
 
-        String& operator=(const String& other)
+        constexpr String& operator=(const String& other)
         {
             ensure(is_valid());
             ensure(other.is_valid());
@@ -102,27 +102,9 @@ namespace xll
             val.str  = nullptr;
             value() = make_string(to_string(other.val.str)).release();
             return *this;
-
-
-            // using std::swap;
-            //
-            // if (this == &other) return *this;
-            // delete[] val.str;
-            // val.str  = nullptr;
-            //
-            // switch (other.xltype == xltypeStr) {
-            //     case true:
-            //         xltype = xltypeStr;
-            //         value() = make_string(to_string(other.val.str)).release();
-            //         break;
-            //     default:
-            //         xltype = xltypeNil;
-            // }
-            //
-            // return *this;
         }
 
-        String& operator=(String&& other) noexcept
+        constexpr String& operator=(String&& other) noexcept
         {
             // ensure(is_valid());
             // ensure(other.is_valid());
@@ -154,17 +136,17 @@ namespace xll
             return *this;
         }
 
-        [[nodiscard]] std::string to_string() const
+        [[nodiscard]] constexpr std::string to_string() const
         {
             return to_string(val.str);
         }
 
-        operator std::string() const
+        constexpr operator std::string() const
         {
             return to_string();
         }
 
-        friend String operator+(const String& lhs, const String& rhs)
+        constexpr friend String operator+(const String& lhs, const String& rhs)
         {
             const std::string result = to_string(lhs.value()) + to_string(rhs.value());
             return {result};
@@ -172,7 +154,7 @@ namespace xll
 
         template<typename TOther>
             requires (!std::same_as<String, TOther>) && std::convertible_to<TOther, std::string>
-        friend String operator+(const String& lhs, TOther&& rhs)
+        constexpr friend String operator+(const String& lhs, TOther&& rhs)
         {
             const std::string result = to_string(lhs.value()) + rhs;
             return {result};
@@ -185,49 +167,49 @@ namespace xll
             return os;
         }
 
-        friend bool operator==(const String& lhs, const String& rhs) {
+        constexpr friend bool operator==(const String& lhs, const String& rhs) {
             return to_string(lhs.val.str) == to_string(rhs.val.str);
         }
 
         template<typename TOther>
             requires (!std::same_as<String, TOther>) && std::convertible_to<TOther, std::string>
-        friend bool operator==(const String& lhs, TOther&& rhs)
+        constexpr friend bool operator==(const String& lhs, TOther&& rhs)
         {
             return to_string(lhs.val.str) == rhs;
         }
 
 
-        friend auto operator<=>(const String& lhs, const String& rhs)
+        constexpr friend auto operator<=>(const String& lhs, const String& rhs)
         {
             return to_string(lhs.val.str) <=> to_string(rhs.val.str);
         }
 
         template<typename TOther>
             requires (!std::same_as<String, TOther>) && std::convertible_to<TOther, std::string>
-        friend auto operator<=>(const String& lhs, TOther&& rhs)
+        constexpr friend auto operator<=>(const String& lhs, TOther&& rhs)
         {
             return to_string(lhs.val.str) <=> rhs;
         }
 
-        bool empty() const
+        constexpr bool empty() const
         {
             if (val.str == nullptr) return true;
             return std::wstring_view(&val.str[1]).empty();
         }
 
-        size_t size() const
+        constexpr size_t size() const
         {
             if (val.str == nullptr) return 0;
             return std::wstring_view(&val.str[1]).size();
         }
 
-        size_t length() const
+        constexpr size_t length() const
         {
             if (val.str == nullptr) return 0;
             return std::wstring_view(&val.str[1]).length();
         }
 
-        void clear()
+        constexpr void clear()
         {
             delete[] val.str;
             val.str = nullptr;
@@ -236,7 +218,7 @@ namespace xll
 
 
     private:
-        static std::string to_string(XCHAR const* str)
+        constexpr static std::string to_string(XCHAR const* str)
         {
 #ifdef _WIN32
 
@@ -271,7 +253,7 @@ namespace xll
 #endif
         }
 
-        static std::unique_ptr<XCHAR[]> make_string(std::string_view str)
+        constexpr static std::unique_ptr<XCHAR[]> make_string(std::string_view str)
         {
             if (str.empty()) {
                 // Handle empty string case
@@ -325,10 +307,10 @@ namespace xll
 
     namespace literals
     {
-        inline String operator""_xs(const char* str, std::size_t len) { return String(std::string_view(str, len)); }
+        inline constexpr String operator""_xs(const char* str, std::size_t len) { return String(std::string_view(str, len)); }
     }    // namespace literals
 
-    inline xll::String trim(const xll::String& str)
+    constexpr inline xll::String trim(const xll::String& str)
     {
         auto s = str.to_string();
 
@@ -349,7 +331,7 @@ namespace xll
         return xll::String(result);
     }
 
-    inline xll::String to_upper(const xll::String& str)
+    constexpr inline xll::String to_upper(const xll::String& str)
     {
         std::string result = str.to_string();
         std::ranges::transform(result, result.begin(), [](unsigned char c) {
