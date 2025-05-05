@@ -13,4 +13,4 @@
 
 #define XLL_FUNCTION extern "C" XLL_EXPORTS
 
-#define XLL_REGISTER(func) xll::AddIn func##_registered(func)
+#define XLL_REGISTER(func) extern const xll::AddIn func##_registered(func)
