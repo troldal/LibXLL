@@ -21,13 +21,9 @@ include(${CMAKE_CURRENT_BINARY_DIR}/cmake/CPM.cmake)
 #==============================================================================
 
 if (WIN32)
-#    set(CPM_EquiLib_SOURCE "D:/Dev/XLThermo/EquiLib")
     set(CPM_FXT_SOURCE "D:/Dev/XLThermo/FXT")
-#    set(CPM_LibXLL_SOURCE "D:/Dev/XLThermo/LibXLL")
 else ()
-#    set(CPM_EquiLib_SOURCE "/mnt/d/Dev/XLThermo/EquiLib")
     set(CPM_FXT_SOURCE "/mnt/d/Dev/XLThermo/FXT")
-#    set(CPM_LibXLL_SOURCE "/mnt/d/Dev/XLThermo/LibXLL")
 endif ()
 
 CPMAddPackage(

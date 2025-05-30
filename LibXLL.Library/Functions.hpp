@@ -8,3 +8,4 @@
 #include "xlFunctions/Coerce.hpp"
 #include "xlFunctions/GetName.hpp"
 #include "xlFunctions/Register.hpp"
+#include "xlFunctions/GetWorkspace.hpp"
