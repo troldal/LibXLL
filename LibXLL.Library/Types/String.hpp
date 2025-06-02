@@ -222,7 +222,7 @@ namespace xll
         {
 #ifdef _WIN32
 
-            if (str[0] == '\0') return "";
+            if (not str or str[0] == '\0') return "";
 
             const int size = WideCharToMultiByte(CP_UTF8,    // Code page
                                            0,          // Flags
