@@ -708,7 +708,7 @@ namespace xll
          * @see transform_error for transforming the error case
          */
         template<typename TSelf, typename TFunc>
-            requires std::invocable<TFunc, TValue&>
+            requires std::invocable<TFunc, TValue>
         constexpr auto transform(this TSelf&& self, TFunc&& func)
         {
             using result_type          = std::invoke_result_t<TFunc, TValue&>;
@@ -1093,7 +1093,7 @@ namespace xll
     template<typename TFunction>
     constexpr auto and_then(TFunction&& f)
     {
-        return [f = std::forward<TFunction>(f)]<impl::is_valid_type TValue, typename TError>(const xll::Expected<TValue, TError>& ex) {
+        return [f = std::forward<TFunction>(f)]<typename TValue, typename TError>(const xll::Expected<TValue, TError>& ex) {
             return ex.and_then(f);
         };
     }
@@ -1126,7 +1126,7 @@ namespace xll
     template<typename TFunction>
     constexpr auto or_else(TFunction&& f)
     {
-        return [f = std::forward<TFunction>(f)]<impl::is_valid_type TValue>(const xll::Expected<TValue>& ex) { return ex.or_else(f); };
+        return [f = std::forward<TFunction>(f)]<typename TValue>(const xll::Expected<TValue>& ex) { return ex.or_else(f); };
     }
 
     /**
@@ -1159,7 +1159,7 @@ namespace xll
     template<typename TFunction>
     constexpr auto transform(TFunction&& f)
     {
-        return [f = std::forward<TFunction>(f)]<impl::is_valid_type TValue>(const xll::Expected<TValue>& ex) { return ex.transform(f); };
+        return [f = std::forward<TFunction>(f)]<typename TValue>(const xll::Expected<TValue>& ex) { return ex.transform(f); };
     }
 
     /**
@@ -1193,7 +1193,7 @@ namespace xll
     constexpr auto transform_error(TFunction&& f)
     {
         return
-            [f = std::forward<TFunction>(f)]<impl::is_valid_type TValue>(const xll::Expected<TValue>& ex) { return ex.transform_error(f); };
+            [f = std::forward<TFunction>(f)]<typename TValue>(const xll::Expected<TValue>& ex) { return ex.transform_error(f); };
     }
 
 }    // namespace xll

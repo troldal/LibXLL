@@ -54,6 +54,20 @@ namespace xll
         return std::invoke(std::forward<TFunc>(f), std::forward<xll::Function>(t));
     }
 
+    // template<typename TFunc, typename TArg>
+    //     requires std::invocable<TFunc, TArg>
+    // constexpr auto operator|(const xll::Expected<TArg>& t, TFunc&& f) -> std::invoke_result_t<TFunc, TArg>
+    // {
+    //     return std::invoke(std::forward<TFunc>(f), *t);
+    // }
+
+    // template<typename TFunc, typename TArg>
+    //     requires std::invocable<TFunc, TArg>
+    // constexpr auto operator|(TArg&& t, TFunc&& f) -> std::invoke_result_t<TFunc, TArg>
+    // {
+    //     return std::invoke(std::forward<TFunc>(f), std::forward<TArg>(t));
+    // }
+
 
 
     // template<typename T, template<typename> class TFunction>
