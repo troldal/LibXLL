@@ -13,7 +13,8 @@
 #else
   #define __declspec(a) __attribute__((a))
   #define XLLAPI
-  #define XLL_EXPORTS __declspec(dllexport) __declspec(used)
+  // #define XLL_EXPORTS __declspec(dllexport) __declspec(used)
+  #define XLL_EXPORTS __declspec(used)
   #define XLL_SUCCESS 1
   #define XLL_FAILURE 0
   #define TRUE 1
