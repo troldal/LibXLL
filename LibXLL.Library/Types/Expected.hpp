@@ -1196,4 +1196,55 @@ namespace xll
             [f = std::forward<TFunction>(f)]<typename TValue>(const xll::Expected<TValue>& ex) { return ex.transform_error(f); };
     }
 
+    /**
+     * @brief Creates a higher-order function for converting Expected objects to fxt::expected.
+     *
+     * This function returns a closure that applies the to_expected method of an Expected object,
+     * converting it to a fxt::expected type. It enables point-free programming style and function
+     * composition with the Expected monad, allowing conversions to be chained together with
+     * the pipe operator.
+     *
+     * @tparam T The target value type for the fxt::expected (defaults to the source value type)
+     * @tparam E The target error type for the fxt::expected (defaults to the source error type)
+     *
+     * @return A higher-order function that takes an Expected object and converts it to
+     *         fxt::expected<T, E> using the to_expected method
+     *
+     * @note This enables more readable composition with the pipe operator, turning
+     *       ex.to_expected<T, E>() into ex | to_expected<T, E>()
+     * @note The target types T and E must be convertible from the source Expected's value and error types
+     * @note If no template arguments are provided, it converts to fxt::expected with the same types
+     *
+     * @see Expected::to_expected
+     * @see operator|
+     * @see fxt::expected
+     *
+     * @example
+     * @code
+     * xll::Expected<xll::Number> ex = 42.0;
+     * auto result = ex | to_expected<double, xll::Error>();
+     * // result is fxt::expected<double, xll::Error>
+     * @endcode
+     */
+    template<typename T = void, typename E = void>
+    constexpr auto to_expected()
+    {
+        return []<typename TValue, typename TError>(const xll::Expected<TValue, TError>& ex) {
+            if constexpr (std::same_as<T, void> && std::same_as<E, void>) {
+                return ex.template to_expected<TValue, TError>();
+            }
+            else if constexpr (std::same_as<T, void>) {
+                return ex.template to_expected<TValue, E>();
+            }
+            else if constexpr (std::same_as<E, void>) {
+                return ex.template to_expected<T, TError>();
+            }
+            else {
+                return ex.template to_expected<T, E>();
+            }
+        };
+    }
+
+
+
 }    // namespace xll
