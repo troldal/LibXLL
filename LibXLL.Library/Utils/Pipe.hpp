@@ -40,18 +40,25 @@ namespace xll
 
 
 
-    template<typename TFunc>
-    requires std::invocable<TFunc, xll::Function>
-    constexpr auto operator|(const xll::Function& t, TFunc&& f) -> std::invoke_result_t<TFunc, xll::Function>
-    {
-        return std::invoke(std::forward<TFunc>(f), t);
-    }
+    // template<typename TFunc>
+    // requires std::invocable<TFunc, xll::Function>
+    // constexpr auto operator|(const xll::Function& t, TFunc&& f) -> std::invoke_result_t<TFunc, xll::Function>
+    // {
+    //     return std::invoke(std::forward<TFunc>(f), t);
+    // }
+    //
+    // template<typename TFunc>
+    //     requires std::invocable<TFunc, xll::Function>
+    // constexpr auto operator|(xll::Function&& t, TFunc&& f) -> std::invoke_result_t<TFunc, xll::Function>
+    // {
+    //     return std::invoke(std::forward<TFunc>(f), std::forward<xll::Function>(t));
+    // }
 
-    template<typename TFunc>
-        requires std::invocable<TFunc, xll::Function>
-    constexpr auto operator|(xll::Function&& t, TFunc&& f) -> std::invoke_result_t<TFunc, xll::Function>
+    template<typename TFunc, typename TCallable>
+        requires std::same_as<TFunc, xll::Function> && std::invocable<TCallable, TFunc>
+    constexpr auto operator|(TFunc&& f, TCallable&& callable) -> std::invoke_result_t<TCallable, TFunc>
     {
-        return std::invoke(std::forward<TFunc>(f), std::forward<xll::Function>(t));
+        return std::invoke(std::forward<TCallable>(callable), std::forward<TFunc>(f));
     }
 
     // template<typename TFunc, typename TArg>

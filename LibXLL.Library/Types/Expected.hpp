@@ -773,6 +773,57 @@ namespace xll
         }
     };
 
+    namespace impl
+    {
+        // Helper trait to detect if a type is a specialization of xll::Expected
+        template<typename T>
+        struct is_expected_impl : std::false_type
+        {
+        };
+
+        template<typename TValue, typename TError>
+        struct is_expected_impl<Expected<TValue, TError>> : std::true_type
+        {
+        };
+
+        template<typename T>
+        inline constexpr bool is_expected_v = is_expected_impl<std::remove_cvref_t<T>>::value;
+    }
+
+    /**
+     * @brief Concept to check if a type is a specialization of xll::Expected.
+     *
+     * This concept evaluates to true if and only if the type T (after removing cv-qualifiers
+     * and references) is a specialization of xll::Expected. It will not match other
+     * expected-like types such as std::expected or fxt::expected.
+     *
+     * @tparam T The type to check
+     *
+     * @note This concept can be used in requires clauses, if constexpr conditions, or
+     *       as a constraint on template parameters.
+     * @note The concept automatically removes cv-qualifiers and references from T before checking.
+     *
+     * @example
+     * @code
+     * template<IsExpected E>
+     * void process(E&& expected) {
+     *     // This function only accepts xll::Expected types
+     * }
+     *
+     * xll::Expected<xll::Number> ex = 42.0;
+     * process(ex); // OK
+     *
+     * std::expected<int, xll::Error> stdEx = 5;
+     * process(stdEx); // Compile error - not xll::Expected
+     *
+     * int x = 5;
+     * process(x); // Compile error
+     * @endcode
+     */
+    template<typename T>
+    concept IsExpected = impl::is_expected_v<T>;
+
+
     /**
      * @brief A class template that represents an unexpected error value.
      *
@@ -996,74 +1047,37 @@ namespace xll
     using ExpBool = Expected<Bool>;
 
     /**
-     * @brief Pipe operator for Expected, const lvalue reference overload.
+     * @brief Pipe operator for chaining operations on xll::Expected objects.
      *
-     * Allows piping an Expected object through a function using the | operator.
+     * Allows piping an Expected object through a callable using the | operator.
      * This enables a more readable functional programming style with the Expected monad,
-     * supporting fluent chaining of operations.
+     * supporting fluent chaining of operations. The operator uses perfect forwarding to
+     * preserve the value category of both the Expected object and the callable.
      *
-     * @tparam T The value type of the Expected object
-     * @tparam E The error type of the Expected object
-     * @tparam TFunc The type of function to apply to the Expected
+     * @tparam TExpected The Expected type (must be a specialization of xll::Expected)
+     * @tparam Callable The type of callable to apply to the Expected object
      *
-     * @param t The Expected object to pipe through the function
-     * @param f The function to apply to the Expected object
-     * @return The result of applying the function to the Expected object
+     * @param expected The Expected object to pipe through the callable (forwarding reference)
+     * @param function The callable to apply to the Expected object (forwarding reference)
+     * @return The result of invoking the callable with the Expected object
      *
-     * @note Used for const lvalue Expected objects
+     * @note The IsExpected concept ensures only xll::Expected specializations are accepted
+     * @note Uses perfect forwarding to support lvalue, rvalue, const, and non-const Expected objects
+     * @note The callable must be invocable with the Expected object
+     *
+     * @example
+     * @code
+     * xll::Expected<xll::Number> ex = 42.0;
+     * auto result = ex | and_then([](auto val) { return xll::Expected<xll::Number>(val * 2); })
+     *                  | transform([](auto val) { return val + 10; });
+     * @endcode
      */
-    template<typename T, typename E, typename TFunc>
-        requires std::invocable<TFunc, xll::Expected<T, E>>
-    constexpr auto operator|(const xll::Expected<T, E>& t, TFunc&& f) -> std::invoke_result_t<TFunc, xll::Expected<T, E>>
+    template<typename TExpected, typename Callable>
+        requires std::invocable<Callable, TExpected> && IsExpected<std::remove_cvref_t<TExpected>>
+    constexpr auto operator|(TExpected&& expected, Callable&& function)
+        -> decltype(std::invoke(std::forward<Callable>(function), std::forward<TExpected>(expected)))
     {
-        return std::invoke(std::forward<TFunc>(f), t);
-    }
-
-    /**
-     * @brief Pipe operator for Expected, rvalue reference overload.
-     *
-     * Allows piping a temporary Expected object through a function using the | operator.
-     * This overload enables move semantics when the Expected object is a temporary,
-     * avoiding unnecessary copies for better performance.
-     *
-     * @tparam T The value type of the Expected object
-     * @tparam E The error type of the Expected object
-     * @tparam TFunc The type of function to apply to the Expected
-     *
-     * @param t The temporary Expected object to pipe through the function
-     * @param f The function to apply to the Expected object
-     * @return The result of applying the function to the Expected object
-     *
-     * @note Used for rvalue Expected objects, preserving move semantics
-     */
-    template<typename T, typename E, typename TFunc>
-        requires std::invocable<TFunc, xll::Expected<T, E>>
-    constexpr auto operator|(xll::Expected<T, E>&& t, TFunc&& f) -> std::invoke_result_t<TFunc, xll::Expected<T, E>>
-    {
-        return std::invoke(std::forward<TFunc>(f), std::move(t));
-    }
-
-    /**
-     * @brief Pipe operator for Expected, non-const lvalue reference overload.
-     *
-     * Allows piping a mutable Expected object through a function using the | operator.
-     * This overload is useful when the function needs to modify the Expected object directly.
-     *
-     * @tparam T The value type of the Expected object
-     * @tparam E The error type of the Expected object
-     * @tparam TFunc The type of function to apply to the Expected
-     *
-     * @param t The mutable Expected object to pipe through the function
-     * @param f The function to apply to the Expected object
-     * @return The result of applying the function to the Expected object
-     *
-     * @note Used for non-const lvalue Expected objects
-     */
-    template<typename T, typename E, typename TFunc>
-        requires std::invocable<TFunc, xll::Expected<T, E>&>
-    constexpr auto operator|(xll::Expected<T, E>& t, TFunc&& f) -> std::invoke_result_t<TFunc, xll::Expected<T, E>&>
-    {
-        return std::invoke(std::forward<TFunc>(f), t);
+        return std::invoke(std::forward<Callable>(function), std::forward<TExpected>(expected));
     }
 
     /**
@@ -1244,6 +1258,7 @@ namespace xll
             }
         };
     }
+
 
 
 
