@@ -5,6 +5,13 @@
 #pragma once
 
 #include <fxt.hpp>
+#include "../ExcelSDK/xlcall.hpp"
+#include "Error.hpp"
+#include "Nil.hpp"
+#include "Missing.hpp"
+#include "Number.hpp"
+#include "Int.hpp"
+#include "Bool.hpp"
 
 namespace xll
 {

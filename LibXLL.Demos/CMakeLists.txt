@@ -1,6 +1,8 @@
 add_library(xllDemo SHARED xllDemo.cpp)
 target_link_libraries(xllDemo PUBLIC LibXLL)
 set_target_properties(xllDemo PROPERTIES OUTPUT_NAME "example" SUFFIX ".xll")
+target_compile_definitions(xllDemo PRIVATE NOMINMAX)
+
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     target_compile_options(xllDemo PRIVATE ${CLANG_WARNINGS})

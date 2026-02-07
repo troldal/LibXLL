@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "ExcelSDK/xlcall.hpp"
 #include "Commands.hpp"
 #include "Functions.hpp"
 #include "Register.hpp"
