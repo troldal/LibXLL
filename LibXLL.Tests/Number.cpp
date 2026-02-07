@@ -1,7 +1,7 @@
 //
 // Created by kenne on 04/04/2025.
 //
-#include <catch2/catch_test_macros.hpp>
+#include "catch_amalgamated.hpp"
 #include <xlcall.hpp>
 #include "../Types/Number.hpp"
 #include "../Types/Int.hpp"

@@ -17,6 +17,10 @@ endif ()
 add_executable(exeDemo exeDemo.cpp)
 target_link_libraries(exeDemo PUBLIC LibXLL)
 
+add_executable(DemoUtilsEnsure Utils/DemoUtilsEnsure.cpp)
+target_link_libraries(DemoUtilsEnsure PUBLIC LibXLL)
+target_compile_definitions(DemoUtilsEnsure PRIVATE NOMINMAX)
+
 
 include(../cmake/CompilerWarnings.cmake)
 set_project_warnings(

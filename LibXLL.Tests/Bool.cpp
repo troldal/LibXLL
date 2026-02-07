@@ -1,7 +1,9 @@
 #include "../Types/Bool.hpp"
+
 #include "../Types/Int.hpp"
 #include "../Types/Number.hpp"
-#include <catch2/catch_test_macros.hpp>
+#include "catch_amalgamated.hpp"
+// #include <catch2/catch_test_macros.hpp>
 #include <xlcall.hpp>
 
 TEST_CASE("Bool Construction", "[xll::Bool]")

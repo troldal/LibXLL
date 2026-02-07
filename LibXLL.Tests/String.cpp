@@ -3,9 +3,11 @@
 //
 
 //#include <windows.h>
-#include <catch2/catch_test_macros.hpp>
+// #include <catch2/catch_test_macros.hpp>
 #include <xlcall.hpp>
 #include "../Types/String.hpp"
+
+#include "catch_amalgamated.hpp"
 
 TEST_CASE( "String Construction", "[xll::String]" ) {
 

@@ -2,7 +2,7 @@
 // Created by kenne on 25/03/2025.
 //
 
-#include <catch2/catch_test_macros.hpp>
+#include "catch_amalgamated.hpp"
 #include <xlcall.hpp>
 #include "../Types/Array.hpp"
 
