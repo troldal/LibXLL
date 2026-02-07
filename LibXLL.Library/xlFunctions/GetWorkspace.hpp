@@ -29,7 +29,7 @@ namespace xll
         inline auto workspace(Index<Workspace::LocaleData>)
         {
             XLOPER12 data {};
-            Excel12(xlfGetWorkspace, &data, 1, xll::Int(37));
+            Excel12(xlfGetWorkspace, &data, 1, static_cast<XLOPER12>(xll::Int(37)));
             auto result = reinterpret_cast<xll::Array<xll::Variant<xll::Nil, xll::String, xll::Number, xll::Bool>>&>(data);
             Excel12(xlFree, nullptr, 1, &data);
             return result;
