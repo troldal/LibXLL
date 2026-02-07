@@ -21,6 +21,15 @@ add_executable(DemoUtilsEnsure Utils/DemoUtilsEnsure.cpp)
 target_link_libraries(DemoUtilsEnsure PUBLIC LibXLL)
 target_compile_definitions(DemoUtilsEnsure PRIVATE NOMINMAX)
 
+add_executable(DemoTypesExpected Types/DemoTypesExpected.cpp)
+target_link_libraries(DemoTypesExpected PUBLIC LibXLL)
+target_compile_definitions(DemoTypesExpected PRIVATE NOMINMAX)
+
+add_library(xllDemoTypesExpected SHARED Types/xllDemoTypesExpected.cpp)
+target_link_libraries(xllDemoTypesExpected PUBLIC LibXLL)
+set_target_properties(xllDemoTypesExpected PROPERTIES OUTPUT_NAME "expected_demo" SUFFIX ".xll")
+target_compile_definitions(xllDemoTypesExpected PRIVATE NOMINMAX)
+
 
 include(../cmake/CompilerWarnings.cmake)
 set_project_warnings(
