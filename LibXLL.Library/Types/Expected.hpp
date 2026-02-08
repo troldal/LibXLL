@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <cassert>
 #include <fxt.hpp>
 #include "../ExcelSDK/xlcall.hpp"
 #include "Error.hpp"
@@ -32,16 +33,51 @@ namespace xll
      * @tparam TValue The type of value to store when in the success state
      * @tparam TError The type of error to store when in the failure state, defaults to xll::Error
      *
+     * ## Design & Invariants
+     *
+     * This class inherits from XLOPER12 and maintains binary compatibility with it.
+     * Both TValue and TError are also XLOPER12 wrappers, meaning all three types
+     * have identical memory layout but different interfaces to enforce type safety.
+     *
+     * **Critical Invariants:**
+     * 1. The `xltype` field MUST always be either `TValue::excel_type` OR `TError::excel_type`
+     *    (memory management flags like xlbitXLFree and xlbitDLLFree may be OR'd with the base type)
+     * 2. No additional data members are added to maintain binary compatibility with XLOPER12
+     * 3. The class is marked `final` to prevent derived classes from adding data members
+     * 4. If `has_value()` returns true, the object contains a valid TValue
+     * 5. If `has_value()` returns false, the object contains a valid TError
+     *
+     * **XLOPER12 Wrapper Design:**
+     * Since Expected, TValue, and TError all wrap XLOPER12 with identical layout,
+     * operations like `value()` return `reinterpret_cast<TValue&>(*this)`, which
+     * returns a reference to the *same memory* with a different type interface.
+     * This means self-assignment through union members is possible and must be handled.
+     *
      * @note The type parameters are constrained to exclude certain Excel types from being
      *       used as values, and the error type is currently limited to xll::Error.
      *
      * @see Unexpected
+     * @see XLOPER12
      */
     template<typename TValue, typename TError = xll::Error>
         requires(not std::same_as<TValue, xll::Error> and not std::same_as<TValue, xll::Nil> and not std::same_as<TValue, xll::Missing>) and
                 (std::same_as<TError, xll::Error>)    // or std::same_as<TError, xll::String>)
     class Expected final : public XLOPER12
     {
+        // Safety checks to ensure Expected can be stored in XLOPER12
+        static_assert(sizeof(TValue) <= sizeof(XLOPER12),
+            "TValue is too large to fit in XLOPER12");
+        static_assert(sizeof(TError) <= sizeof(XLOPER12),
+            "TError is too large to fit in XLOPER12");
+        static_assert(alignof(TValue) <= alignof(XLOPER12),
+            "TValue alignment is incompatible with XLOPER12");
+        static_assert(alignof(TError) <= alignof(XLOPER12),
+            "TError alignment is incompatible with XLOPER12");
+        static_assert(!std::is_polymorphic_v<TValue>,
+            "TValue cannot have virtual functions (vtable would be corrupted)");
+        static_assert(!std::is_polymorphic_v<TError>,
+            "TError cannot have virtual functions (vtable would be corrupted)");
+
     public:
         using value_type      = TValue;
         using error_type      = TError;
@@ -59,8 +95,8 @@ namespace xll
          */
         constexpr Expected() : XLOPER12()
         {
-            xltype                           = TValue::excel_type;
-            reinterpret_cast<TValue&>(*this) = TValue();
+            //xltype = TValue::excel_type;
+            std::construct_at(reinterpret_cast<TValue*>(this));
         }
 
         /**
@@ -71,16 +107,16 @@ namespace xll
          * If the source object contains an error, the new object will contain a copy of that error.
          *
          * @param other The Expected object to copy from
+         *
+         * @note The xltype is set by the TValue or TError constructor, not explicitly here
          */
         constexpr Expected(const Expected& other) : XLOPER12()
         {
             if (other.has_value()) {
-                xltype                           = other.xltype;
-                reinterpret_cast<TValue&>(*this) = other.value();
+                std::construct_at(reinterpret_cast<TValue*>(this), other.value());
             }
             else {
-                xltype                           = TError().xltype;
-                reinterpret_cast<TError&>(*this) = other.error();
+                std::construct_at(reinterpret_cast<TError*>(this), other.error());
             }
         }
 
@@ -93,16 +129,16 @@ namespace xll
          * This operation is noexcept, guaranteeing that it won't throw exceptions during the move.
          *
          * @param other The Expected object to move from
+         *
+         * @note The xltype is set by the TValue or TError constructor, not explicitly here
          */
         constexpr Expected(Expected&& other) noexcept : XLOPER12()
         {
             if (other.has_value()) {
-                xltype                           = other.xltype;
-                reinterpret_cast<TValue&>(*this) = std::move(other.value());
+                std::construct_at(reinterpret_cast<TValue*>(this), std::move(other.value()));
             }
             else {
-                xltype                           = TError().xltype;
-                reinterpret_cast<TError&>(*this) = std::move(other.error());
+                std::construct_at(reinterpret_cast<TError*>(this), std::move(other.error()));
             }
         }
 
@@ -119,42 +155,38 @@ namespace xll
          */
         constexpr Expected(const TValue& t) : XLOPER12()    // NOLINT
         {
-            xltype                           = t.xltype;
-            reinterpret_cast<TValue&>(*this) = t;
+            //xltype = TValue::excel_type;
+            std::construct_at(reinterpret_cast<TValue*>(this), t);
         }
 
         template<typename U, typename UBase = std::remove_cvref_t<U>>
-            requires std::constructible_from<TValue, U> && (!std::same_as<TValue, UBase>) && (!std::same_as<Expected, UBase>)
+            requires std::constructible_from<TValue, U> &&
+                     (!std::same_as<TValue, UBase>) &&
+                     (!std::same_as<Expected, UBase>) &&
+                     (!requires { typename UBase::value_type; typename UBase::error_type; })
         constexpr Expected(const U& u) : XLOPER12()
         {
-            TValue value(u);
-            xltype = value.xltype;
-            reinterpret_cast<TValue&>(*this) = value;
+            //xltype = TValue::excel_type;
+            std::construct_at(reinterpret_cast<TValue*>(this), u);
         }
 
-        /**
-         * @brief Converting move constructor from a value type.
-         *
-         * Constructs a new Expected object in a success state containing the moved value.
-         * This constructor allows for implicit conversion from an rvalue reference of TValue
-         * to Expected<TValue, TError>, enabling move semantics when returning values from
-         * functions that return Expected objects.
-         *
-         * @param t The value to move into the Expected object
-         */
-        constexpr Expected(TValue&& t) : XLOPER12()
+        // ...existing code...
+
+        constexpr Expected(TValue&& t) noexcept : XLOPER12()
         {
-            xltype                           = t.xltype;
-            reinterpret_cast<TValue&>(*this) = std::move(t);
+            //xltype = TValue::excel_type;
+            std::construct_at(reinterpret_cast<TValue*>(this), std::move(t));
         }
 
         template<typename U, typename UBase = std::remove_cvref_t<U>>
-            requires std::constructible_from<TValue, U> && (!std::same_as<TValue, UBase>) && (!std::same_as<Expected, UBase>)
+            requires std::constructible_from<TValue, U> &&
+                     (!std::same_as<TValue, UBase>) &&
+                     (!std::same_as<Expected, UBase>) &&
+                     (!requires { typename UBase::value_type; typename UBase::error_type; })
         constexpr Expected(U&& u) : XLOPER12()
         {
-            TValue value(std::forward<U>(u));
-            xltype = value.xltype;
-            reinterpret_cast<TValue&>(*this) = std::move(value);
+            //xltype = TValue::excel_type;
+            std::construct_at(reinterpret_cast<TValue*>(this), std::forward<U>(u));
         }
 
         /**
@@ -171,71 +203,35 @@ namespace xll
         template<typename UError = TError>
         constexpr Expected(const Unexpected<UError>& unexpected) : XLOPER12()
         {
-            xltype                           = unexpected.error().xltype;
-            reinterpret_cast<TError&>(*this) = unexpected.error();
+            //xltype = TError::excel_type;
+            std::construct_at(reinterpret_cast<TError*>(this), unexpected.error());
         }
 
-        /**
-         * @brief Converting move constructor from an Unexpected object.
-         *
-         * Constructs a new Expected object in an error state containing the moved error
-         * from the provided Unexpected object. This constructor allows for implicit conversion
-         * from an rvalue reference of Unexpected<UError> to Expected<TValue, TError>, enabling
-         * move semantics when propagating errors in functions that return Expected objects.
-         *
-         * @tparam UError The error type of the Unexpected object, defaults to TError
-         * @param unexpected The Unexpected object containing the error to be moved
-         */
+        // ...existing code...
+
         template<typename UError = TError>
-        constexpr Expected(Unexpected<UError>&& unexpected) : XLOPER12()
+        constexpr Expected(Unexpected<UError>&& unexpected) noexcept : XLOPER12()
         {
-            xltype                           = unexpected.error().xltype;
-            reinterpret_cast<TError&>(*this) = std::move(unexpected.error());
+            //xltype = TError::excel_type;
+            std::construct_at(reinterpret_cast<TError*>(this), std::move(unexpected.error()));
         }
-
-        /**
-         * @brief Converting constructor from a Nil object.
-         *
-         * Constructs a new Expected object in an error state when provided with a Nil object.
-         * This constructor handles cases where a Nil value (representing empty or null values in Excel)
-         * is converted to an Expected object by treating it as an error. It delegates to the
-         * Unexpected constructor, creating an Expected object that contains a default-constructed error.
-         *
-         * @param _ The Nil object (parameter name is intentionally unused)
-         */
-        // Expected(const Nil& _) : Expected(Unexpected(TError())) {}
-
-        /**
-         * @brief Converting constructor from a Missing object.
-         *
-         * Constructs a new Expected object in an error state when provided with a Missing object.
-         * This constructor handles cases where a Missing value (representing missing arguments in Excel)
-         * is converted to an Expected object by treating it as an error. It delegates to the
-         * Unexpected constructor, creating an Expected object that contains a default-constructed error.
-         *
-         * @param _ The Missing object (parameter name is intentionally unused)
-         */
-        // Expected(const Missing& _) : Expected(Unexpected(TError())) {}
 
         /**
          * @brief Destructor for the Expected class.
          *
          * Properly destroys the contained object based on whether the Expected is in a
-         * value or error state. First calls the destructor of the appropriate type
-         * (TValue or TError) using reinterpret_cast to access the underlying object.
-         * Then resets the XLOPER12 base class to its default-constructed state to
-         * ensure all memory is properly released and the object is left in a clean state.
+         * value or error state. Uses std::destroy_at to explicitly destroy the active
+         * object without invoking undefined behavior.
          *
-         * This destructor handles the special memory management needed when embedding
-         * C++ objects within an XLOPER12 structure.
+         * CRITICAL FIX: Removed the problematic XLOPER12() assignment that would
+         * corrupt the union state after manual destruction.
          */
         constexpr ~Expected()
         {
             if (has_value())
-                reinterpret_cast<TValue&>(*this).~TValue();
+                std::destroy_at(reinterpret_cast<TValue*>(this));
             else
-                reinterpret_cast<TError&>(*this).~TError();
-            *static_cast<XLOPER12*>(this) = XLOPER12();
+                std::destroy_at(reinterpret_cast<TError*>(this));
         }
 
         /**
@@ -255,14 +251,19 @@ namespace xll
         {
             if (this == &other) return *this;
 
-            this->~Expected();
+            // Manually destroy only the active union member
+            if (has_value())
+                std::destroy_at(reinterpret_cast<TValue*>(this));
+            else
+                std::destroy_at(reinterpret_cast<TError*>(this));
+
             if (other.has_value()) {
-                xltype                           = other.xltype;
-                reinterpret_cast<TValue&>(*this) = other.value();
+                std::construct_at(reinterpret_cast<TValue*>(this),
+                                reinterpret_cast<const TValue&>(other));
             }
             else {
-                xltype                           = TError().xltype;
-                reinterpret_cast<TError&>(*this) = other.error();
+                std::construct_at(reinterpret_cast<TError*>(this),
+                                reinterpret_cast<const TError&>(other));
             }
 
             return *this;
@@ -286,16 +287,21 @@ namespace xll
          */
         constexpr Expected& operator=(Expected&& other) noexcept
         {
-            if (this == &other) return *this;
+            if (this == std::addressof(other)) return *this;
 
-            this->~Expected();
+            // Manually destroy only the active union member
+            if (has_value())
+                std::destroy_at(reinterpret_cast<TValue*>(this));
+            else
+                std::destroy_at(reinterpret_cast<TError*>(this));
+
             if (other.has_value()) {
-                xltype                           = other.xltype;
-                reinterpret_cast<TValue&>(*this) = std::move(other.value());
+                std::construct_at(reinterpret_cast<TValue*>(this),
+                                std::move(reinterpret_cast<TValue&>(other)));
             }
             else {
-                xltype                           = TError().xltype;
-                reinterpret_cast<TError&>(*this) = std::move(other.error());
+                std::construct_at(reinterpret_cast<TError*>(this),
+                                std::move(reinterpret_cast<TError&>(other)));
             }
 
             return *this;
@@ -316,56 +322,75 @@ namespace xll
          */
         constexpr Expected& operator=(const TValue& other)
         {
-            if (reinterpret_cast<void*>(this) == reinterpret_cast<const void*>(&other)) return *this;
+            if (std::addressof(other) == reinterpret_cast<const TValue*>(this))
+                return *this;
 
-            this->~Expected();
-            xltype                           = TValue().xltype;
-            reinterpret_cast<TValue&>(*this) = other;
+            // Manually destroy only the active union member
+            if (has_value())
+                std::destroy_at(reinterpret_cast<TValue*>(this));
+            else
+                std::destroy_at(reinterpret_cast<TError*>(this));
+
+            //xltype = TValue::excel_type;
+            std::construct_at(reinterpret_cast<TValue*>(this), other);
             return *this;
         }
 
         template<typename U, typename UBase = std::remove_cvref_t<U>>
-            requires std::constructible_from<TValue, U> && (!std::same_as<TValue, UBase>) && (!std::same_as<Expected, UBase>)
+            requires std::constructible_from<TValue, U> &&
+                     (!std::same_as<TValue, UBase>) &&
+                     (!std::same_as<Expected, UBase>) &&
+                     (!requires { typename UBase::value_type; typename UBase::error_type; })
         constexpr Expected& operator=(const U& other)
         {
-            this->~Expected();
-            TValue value(other);
-            xltype                           = value.xltype;
-            reinterpret_cast<TValue&>(*this) = value;
+
+            // Manually destroy only the active union member
+            if (has_value())
+                std::destroy_at(reinterpret_cast<TValue*>(this));
+            else
+                std::destroy_at(reinterpret_cast<TError*>(this));
+
+            //xltype = TValue::excel_type;
+            std::construct_at(reinterpret_cast<TValue*>(this), other);
             return *this;
         }
 
-        /**
-         * @brief Move assignment operator from a value type.
-         *
-         * Assigns a value to this Expected object by moving it, changing the object to a success state.
-         * If the current object and the value are the same object (self-assignment detection using pointer comparison),
-         * no operation is performed to avoid undefined behavior.
-         * Otherwise, the current object is destroyed, and then reconstructed with the moved value type.
-         *
-         * @param other The value to move into the Expected object
-         * @return Reference to this object after assignment
-         *
-         * @note Uses reinterpret_cast for self-assignment detection since the compared objects have different types
-         */
-        constexpr Expected& operator=(TValue&& other)
-        {
-            if (reinterpret_cast<void*>(this) == reinterpret_cast<void*>(&other)) return *this;
+        // ...existing code...
 
-            this->~Expected();
-            xltype                           = TValue().xltype;
-            reinterpret_cast<TValue&>(*this) = std::move(other);
+        constexpr Expected& operator=(TValue&& other)
+            noexcept(std::is_nothrow_move_constructible_v<TValue> && std::is_nothrow_destructible_v<Expected>)
+        {
+            if (std::addressof(other) == reinterpret_cast<const TValue*>(this))
+                return *this;
+
+            // Manually destroy only the active union member
+            if (has_value())
+                std::destroy_at(reinterpret_cast<TValue*>(this));
+            else
+                std::destroy_at(reinterpret_cast<TError*>(this));
+
+            //xltype = TValue::excel_type;
+            std::construct_at(reinterpret_cast<TValue*>(this), std::move(other));
             return *this;
         }
 
         template<typename U, typename UBase = std::remove_cvref_t<U>>
-            requires std::constructible_from<TValue, U> && (!std::same_as<TValue, UBase>) && (!std::same_as<Expected, UBase>)
+            requires std::constructible_from<TValue, U> &&
+                     (!std::same_as<TValue, UBase>) &&
+                     (!std::same_as<Expected, UBase>) &&
+                     (!requires { typename UBase::value_type; typename UBase::error_type; })
         constexpr Expected& operator=(U&& other)
+            noexcept(std::is_nothrow_constructible_v<TValue, U> && std::is_nothrow_destructible_v<Expected>)
         {
-            this->~Expected();
-            TValue value(std::forward<U>(other));
-            xltype                           = value.xltype;
-            reinterpret_cast<TValue&>(*this) = std::move(value);
+
+            // Manually destroy only the active union member
+            if (has_value())
+                std::destroy_at(reinterpret_cast<TValue*>(this));
+            else
+                std::destroy_at(reinterpret_cast<TError*>(this));
+
+            //xltype = TValue::excel_type;
+            std::construct_at(reinterpret_cast<TValue*>(this), std::forward<U>(other));
             return *this;
         }
 
@@ -387,79 +412,33 @@ namespace xll
         template<typename UError = TError>
         constexpr Expected& operator=(const Unexpected<UError>& unexpected)
         {
-            this->~Expected();
-            xltype                           = unexpected.error().xltype;
-            reinterpret_cast<TError&>(*this) = unexpected.error();
+            // Manually destroy only the active union member
+            if (has_value())
+                std::destroy_at(reinterpret_cast<TValue*>(this));
+            else
+                std::destroy_at(reinterpret_cast<TError*>(this));
+
+            //xltype = TError::excel_type;
+            std::construct_at(reinterpret_cast<TError*>(this), unexpected.error());
             return *this;
         }
 
-        /**
-         * @brief Move assignment operator from an Unexpected object.
-         *
-         * Assigns an error to this Expected object by moving it, changing the object to an error state.
-         * The current object is destroyed, and then reconstructed with the moved error type.
-         * This operator enables efficient error propagation without unnecessary copying of error objects.
-         *
-         * @tparam UError The error type of the Unexpected object, defaults to TError
-         * @param unexpected The Unexpected object containing the error to be moved
-         * @return Reference to this object after assignment
-         *
-         * @note This templated assignment operator allows for implicit conversion from
-         *       Unexpected<UError> to Expected<TValue, TError> when assigning, which
-         *       facilitates efficient error propagation in code that uses Expected objects.
-         */
+        // ...existing code...
+
         template<typename UError = TError>
         constexpr Expected& operator=(Unexpected<UError>&& unexpected)
+            noexcept(std::is_nothrow_move_constructible_v<TError> && std::is_nothrow_destructible_v<Expected>)
         {
-            this->~Expected();
-            xltype                           = unexpected.error().xltype;
-            reinterpret_cast<TError&>(*this) = std::move(unexpected.error());
+            // Manually destroy only the active union member
+            if (has_value())
+                std::destroy_at(reinterpret_cast<TValue*>(this));
+            else
+                std::destroy_at(reinterpret_cast<TError*>(this));
+
+            //xltype = TError::excel_type;
+            std::construct_at(reinterpret_cast<TError*>(this), std::move(unexpected.error()));
             return *this;
         }
-
-        /**
-         * @brief Assignment operator from a Nil object.
-         *
-         * Assigns an error state to this Expected object when provided with a Nil object.
-         * This operator handles cases where a Nil value (representing empty or null values in Excel)
-         * is assigned to an Expected object by treating it as an error. The current object is destroyed,
-         * and then reconstructed with a default-constructed error object.
-         *
-         * @param _ The Nil object (parameter name is intentionally unused)
-         * @return Reference to this object after assignment
-         *
-         * @note This operator maintains consistency with the Nil constructor, treating Nil values
-         *       as errors rather than valid values within the Expected container.
-         */
-        // Expected& operator=(const Nil& _)
-        // {
-        //     this->~Expected();
-        //     xltype                           = TError().xltype;
-        //     reinterpret_cast<TError&>(*this) = TError();
-        //     return *this;
-        // }
-
-        /**
-         * @brief Assignment operator from a Missing object.
-         *
-         * Assigns an error state to this Expected object when provided with a Missing object.
-         * This operator handles cases where a Missing value (representing missing arguments in Excel)
-         * is assigned to an Expected object by treating it as an error. The current object is destroyed,
-         * and then reconstructed with a default-constructed error object.
-         *
-         * @param _ The Missing object (parameter name is intentionally unused)
-         * @return Reference to this object after assignment
-         *
-         * @note This operator maintains consistency with the Missing constructor, treating Missing values
-         *       as errors rather than valid values within the Expected container.
-         */
-        // Expected& operator=(const Missing& _)
-        // {
-        //     this->~Expected();
-        //     xltype                           = TError().xltype;
-        //     reinterpret_cast<TError&>(*this) = TError();
-        //     return *this;
-        // }
 
         /**
          * @brief Checks if the Expected object contains a value (is in success state).
@@ -473,10 +452,10 @@ namespace xll
          *
          * @note This method is const and doesn't modify the state of the Expected object.
          */
-        constexpr bool has_value() const
+        [[nodiscard]]
+        constexpr bool has_value() const noexcept
         {
-            if (xltype & TValue::excel_type) return true;
-            return false;
+            return (xltype & TValue::excel_type) != 0;
         }
 
         /**
@@ -492,69 +471,187 @@ namespace xll
          * @note This operator is marked explicit to prevent unintended implicit conversions to bool.
          *       It delegates to the has_value() method for the actual state check.
          */
+        [[nodiscard]]
         constexpr explicit operator bool() const { return has_value(); }
 
         /**
-         * @brief Retrieves the contained value if in a success state.
+         * @brief Retrieves the contained value if in a success state (const lvalue overload).
          *
          * Provides access to the underlying value stored in the Expected object when it's in
          * a success state. Throws an exception if called when the object is in an error state.
-         * This method performs a runtime check to ensure safe access to the value.
+         * This overload returns a const reference to avoid unnecessary copies.
          *
-         * @return The contained value of type TValue
+         * @return Const reference to the contained value
          * @throws std::runtime_error if the Expected object is in an error state
-         *
-         * @note Marked with [[nodiscard]] to warn if the return value is ignored
-         * @note Uses reinterpret_cast to access the underlying value without type conversion
          */
         [[nodiscard]]
-        constexpr TValue value() const
+        constexpr const TValue& value() const& noexcept(false)
         {
             if (has_value()) return reinterpret_cast<const TValue&>(*this);
             throw std::runtime_error("Expected::value() called on unexpected value");
         }
 
         /**
-         * @brief Retrieves the contained error if in a failure state.
+         * @brief Retrieves the contained value if in a success state (rvalue overload).
          *
-         * Provides access to the underlying error stored in the Expected object when it's in
-         * a failure state. This method handles two failure cases:
-         * 1. When the object contains an error of the expected type (TError)
-         * 2. When the object contains an error of a different Excel type
+         * Provides move access to the underlying value stored in the Expected object.
+         * Enables efficient transfer of the value when the Expected is an rvalue.
          *
-         * Throws an exception if called when the object is in a success state.
-         *
-         * @return The contained error of type TError
-         * @throws std::runtime_error if the Expected object is in a success state (contains a value)
-         *
-         * @note Marked with [[nodiscard]] to warn if the return value is ignored
-         * @note When the object contains an error but with a different Excel type than expected,
-         *       a default-constructed error object is returned
+         * @return Rvalue reference to the contained value (enables moves)
+         * @throws std::runtime_error if the Expected object is in an error state
          */
         [[nodiscard]]
-        constexpr TError error() const
+        constexpr TValue&& value() && noexcept(false)
         {
-            if (not has_value() and xltype == TError().xltype) return reinterpret_cast<const TError&>(*this);
-            if (not has_value() and xltype != TError().xltype) return TError();
-            throw std::runtime_error("Expected::error() called on expected value");
+            if (has_value()) return std::move(reinterpret_cast<TValue&>(*this));
+            throw std::runtime_error("Expected::value() called on unexpected value");
         }
 
         /**
-         * @brief Dereference operator that retrieves the contained value.
+         * @brief Retrieves the contained value if in a success state (const rvalue overload).
+         *
+         * Provides const rvalue access to the underlying value.
+         *
+         * @return Const rvalue reference to the contained value
+         * @throws std::runtime_error if the Expected object is in an error state
+         */
+        [[nodiscard]]
+        constexpr const TValue&& value() const&& noexcept(false)
+        {
+            if (has_value()) return std::move(reinterpret_cast<const TValue&>(*this));
+            throw std::runtime_error("Expected::value() called on unexpected value");
+        }
+
+        /**
+         * @brief Retrieves the contained error if in a failure state (const lvalue overload).
+         *
+         * Provides access to the underlying error stored in the Expected object when it's in
+         * a failure state. Returns a const reference to avoid unnecessary copies.
+         * Throws an exception if:
+         * 1. Called when the object is in a success state (contains a value)
+         * 2. The error type doesn't match TError (type mismatch)
+         *
+         * @return Const reference to the contained error
+         * @throws std::runtime_error if the Expected object is in a success state or type mismatch
+         */
+        [[nodiscard]]
+        constexpr const TError& error() const& noexcept(false)
+        {
+            if (has_value())
+                throw std::runtime_error("Expected::error() called on expected value");
+
+            if (xltype != TError::excel_type)
+                throw std::runtime_error("Type mismatch: Expected contains error of different type");
+
+            return reinterpret_cast<const TError&>(*this);
+        }
+
+        /**
+         * @brief Retrieves the contained error if in a failure state (rvalue overload).
+         *
+         * Provides move access to the underlying error. Enables efficient transfer of the error
+         * when the Expected is an rvalue.
+         *
+         * @return Rvalue reference to the contained error (enables moves)
+         * @throws std::runtime_error if the Expected object is in a success state or type mismatch
+         */
+        [[nodiscard]]
+        constexpr TError&& error() && noexcept(false)
+        {
+            if (has_value())
+                throw std::runtime_error("Expected::error() called on expected value");
+
+            if (xltype != TError::excel_type)
+                throw std::runtime_error("Type mismatch: Expected contains error of different type");
+
+            return std::move(reinterpret_cast<TError&>(*this));
+        }
+
+        /**
+         * @brief Retrieves the contained error if in a failure state (const rvalue overload).
+         *
+         * Provides const rvalue access to the underlying error.
+         *
+         * @return Const rvalue reference to the contained error
+         * @throws std::runtime_error if the Expected object is in a success state or type mismatch
+         */
+        [[nodiscard]]
+        constexpr const TError&& error() const&& noexcept(false)
+        {
+            if (has_value())
+                throw std::runtime_error("Expected::error() called on expected value");
+
+            if (xltype != TError::excel_type)
+                throw std::runtime_error("Type mismatch: Expected contains error of different type");
+
+            return std::move(reinterpret_cast<const TError&>(*this));
+        }
+
+        /**
+         * @brief Dereference operator that retrieves the contained value (const lvalue overload).
          *
          * Provides a convenient shorthand for accessing the underlying value stored in the
-         * Expected object when it's in a success state. This operator follows the common
-         * pointer-like interface pattern used by other monadic types like std::optional
-         * and std::expected.
+         * Expected object when it's in a success state. Returns a const reference.
          *
-         * @return The contained value of type TValue
+         * @return Const reference to the contained value
          * @throws std::runtime_error if the Expected object is in an error state
-         *
-         * @note Delegates to the value() method, which performs the necessary runtime checks
-         *       and throws an exception if called when the object is in an error state
-         * @note Marked const to allow usage with const Expected objects
          */
-        constexpr TValue operator*() const { return value(); }
+        [[nodiscard]]
+        constexpr const TValue& operator*() const& { return value(); }
+
+        /**
+         * @brief Dereference operator that retrieves the contained value (rvalue overload).
+         *
+         * Enables move semantics when dereferencing an rvalue Expected.
+         *
+         * @return Rvalue reference to the contained value
+         * @throws std::runtime_error if the Expected object is in an error state
+         */
+        [[nodiscard]]
+        constexpr TValue&& operator*() && { return std::move(*this).value(); }
+
+        /**
+         * @brief Dereference operator that retrieves the contained value (const rvalue overload).
+         *
+         * @return Const rvalue reference to the contained value
+         * @throws std::runtime_error if the Expected object is in an error state
+         */
+        [[nodiscard]]
+        constexpr const TValue&& operator*() const&& { return std::move(*this).value(); }
+
+        /**
+         * @brief Arrow operator for pointer-like access to the contained value.
+         *
+         * Provides convenient member access to the contained value, following the
+         * smart pointer interface pattern. Allows using -> on Expected just like
+         * on std::optional or smart pointers.
+         *
+         * @return Pointer to the contained value
+         *
+         * @pre has_value() must be true
+         * @note Does not perform has_value() check in release builds - undefined behavior if called on error state
+         * @note Use only when you're certain the Expected contains a value
+         */
+        [[nodiscard]]
+        constexpr const TValue* operator->() const noexcept
+        {
+            assert(has_value() && "operator-> called on Expected in error state");
+            return std::addressof(reinterpret_cast<const TValue&>(*this));
+        }
+
+        /**
+         * @brief Arrow operator for pointer-like access to the contained value (non-const).
+         *
+         * @return Pointer to the contained value
+         * @pre has_value() must be true
+         * @note Does not perform has_value() check in release builds - undefined behavior if called on error state
+         */
+        [[nodiscard]]
+        constexpr TValue* operator->() noexcept
+        {
+            assert(has_value() && "operator-> called on Expected in error state");
+            return std::addressof(reinterpret_cast<TValue&>(*this));
+        }
 
         /**
          * @brief Converts the Expected object to a fxt::expected object.
@@ -576,57 +673,98 @@ namespace xll
          * @see fxt::unexpected
          */
         template<typename T = TValue, typename E = TError>
-            requires std::convertible_to<TValue, T> && std::convertible_to<TError, E>
+            requires std::convertible_to<TValue, T> &&
+                     std::convertible_to<TError, E>
         constexpr fxt::expected<T, E> to_expected() const
         {
             if (has_value()) return fxt::expected<T, E>(value());
+
+            // Type safety check before accessing error
+            if (xltype != TError::excel_type)
+                throw std::runtime_error("Type mismatch in to_expected: Expected contains error of different type");
+
             return fxt::unexpected<E>(error());
         }
 
         constexpr operator fxt::expected<TValue, xll::Error>() const
         {
             if (has_value()) return fxt::expected<TValue, xll::Error>(value());
+
+            // Type safety check before accessing error
+            if (xltype != TError::excel_type)
+                throw std::runtime_error("Type mismatch in conversion: Expected contains error of different type");
+
             return fxt::unexpected<xll::Error>(error());
         }
 
         constexpr operator fxt::expected<TValue, xll::String>() const
         {
             if (has_value()) return fxt::expected<TValue, xll::String>(value());
+
+            // Type safety check before accessing error
+            if (xltype != TError::excel_type)
+                throw std::runtime_error("Type mismatch in conversion: Expected contains error of different type");
+
             return fxt::unexpected<xll::String>(error().to_string());
         }
 
         template<typename UError>
-            requires std::convertible_to<TError, UError> && (!std::same_as<UError, TError>)
+            requires std::convertible_to<TError, UError> &&
+                     (!std::same_as<UError, TError>)
         constexpr operator fxt::expected<TValue, UError>() const
         {
             if (has_value()) return fxt::expected<TValue, UError>(value());
+
+            // Type safety check before accessing error
+            if (xltype != TError::excel_type)
+                throw std::runtime_error("Type mismatch in conversion: Expected contains error of different type");
+
             return fxt::unexpected<UError>(error());
         }
 
         /**
-         * @brief Returns the contained value or a default value if in error state.
+         * @brief Returns the contained value or a default value if in error state (const lvalue overload).
          *
          * This method provides a safe way to access the contained value without throwing
          * an exception when the Expected object is in an error state. If the object is in
-         * a success state, it returns the contained value; otherwise, it returns the provided
-         * default value.
+         * a success state, it returns a copy of the contained value; otherwise, it returns
+         * a value constructed from the provided default.
          *
+         * @tparam U Type of the default value (deduced)
          * @param default_value The value to return if the Expected object is in an error state
          * @return The contained value if in success state, otherwise the default value
          *
-         * @note Marked with [[nodiscard]] to warn if the return value is ignored
-         * @note Takes the default value by rvalue reference to enable move semantics,
-         *       which can be more efficient for complex types
-         * @note This is const-qualified to allow use with const Expected objects
-         *
-         * @see value()
-         * @see has_value()
+         * @note Uses perfect forwarding to support any type convertible to TValue
+         * @note Returns by value (copies from the Expected)
          */
+        template<typename U = TValue>
+            requires std::constructible_from<TValue, U>
         [[nodiscard]]
-        constexpr TValue value_or(TValue&& default_value) const
+        constexpr TValue value_or(U&& default_value) const&
         {
             if (has_value()) return value();
-            return default_value;
+            return TValue(std::forward<U>(default_value));
+        }
+
+        /**
+         * @brief Returns the contained value or a default value if in error state (rvalue overload).
+         *
+         * This overload enables move semantics when the Expected is an rvalue, allowing
+         * efficient transfer of the contained value without unnecessary copies.
+         *
+         * @tparam U Type of the default value (deduced)
+         * @param default_value The value to return if the Expected object is in an error state
+         * @return The contained value (moved) if in success state, otherwise the default value
+         *
+         * @note Uses perfect forwarding and move semantics for maximum efficiency
+         */
+        template<typename U = TValue>
+            requires std::constructible_from<TValue, U>
+        [[nodiscard]]
+        constexpr TValue value_or(U&& default_value) &&
+        {
+            if (has_value()) return std::move(*this).value();
+            return TValue(std::forward<U>(default_value));
         }
 
         /**
@@ -680,14 +818,21 @@ namespace xll
          * @see or_else for handling the error case
          */
         template<typename TSelf, typename TFunc, typename TResult = std::invoke_result_t<TFunc, TValue&>>
-            requires std::invocable<TFunc, TValue&> && requires(TFunc f, TValue& v) {
-                {
-                    std::invoke(f, v)
-                } -> std::convertible_to<Expected<typename TResult::value_type, TError>>;
-            }
+            requires std::invocable<TFunc, TValue&> &&
+                     requires(TFunc f, TValue& v) {
+                         {
+                             std::invoke(f, v)
+                         } -> std::convertible_to<Expected<typename TResult::value_type, TError>>;
+                     }
+        [[nodiscard]]
         constexpr auto and_then(this TSelf&& self, TFunc&& func) -> TResult
         {
             if (self.has_value()) return std::invoke(std::forward<TFunc>(func), self.value());
+
+            // Type safety check before accessing error
+            if (self.xltype != TError::excel_type)
+                throw std::runtime_error("Type mismatch in and_then: Expected contains error of different type");
+
             return TResult(Unexpected(std::forward<TSelf>(self).error()));
         }
 
@@ -716,12 +861,18 @@ namespace xll
          */
         template<typename TSelf, typename TFunc>
             requires std::invocable<TFunc, TValue>
+        [[nodiscard]]
         constexpr auto transform(this TSelf&& self, TFunc&& func)
         {
             using result_type          = std::invoke_result_t<TFunc, TValue&>;
             using expected_result_type = xll::Expected<result_type>;
 
             if (self.has_value()) return expected_result_type(std::invoke(std::forward<TFunc>(func), self.value()));
+
+            // Type safety check before accessing error
+            if (self.xltype != TError::excel_type)
+                throw std::runtime_error("Type mismatch in transform: Expected contains error of different type");
+
             return expected_result_type(Unexpected(self.error()));
         }
 
@@ -745,11 +896,18 @@ namespace xll
         template<typename TSelf, typename TFunc>
             requires std::invocable<TFunc, const xll::Error&> &&
                      std::convertible_to<std::invoke_result_t<TFunc, const xll::Error&>, xll::Expected<TValue>>
+        [[nodiscard]]
         constexpr auto or_else(this TSelf&& self, TFunc&& func)
         {
             using result_type = std::invoke_result_t<TFunc, const xll::Error&>;
 
-            if (!self.has_value()) return std::invoke(std::forward<TFunc>(func), self.error());
+            if (!self.has_value()) {
+                // Type safety check before accessing error
+                if (self.xltype != TError::excel_type)
+                    throw std::runtime_error("Type mismatch in or_else: Expected contains error of different type");
+
+                return std::invoke(std::forward<TFunc>(func), self.error());
+            }
             return result_type(self.value());
         }
 
@@ -770,13 +928,158 @@ namespace xll
          */
         template<typename TSelf, typename TFunc>
             requires std::invocable<TFunc, const TError&>
+        [[nodiscard]]
         constexpr auto transform_error(this TSelf&& self, TFunc&& func)
         {
             using result_type          = std::invoke_result_t<TFunc, const TError&>;
             using expected_result_type = xll::Expected<TValue, result_type>;
 
-            if (!self.has_value()) return expected_result_type(Unexpected(std::invoke(std::forward<TFunc>(func), self.error())));
+            if (!self.has_value()) {
+                // Type safety check before accessing error
+                if (self.xltype != TError::excel_type)
+                    throw std::runtime_error("Type mismatch in transform_error: Expected contains error of different type");
+
+                return expected_result_type(Unexpected(std::invoke(std::forward<TFunc>(func), self.error())));
+            }
             return expected_result_type(self.value());
+        }
+
+        /**
+         * @brief Constructs the value in-place, destroying any existing value or error.
+         *
+         * Destroys the currently contained value or error, then constructs a new value
+         * in-place using the provided arguments. This is more efficient than assignment
+         * when constructing complex objects.
+         *
+         * @tparam Args Types of arguments to forward to TValue's constructor
+         * @param args Arguments to forward to the TValue constructor
+         */
+        template<typename... Args>
+            requires std::constructible_from<TValue, Args...>
+        constexpr void emplace(Args&&... args)
+        {
+            // Manually destroy only the active union member
+            if (has_value())
+                std::destroy_at(reinterpret_cast<TValue*>(this));
+            else
+                std::destroy_at(reinterpret_cast<TError*>(this));
+
+            xltype = TValue::excel_type;
+            std::construct_at(reinterpret_cast<TValue*>(this), std::forward<Args>(args)...);
+        }
+
+        /**
+         * @brief Constructs the error in-place, destroying any existing value or error.
+         *
+         * Destroys the currently contained value or error, then constructs a new error
+         * in-place using the provided arguments. This is more efficient than assignment
+         * when constructing complex error objects.
+         *
+         * @tparam Args Types of arguments to forward to TError's constructor
+         * @param args Arguments to forward to the TError constructor
+         */
+        template<typename... Args>
+            requires std::constructible_from<TError, Args...>
+        constexpr void emplace_error(Args&&... args)
+        {
+            // Manually destroy only the active union member
+            if (has_value())
+                std::destroy_at(reinterpret_cast<TValue*>(this));
+            else
+                std::destroy_at(reinterpret_cast<TError*>(this));
+
+            xltype = TError::excel_type;
+            std::construct_at(reinterpret_cast<TError*>(this), std::forward<Args>(args)...);
+        }
+
+        /**
+         * @brief Swaps the contents of two Expected objects.
+         *
+         * Efficiently exchanges the contents of this Expected with another.
+         * Handles all four cases: value-value, error-error, value-error, error-value.
+         *
+         * @param other The Expected object to swap with
+         *
+         * @note noexcept specification depends on move constructibility of TValue and TError
+         */
+        constexpr void swap(Expected& other)
+            noexcept(std::is_nothrow_move_constructible_v<TValue> &&
+                     std::is_nothrow_move_constructible_v<TError>)
+        {
+            if (this == &other) return;
+
+            if (has_value() && other.has_value()) {
+                // Both contain values - swap them
+                using std::swap;
+                swap(reinterpret_cast<TValue&>(*this), reinterpret_cast<TValue&>(other));
+            }
+            else if (!has_value() && !other.has_value()) {
+                // Both contain errors - swap them
+                using std::swap;
+                swap(reinterpret_cast<TError&>(*this), reinterpret_cast<TError&>(other));
+            }
+            else {
+                // Mixed case - use move construction
+                Expected temp(std::move(*this));
+                *this = std::move(other);
+                other = std::move(temp);
+            }
+        }
+
+        /**
+         * @brief Equality comparison operator.
+         *
+         * Compares two Expected objects for equality. Two Expected objects are equal if:
+         * - Both contain values and the values are equal, OR
+         * - Both contain errors and the errors are equal
+         *
+         * @param other The Expected object to compare with
+         * @return true if both Expected objects are in the same state with equal contents
+         */
+        [[nodiscard]]
+        friend constexpr bool operator==(const Expected& lhs, const Expected& rhs)
+            requires std::equality_comparable<TValue> && std::equality_comparable<TError>
+        {
+            if (lhs.has_value() != rhs.has_value()) return false;
+            if (lhs.has_value()) return lhs.value() == rhs.value();
+
+            // Both have errors - check type compatibility first
+            if (lhs.xltype != TError::excel_type || rhs.xltype != TError::excel_type)
+                return false;
+
+            return lhs.error() == rhs.error();
+        }
+
+        /**
+         * @brief Equality comparison with a value.
+         *
+         * An Expected is equal to a value if it contains that value (is in success state).
+         *
+         * @param value The value to compare with
+         * @return true if the Expected contains a value equal to the given value
+         */
+        [[nodiscard]]
+        friend constexpr bool operator==(const Expected& lhs, const TValue& rhs)
+            requires std::equality_comparable<TValue>
+        {
+            return lhs.has_value() && lhs.value() == rhs;
+        }
+
+        /**
+         * @brief Equality comparison with an Unexpected.
+         *
+         * An Expected is equal to an Unexpected if it contains that error (is in error state).
+         *
+         * @param unexpected The Unexpected to compare with
+         * @return true if the Expected contains an error equal to the given Unexpected's error
+         */
+        [[nodiscard]]
+        friend constexpr bool operator==(const Expected& lhs, const Unexpected<TError>& rhs)
+            requires std::equality_comparable<TError>
+        {
+            if (lhs.has_value()) return false;
+            if (lhs.xltype != TError::excel_type) return false;
+            return lhs.error() == rhs.error();
         }
     };
 
@@ -829,6 +1132,22 @@ namespace xll
      */
     template<typename T>
     concept IsExpected = impl::is_expected_v<T>;
+
+    /**
+     * @brief Non-member swap function for Expected objects.
+     *
+     * Provides ADL-friendly swap that delegates to the member swap function.
+     * Enables use with standard algorithms and generic code.
+     *
+     * @param lhs First Expected object to swap
+     * @param rhs Second Expected object to swap
+     */
+    template<typename TValue, typename TError>
+    constexpr void swap(Expected<TValue, TError>& lhs, Expected<TValue, TError>& rhs)
+        noexcept(noexcept(lhs.swap(rhs)))
+    {
+        lhs.swap(rhs);
+    }
 
 
     /**
@@ -941,6 +1260,7 @@ namespace xll
          *
          * @return A const lvalue reference to the contained error
          */
+        [[nodiscard]]
         constexpr const TError& error() const& noexcept { return error_; }
 
         /**
@@ -952,6 +1272,7 @@ namespace xll
          *
          * @return A non-const lvalue reference to the contained error
          */
+        [[nodiscard]]
         constexpr TError& error() & noexcept { return error_; }
 
         /**
@@ -964,6 +1285,7 @@ namespace xll
          *
          * @return A const rvalue reference to the contained error
          */
+        [[nodiscard]]
         constexpr const TError&& error() const&& noexcept { return std::move(error_); }
 
         /**
@@ -976,6 +1298,7 @@ namespace xll
          *
          * @return An rvalue reference to the contained error
          */
+        [[nodiscard]]
         constexpr TError&& error() && noexcept { return std::move(error_); }
 
         /**
@@ -1080,7 +1403,9 @@ namespace xll
      * @endcode
      */
     template<typename TExpected, typename Callable>
-        requires std::invocable<Callable, TExpected> && IsExpected<std::remove_cvref_t<TExpected>>
+        requires std::invocable<Callable, TExpected> &&
+                 IsExpected<std::remove_cvref_t<TExpected>>
+    [[nodiscard]]
     constexpr auto operator|(TExpected&& expected, Callable&& function)
         -> decltype(std::invoke(std::forward<Callable>(function), std::forward<TExpected>(expected)))
     {
