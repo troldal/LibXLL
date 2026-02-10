@@ -475,149 +475,100 @@ namespace xll
         constexpr explicit operator bool() const { return has_value(); }
 
         /**
-         * @brief Retrieves the contained value if in a success state (const lvalue overload).
+         * @brief Retrieves the contained value if in a success state.
          *
-         * Provides access to the underlying value stored in the Expected object when it's in
-         * a success state. Throws an exception if called when the object is in an error state.
-         * This overload returns a const reference to avoid unnecessary copies.
+         * Uses C++23 deducing this to automatically handle all reference qualifiers:
+         * - const& when called on const lvalue
+         * - & when called on non-const lvalue
+         * - && when called on rvalue
          *
-         * @return Const reference to the contained value
+         * This single template replaces multiple overloads while maintaining the same
+         * behavior through perfect forwarding.
+         *
+         * @tparam Self The deduced type of the Expected instance (preserves cv-qualifiers and value category)
+         * @param self The Expected object to operate on (deducing this parameter)
+         * @return Forwarded reference to the contained value (preserving const and value category)
          * @throws std::runtime_error if the Expected object is in an error state
          */
+        template<typename Self>
         [[nodiscard]]
-        constexpr const TValue& value() const& noexcept(false)
+        constexpr auto&& value(this Self&& self) noexcept(false)
         {
-            if (has_value()) return reinterpret_cast<const TValue&>(*this);
+            if (self.has_value()) {
+                // Apply Self's cv-qualifiers and value category to TValue
+                using QualifiedValue = std::conditional_t<
+                    std::is_const_v<std::remove_reference_t<Self>>,
+                    const TValue,
+                    TValue
+                >;
+
+                // Return the appropriate reference type (& or &&)
+                if constexpr (std::is_rvalue_reference_v<Self&&>)
+                    return std::move(reinterpret_cast<QualifiedValue&>(self));
+                else
+                    return reinterpret_cast<QualifiedValue&>(self);
+
+            }
             throw std::runtime_error("Expected::value() called on unexpected value");
         }
 
-        /**
-         * @brief Retrieves the contained value if in a success state (rvalue overload).
-         *
-         * Provides move access to the underlying value stored in the Expected object.
-         * Enables efficient transfer of the value when the Expected is an rvalue.
-         *
-         * @return Rvalue reference to the contained value (enables moves)
-         * @throws std::runtime_error if the Expected object is in an error state
-         */
-        [[nodiscard]]
-        constexpr TValue&& value() && noexcept(false)
-        {
-            if (has_value()) return std::move(reinterpret_cast<TValue&>(*this));
-            throw std::runtime_error("Expected::value() called on unexpected value");
-        }
+
 
         /**
-         * @brief Retrieves the contained value if in a success state (const rvalue overload).
+         * @brief Retrieves the contained error if in a failure state.
          *
-         * Provides const rvalue access to the underlying value.
+         * Uses C++23 deducing this to automatically handle all reference qualifiers.
+         * Provides access to the underlying error with appropriate const-correctness
+         * and value category preservation through perfect forwarding.
          *
-         * @return Const rvalue reference to the contained value
-         * @throws std::runtime_error if the Expected object is in an error state
-         */
-        [[nodiscard]]
-        constexpr const TValue&& value() const&& noexcept(false)
-        {
-            if (has_value()) return std::move(reinterpret_cast<const TValue&>(*this));
-            throw std::runtime_error("Expected::value() called on unexpected value");
-        }
-
-        /**
-         * @brief Retrieves the contained error if in a failure state (const lvalue overload).
-         *
-         * Provides access to the underlying error stored in the Expected object when it's in
-         * a failure state. Returns a const reference to avoid unnecessary copies.
-         * Throws an exception if:
-         * 1. Called when the object is in a success state (contains a value)
-         * 2. The error type doesn't match TError (type mismatch)
-         *
-         * @return Const reference to the contained error
+         * @tparam Self The deduced type of the Expected instance
+         * @param self The Expected object to operate on (deducing this parameter)
+         * @return Forwarded reference to the contained error
          * @throws std::runtime_error if the Expected object is in a success state or type mismatch
          */
+        template<typename Self>
         [[nodiscard]]
-        constexpr const TError& error() const& noexcept(false)
+        constexpr auto&& error(this Self&& self) noexcept(false)
         {
-            if (has_value())
+            if (self.has_value())
                 throw std::runtime_error("Expected::error() called on expected value");
 
-            if (xltype != TError::excel_type)
+            if (self.xltype != TError::excel_type)
                 throw std::runtime_error("Type mismatch: Expected contains error of different type");
 
-            return reinterpret_cast<const TError&>(*this);
+            using QualifiedError = std::conditional_t<
+                std::is_const_v<std::remove_reference_t<Self>>,
+                const TError,
+                TError
+            >;
+
+            if constexpr (std::is_rvalue_reference_v<Self&&>)
+                return std::move(reinterpret_cast<QualifiedError&>(self));
+            else
+                return reinterpret_cast<QualifiedError&>(self);
         }
 
+
         /**
-         * @brief Retrieves the contained error if in a failure state (rvalue overload).
+         * @brief Dereference operator that retrieves the contained value.
          *
-         * Provides move access to the underlying error. Enables efficient transfer of the error
-         * when the Expected is an rvalue.
+         * Uses C++23 deducing this to provide a convenient shorthand for accessing
+         * the underlying value. Automatically handles all reference qualifiers through
+         * delegation to value().
          *
-         * @return Rvalue reference to the contained error (enables moves)
-         * @throws std::runtime_error if the Expected object is in a success state or type mismatch
+         * @tparam Self The deduced type of the Expected instance
+         * @param self The Expected object to operate on (deducing this parameter)
+         * @return Forwarded reference to the contained value
+         * @throws std::runtime_error if the Expected object is in an error state
          */
+        template<typename Self>
         [[nodiscard]]
-        constexpr TError&& error() && noexcept(false)
+        constexpr auto&& operator*(this Self&& self)
         {
-            if (has_value())
-                throw std::runtime_error("Expected::error() called on expected value");
-
-            if (xltype != TError::excel_type)
-                throw std::runtime_error("Type mismatch: Expected contains error of different type");
-
-            return std::move(reinterpret_cast<TError&>(*this));
+            return std::forward<Self>(self).value();
         }
 
-        /**
-         * @brief Retrieves the contained error if in a failure state (const rvalue overload).
-         *
-         * Provides const rvalue access to the underlying error.
-         *
-         * @return Const rvalue reference to the contained error
-         * @throws std::runtime_error if the Expected object is in a success state or type mismatch
-         */
-        [[nodiscard]]
-        constexpr const TError&& error() const&& noexcept(false)
-        {
-            if (has_value())
-                throw std::runtime_error("Expected::error() called on expected value");
 
-            if (xltype != TError::excel_type)
-                throw std::runtime_error("Type mismatch: Expected contains error of different type");
-
-            return std::move(reinterpret_cast<const TError&>(*this));
-        }
-
-        /**
-         * @brief Dereference operator that retrieves the contained value (const lvalue overload).
-         *
-         * Provides a convenient shorthand for accessing the underlying value stored in the
-         * Expected object when it's in a success state. Returns a const reference.
-         *
-         * @return Const reference to the contained value
-         * @throws std::runtime_error if the Expected object is in an error state
-         */
-        [[nodiscard]]
-        constexpr const TValue& operator*() const& { return value(); }
-
-        /**
-         * @brief Dereference operator that retrieves the contained value (rvalue overload).
-         *
-         * Enables move semantics when dereferencing an rvalue Expected.
-         *
-         * @return Rvalue reference to the contained value
-         * @throws std::runtime_error if the Expected object is in an error state
-         */
-        [[nodiscard]]
-        constexpr TValue&& operator*() && { return std::move(*this).value(); }
-
-        /**
-         * @brief Dereference operator that retrieves the contained value (const rvalue overload).
-         *
-         * @return Const rvalue reference to the contained value
-         * @throws std::runtime_error if the Expected object is in an error state
-         */
-        [[nodiscard]]
-        constexpr const TValue&& operator*() const&& { return std::move(*this).value(); }
 
         /**
          * @brief Arrow operator for pointer-like access to the contained value.

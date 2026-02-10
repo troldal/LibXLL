@@ -303,6 +303,51 @@ TEST_CASE("Expected - Value Assignment", "[xll::Expected][assignment]")
         REQUIRE(exp.has_value());
         REQUIRE(exp.value() == 3.14);
     }
+
+    SECTION("Assign const lvalue convertible type (int to Number)") {
+        xll::Expected<xll::Number> exp{xll::Number(1.0)};
+        const int value = 42;
+        exp = value; // Uses template<typename U> operator=(const U&) - const lvalue
+
+        REQUIRE(exp.has_value());
+        REQUIRE(exp.value() == 42.0);
+    }
+
+    SECTION("Assign const lvalue convertible type (double to Number)") {
+        xll::Expected<xll::Number> exp{xll::Number(0.0)};
+        const double value = 3.14159;
+        exp = value; // Uses template<typename U> operator=(const U&) - const lvalue
+
+        REQUIRE(exp.has_value());
+        REQUIRE(exp.value() == 3.14159);
+    }
+
+    SECTION("Assign const lvalue convertible type to error state") {
+        xll::Expected<xll::Number> exp{xll::Unexpected<xll::Error>{xll::ErrNull}};
+        const int value = 777;
+        exp = value; // Uses template<typename U> operator=(const U&) - const lvalue
+
+        REQUIRE(exp.has_value());
+        REQUIRE(exp.value() == 777.0);
+    }
+
+    SECTION("Assign const lvalue bool to Expected<Bool>") {
+        xll::Expected<xll::Bool> exp{xll::Bool(false)};
+        const bool value = true;
+        exp = value; // Uses template<typename U> operator=(const U&) - const lvalue
+
+        REQUIRE(exp.has_value());
+        REQUIRE(exp.value() == true);
+    }
+
+    SECTION("Assign non-const lvalue convertible type") {
+        xll::Expected<xll::Number> exp{xll::Number(1.0)};
+        int value = 555;
+        exp = value; // Uses template<typename U> operator=(const U&) - lvalue binding to const&
+
+        REQUIRE(exp.has_value());
+        REQUIRE(exp.value() == 555.0);
+    }
 }
 
 TEST_CASE("Expected - Unexpected Assignment", "[xll::Expected][assignment]")
@@ -321,6 +366,47 @@ TEST_CASE("Expected - Unexpected Assignment", "[xll::Expected][assignment]")
 
         REQUIRE_FALSE(exp.has_value());
         REQUIRE(exp.error() == xll::ErrDiv0);
+    }
+
+    SECTION("Assign const lvalue Unexpected to Expected with value") {
+        xll::Expected<xll::Number> exp{xll::Number(3.14)};
+        const auto unexpected = xll::Unexpected<xll::Error>{xll::ErrNull};
+        exp = unexpected; // Uses operator=(const Unexpected<UError>&)
+
+        REQUIRE_FALSE(exp.has_value());
+        REQUIRE(exp.error() == xll::ErrNull);
+    }
+
+    SECTION("Assign const lvalue Unexpected to Expected with error") {
+        xll::Expected<xll::Number> exp{xll::Unexpected<xll::Error>{xll::ErrValue}};
+        const auto unexpected = xll::Unexpected<xll::Error>{xll::ErrRef};
+        exp = unexpected; // Uses operator=(const Unexpected<UError>&)
+
+        REQUIRE_FALSE(exp.has_value());
+        REQUIRE(exp.error() == xll::ErrRef);
+    }
+
+    SECTION("Assign non-const lvalue Unexpected to Expected") {
+        xll::Expected<xll::Number> exp{xll::Number(99.0)};
+        auto unexpected = xll::Unexpected<xll::Error>{xll::ErrName};
+        exp = unexpected; // Binds to operator=(const Unexpected<UError>&)
+
+        REQUIRE_FALSE(exp.has_value());
+        REQUIRE(exp.error() == xll::ErrName);
+    }
+
+    SECTION("Assign const lvalue Unexpected multiple times") {
+        xll::Expected<xll::Int> exp{xll::Int(42)};
+        const auto unexpected1 = xll::Unexpected<xll::Error>{xll::ErrNum};
+        const auto unexpected2 = xll::Unexpected<xll::Error>{xll::ErrNA};
+
+        exp = unexpected1; // First assignment
+        REQUIRE_FALSE(exp.has_value());
+        REQUIRE(exp.error() == xll::ErrNum);
+
+        exp = unexpected2; // Second assignment (error to error)
+        REQUIRE_FALSE(exp.has_value());
+        REQUIRE(exp.error() == xll::ErrNA);
     }
 }
 
@@ -352,6 +438,12 @@ TEST_CASE("Expected - Value Access", "[xll::Expected][access]")
 
         const auto& cexp = exp;
         REQUIRE(*cexp == 3.14);
+    }
+
+    SECTION("operator* rvalue reference") {
+        xll::Expected<xll::Number> exp{xll::Number(2.718)};
+        auto val = *std::move(exp); // Calls && overload
+        REQUIRE(val == 2.718);
     }
 
     SECTION("operator-> on Expected with value") {
