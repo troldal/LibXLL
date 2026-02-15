@@ -829,52 +829,48 @@ TEST_CASE("Expected - Swap", "[xll::Expected][swap]")
 
 TEST_CASE("Expected - Invalid XLOPER12 State", "[xll::Expected][invalid]")
 {
-    SECTION("has_value() with corrupted xltype") {
+    SECTION("has_value() with corrupted metadata") {
         xll::Expected<xll::Number> exp{xll::Number(3.14)};
 
-        // Corrupt the xltype to something invalid
-        exp.xltype = xltypeNil;
+        // Corrupt the metadata to indicate error state
+        auto* tag = xll::impl::metadata_bytes(exp);
+        tag[1] = xll::impl::kIsError; // Change value state to error state
 
-        // has_value() checks if xltype matches TValue::excel_type
+        // has_value() should now return false
         REQUIRE_FALSE(exp.has_value());
     }
 
-    SECTION("has_value() with wrong value type") {
+    SECTION("value() with corrupted metadata throws") {
         xll::Expected<xll::Number> exp{xll::Number(3.14)};
 
-        // Change xltype to a different value type
-        exp.xltype = xltypeStr;
-
-        // has_value() uses bitwise AND, so this depends on the types
-        REQUIRE_FALSE(exp.has_value());
-    }
-
-    SECTION("value() with corrupted state throws") {
-        xll::Expected<xll::Number> exp{xll::Number(3.14)};
-        exp.xltype = xltypeNil; // Corrupt state
+        // Corrupt metadata to error state
+        auto* tag = xll::impl::metadata_bytes(exp);
+        tag[1] = xll::impl::kIsError;
 
         // Should throw because has_value() returns false
         REQUIRE_THROWS(exp.value());
     }
 
-    SECTION("error() with wrong error xltype throws") {
+    SECTION("error() with wrong error xltype returns default") {
         xll::Expected<xll::Number> exp{xll::Unexpected<xll::Error>{xll::ErrDiv0}};
 
-        // Corrupt xltype to non-error type
+        // Corrupt xltype to non-error type (but object is still in error state)
         exp.xltype = xltypeNum;
 
-        // error() checks xltype == TError::excel_type
-        REQUIRE_THROWS(exp.error());
+        // error() returns default-constructed error when xltype doesn't match TError::excel_type
+        auto err = exp.error();
+        REQUIRE(err.xltype == xltypeErr);
     }
 
-    SECTION("error() with corrupted xltype but !has_value()") {
+    SECTION("error() with corrupted xltype but !has_value() returns default") {
         xll::Expected<xll::Number> exp{xll::Unexpected<xll::Error>{xll::ErrDiv0}};
 
         // Set xltype to something that makes has_value() false but isn't an error
         exp.xltype = xltypeNil;
 
-        // Should throw due to type mismatch check
-        REQUIRE_THROWS(exp.error());
+        // Should return default-constructed error since xltype doesn't match
+        auto err = exp.error();
+        REQUIRE(err.xltype == xltypeErr);
     }
 
     SECTION("Construct from invalid XLOPER12") {
@@ -1017,4 +1013,158 @@ TEST_CASE("Expected - Resource Management", "[xll::Expected][resources]")
     }
 }
 
+// =============================================================================
+// LAZY ERROR MATERIALIZATION
+// =============================================================================
+
+TEST_CASE("Expected - Lazy Error Materialization", "[xll::Expected][lazy_materialization]")
+{
+    SECTION("Return default error from Missing xltype") {
+        // Simulate what Excel does when passing Missing to Expected<String>
+        xll::Expected<xll::String> exp;
+        // Manually set to error state with wrong xltype (simulating Excel's behavior)
+        exp.xltype = xltypeMissing;
+        xll::impl::set_error_state(exp, true);
+        REQUIRE_FALSE(exp.has_value());
+        // Access error - should return a default xll::Error (by value)
+        auto err = exp.error();
+        REQUIRE(err.xltype == xltypeErr);
+        // Original xltype remains unchanged since error() returns by value
+        REQUIRE(exp.xltype == xltypeMissing);
+        xll::impl::set_error_state(exp, false);
+        exp.xltype = xltypeStr;
+    }
+
+    SECTION("Return default error from Nil xltype") {
+        xll::Expected<xll::Number> exp;
+        // Set to error state with Nil xltype
+        exp.xltype = xltypeNil;
+        xll::impl::set_error_state(exp, true);
+        REQUIRE_FALSE(exp.has_value());
+        // Should return default error
+        auto err = exp.error();
+        REQUIRE(err.xltype == xltypeErr);
+        // Original xltype remains unchanged
+        REQUIRE(exp.xltype == xltypeNil);
+    }
+
+    SECTION("Materialize error from wrong type") {
+        xll::Expected<xll::String> exp;
+
+        // Set to error state but with Number xltype (wrong type passed from Excel)
+        exp.xltype = xltypeNum;
+        xll::impl::set_error_state(exp, true);
+
+        REQUIRE_FALSE(exp.has_value());
+
+        // Should return default-constructed error since xltype doesn't match
+        auto err = exp.error();
+        REQUIRE(err.xltype == xltypeErr);
+        xll::impl::set_error_state(exp, false);
+        exp.xltype = xltypeStr;
+    }
+
+    SECTION("No materialization when xltype is already correct") {
+        xll::Expected<xll::Number> exp{xll::Unexpected<xll::Error>{xll::ErrDiv0}};
+
+        REQUIRE_FALSE(exp.has_value());
+        REQUIRE(exp.xltype == xltypeErr);
+
+        // Should return the actual error
+        auto err = exp.error();
+        REQUIRE(err == xll::ErrDiv0); // Should preserve the original error
+    }
+
+    SECTION("Materialization works with transform_error") {
+        xll::Expected<xll::String> exp;
+
+        // Simulate Missing input
+        exp.xltype = xltypeMissing;
+        xll::impl::set_error_state(exp, true);
+
+        REQUIRE_FALSE(exp.has_value());
+
+        // transform_error should work without throwing
+        auto result = exp.transform_error([](const xll::Error&) {
+            return xll::String("Materialized error");
+        });
+
+        REQUIRE_FALSE(result.has_value());
+        REQUIRE(result.error() == "Materialized error");
+        xll::impl::set_error_state(exp, false);
+        exp.xltype = xltypeStr;
+    }
+
+    SECTION("Materialization in monadic pipeline") {
+        xll::Expected<xll::String> exp;
+
+        // Simulate wrong type from Excel
+        exp.xltype = xltypeNum;
+        xll::impl::set_error_state(exp, true);
+
+        // Full monadic pipeline should work
+        auto result = exp
+            .transform_error([](const xll::Error&) { return xll::String("Type error"); })
+            .or_else([](const xll::String& err) {
+                return xll::Expected<xll::String, xll::String>(xll::Unexpected(err));
+            })
+            .transform_error([](const xll::String&) { return xll::ErrValue; });
+
+        REQUIRE_FALSE(result.has_value());
+        REQUIRE(result.error() == xll::ErrValue);
+        xll::impl::set_error_state(exp, false);
+        exp.xltype = xltypeStr;
+    }
+
+    SECTION("Const Expected can call error()") {
+        xll::Expected<xll::String> exp;
+        exp.xltype = xltypeMissing;
+        xll::impl::set_error_state(exp, true);
+
+        const auto& const_exp = exp;
+
+        REQUIRE_FALSE(const_exp.has_value());
+
+        // Accessing error on const Expected with wrong xltype returns default error
+        auto err = const_exp.error();
+        REQUIRE(err.xltype == xltypeErr);
+        xll::impl::set_error_state(exp, false);
+        exp.xltype = xltypeStr;
+    }
+
+    SECTION("Materialization preserves error state metadata") {
+        xll::Expected<xll::Number> exp;
+        exp.xltype = xltypeMissing;
+        xll::impl::set_error_state(exp, true);
+
+        REQUIRE_FALSE(exp.has_value());
+
+        // Materialize
+        exp.error();
+
+        // Should still be in error state
+        REQUIRE_FALSE(exp.has_value());
+        REQUIRE(xll::impl::is_error_state(exp));
+    }
+
+    SECTION("Multiple error() calls work correctly") {
+        xll::Expected<xll::String> exp;
+        exp.xltype = xltypeNil;
+        xll::impl::set_error_state(exp, true);
+
+        // First call returns default-constructed error
+        auto err1 = exp.error();
+        REQUIRE(err1.xltype == xltypeErr);
+        // Original xltype unchanged
+        REQUIRE(exp.xltype == xltypeNil);
+
+        // Second call also returns default-constructed error
+        auto err2 = exp.error();
+        REQUIRE(err2.xltype == xltypeErr);
+        // Original xltype still unchanged
+        REQUIRE(exp.xltype == xltypeNil);
+        xll::impl::set_error_state(exp, false);
+        exp.xltype = xltypeStr;
+    }
+}
 

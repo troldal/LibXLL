@@ -25,10 +25,19 @@ add_executable(DemoTypesExpected Types/DemoTypesExpected.cpp)
 target_link_libraries(DemoTypesExpected PUBLIC LibXLL)
 target_compile_definitions(DemoTypesExpected PRIVATE NOMINMAX)
 
+add_executable(DemoExpectedSameType Types/DemoExpectedSameType.cpp)
+target_link_libraries(DemoExpectedSameType PUBLIC LibXLL)
+target_compile_definitions(DemoExpectedSameType PRIVATE NOMINMAX)
+
 add_library(xllDemoTypesExpected SHARED Types/xllDemoTypesExpected.cpp)
 target_link_libraries(xllDemoTypesExpected PUBLIC LibXLL)
 set_target_properties(xllDemoTypesExpected PROPERTIES OUTPUT_NAME "expected_demo" SUFFIX ".xll")
 target_compile_definitions(xllDemoTypesExpected PRIVATE NOMINMAX)
+
+add_library(xllDemoExpectedValidation SHARED Types/xllDemoExpectedValidation.cpp)
+target_link_libraries(xllDemoExpectedValidation PUBLIC LibXLL)
+set_target_properties(xllDemoExpectedValidation PROPERTIES OUTPUT_NAME "expected_validation" SUFFIX ".xll")
+target_compile_definitions(xllDemoExpectedValidation PRIVATE NOMINMAX)
 
 
 include(../cmake/CompilerWarnings.cmake)

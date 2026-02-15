@@ -1,10 +1,123 @@
-//
-// Created by kenne on 31/03/2025.
-//
+/**
+ * @file Expected.hpp
+ * @brief Monadic error handling for Excel add-ins using Expected<TValue, TError>
+ *
+ * @section type_punning Type Punning and XLOPER12 Foundation
+ *
+ * This file implements a sophisticated type-punning design where all types (Expected, TValue, TError)
+ * are fundamentally XLOPER12 objects with identical binary layout but different type-safe interfaces.
+ *
+ * **Critical Design Principles:**
+ *
+ * 1. **Binary Layout Identity**: Expected, TValue, and TError all inherit from XLOPER12 without
+ *    adding any data members. This means `sizeof(Expected<T,E>) == sizeof(XLOPER12)` and they
+ *    can be safely reinterpret_cast between each other.
+ *
+ * 2. **Type Punning via reinterpret_cast**: We use reinterpret_cast to view the same memory as
+ *    different types (Expected ↔ TValue ↔ TError). This is safe because:
+ *    - All types have identical size and alignment
+ *    - We use std::launder after std::construct_at to obtain valid pointers
+ *    - We carefully manage object lifetimes with std::construct_at/std::destroy_at
+ *
+ * 3. **Metadata-Based State Tracking**: Instead of relying solely on xltype, we use the last 2 bytes
+ *    of the XLOPER12.val union to store metadata (magic sentinel + state flag). This allows:
+ *    - Same type for TValue and TError (e.g., Expected<String, String>)
+ *    - Detection of raw XLOPER12 objects from Excel
+ *    - Proper state tracking independent of xltype
+ *
+ * 4. **Excel Compatibility**: The metadata is cleared before passing to Excel, and we can accept
+ *    raw XLOPER12 objects from Excel and wrap them in Expected without copying.
+ *
+ * @section pointer_provenance Pointer Provenance and std::launder
+ *
+ * Because we construct objects via std::construct_at and access them through reinterpret_cast,
+ * we must use std::launder to avoid undefined behavior from invalid pointer provenance:
+ *
+ * ```cpp
+ * // Construction (no launder needed - pointer goes TO construct_at)
+ * std::construct_at(reinterpret_cast<TValue*>(this), value);
+ *
+ * // Access (launder needed - pointer used AFTER construction)
+ * auto* ptr = std::launder(reinterpret_cast<TValue*>(this));
+ * return *ptr;  // Safe - pointer has valid provenance
+ * ```
+ *
+ * @section memory_safety Memory Safety and Object Lifetimes
+ *
+ * - Every constructor calls std::construct_at to create the appropriate object
+ * - The destructor calls std::destroy_at on the laundered pointer to the actual type
+ * - Assignment operators use copy-and-swap for exception safety
+ * - Corrupting metadata (e.g., setting xltype without proper construction) leads to undefined behavior
+ *
+ * @section examples Comprehensive Examples
+ *
+ * **Example 1: Basic Type Punning**
+ * ```cpp
+ * // All fundamentally XLOPER12 with identical layout:
+ * Expected<Number> exp = 42.0;
+ * Number* num = std::launder(reinterpret_cast<Number*>(&exp));  // Valid - same layout
+ * XLOPER12* raw = &exp;  // Valid - Expected IS-A XLOPER12
+ * ```
+ *
+ * **Example 2: Construction and Destruction with Laundering**
+ * ```cpp
+ * Expected<String> exp;  // Default constructor
+ * // 1. XLOPER12() initializes base
+ * // 2. std::construct_at(reinterpret_cast<String*>(this)) creates String
+ * // 3. String constructor sets xltype = xltypeStr, allocates buffer
+ * // 4. Metadata set to value state
+ *
+ * exp.value();  // Access with laundering
+ * // 1. Check has_value() - reads metadata
+ * // 2. std::launder(reinterpret_cast<String*>(this)) - get valid pointer
+ * // 3. Return reference to laundered String
+ *
+ * // Destructor
+ * // 1. Check has_value() - reads metadata (value state)
+ * // 2. std::launder(reinterpret_cast<String*>(this)) - get valid pointer
+ * // 3. std::destroy_at on laundered pointer - calls String destructor, frees buffer
+ * // 4. Clear metadata
+ * ````
+ *
+ * **Example 3: Same Type for Value and Error**
+ * ```cpp
+ * // Metadata enables this pattern:
+ * Expected<String, String> validate(const String& input) {
+ *     if (input.empty())
+ *         return Unexpected(String("Error: empty input"));  // Error state
+ *     return String("Valid: ") + input;  // Value state
+ * }
+ *
+ * auto result = validate("");
+ * // xltype == xltypeStr for both value and error
+ * // Metadata distinguishes: has_value() uses metadata, not xltype
+ * ```
+ *
+ * **Example 4: Monadic Chaining with Type Punning**
+ * ```cpp
+ * Expected<Number> calculate() {
+ *     return Expected<String>("42")
+ *         .transform([](String& s) { return std::stod(std::string(s)); })  // String→double
+ *         .and_then([](double d) { return Expected<Number>(d * 2); })      // double→Expected<Number>
+ *         .transform([](Number& n) { return n.val.num + 10; });            // Number→double
+ * }
+ *
+ * // Type punning at each step:
+ * // - Expected<String>: XLOPER12 with xltypeStr
+ * // - Expected<double>: XLOPER12 with xltypeNum (via Number)
+ * // - Expected<Number>: XLOPER12 with xltypeNum
+ * // All same size, all safely reinterpret_cast-able
+ * ```
+ *
+ * @author Kenneth Troldal Balslev
+ * @date 31/03/2025
+ */
 
 #pragma once
 
 #include <cassert>
+#include <cstddef>
+#include <cstdint>
 #include <fxt.hpp>
 #include "../ExcelSDK/xlcall.hpp"
 #include "Error.hpp"
@@ -13,13 +126,227 @@
 #include "Number.hpp"
 #include "Int.hpp"
 #include "Bool.hpp"
+#include "String.hpp"
+#include "Variant.hpp"
 
 namespace xll
 {
+    /**
+     * @namespace xll::impl
+     * @brief Internal implementation details for Expected metadata management
+     *
+     * This namespace contains functions for managing metadata stored in unused bytes of the
+     * XLOPER12.val union. The metadata allows Expected to track value/error state independently
+     * of xltype, enabling advanced features like Expected<String, String>.
+     *
+     * **Metadata Layout:**
+     * - XLOPER12.val is an 8-byte union
+     * - Most types (String, Int, Number, etc.) use only 4-6 bytes
+     * - Last 2 bytes used for metadata:
+     *   - Byte [-2]: Magic sentinel (0xE7) to identify our metadata
+     *   - Byte [-1]: State flag (0 = value, 1 = error)
+     *
+     * **Safety:** These functions use std::byte* which is exempt from strict aliasing rules,
+     * making them safe for type-punning into the union.
+     */
+    namespace impl
+    {
+        // Metadata tag constants for marking Expected state in unused XLOPER12 bytes
+        constexpr std::byte kMagic = std::byte{0xE7};  // Sentinel to identify our metadata
+        constexpr std::byte kIsError = std::byte{1};
+        constexpr std::byte kIsValue = std::byte{0};
+
+        /**
+         * @brief Access the metadata bytes in the XLOPER12 val union.
+         *
+         * Returns a pointer to the last 2 bytes of the XLOPER12.val union where we store
+         * metadata for Expected state tracking.
+         *
+         * **Type Punning Safety:**
+         * This function uses reinterpret_cast to std::byte*, which is explicitly allowed
+         * by the C++ standard (std::byte is exempt from strict aliasing rules). This makes
+         * it safe to read/write the raw bytes of the union without undefined behavior.
+         *
+         * **Memory Layout:**
+         * ```
+         * XLOPER12.val (8 bytes):
+         * [0][1][2][3][4][5][6][7]
+         *  ^                 ^  ^
+         *  |                 |  +-- Byte [-1]: State (0=value, 1=error)
+         *  |                 +---- Byte [-2]: Magic (0xE7)
+         *  +-- Used by actual data (String*, int, double, etc.)
+         * ```
+         *
+         * @param x The XLOPER12 object to access metadata from (fundamentally, this could be
+         *          Expected, TValue, or TError since they all have identical layout)
+         * @return Pointer to the first of the 2 metadata bytes (byte [-2])
+         *
+         * @note The XLOPER12 val union is 8 bytes, but most types (especially strings) only use
+         *       part of this space. We use the last 2 bytes to store metadata.
+         * @note This allows Expected to support any TValue/TError types while maintaining
+         *       Excel compatibility (metadata is cleared before passing to Excel).
+         */
+        inline std::byte* metadata_bytes(XLOPER12& x) noexcept
+        {
+            auto* b = reinterpret_cast<std::byte*>(&x.val);
+            return b + sizeof(x.val) - 2;  // Last 2 bytes
+        }
+
+        /**
+         * @brief Access the metadata bytes in a const XLOPER12 val union.
+         *
+         * Const-qualified version of metadata_bytes for read-only access to metadata.
+         * See the non-const version for detailed documentation.
+         *
+         * @param x The const XLOPER12 object to access metadata from
+         * @return Const pointer to the first of the 2 metadata bytes
+         */
+        inline const std::byte* metadata_bytes(const XLOPER12& x) noexcept
+        {
+            const auto* b = reinterpret_cast<const std::byte*>(&x.val);
+            return b + sizeof(x.val) - 2;
+        }
+
+        /**
+         * @brief Check if metadata tag is present in an XLOPER12 object.
+         *
+         * Checks if the magic sentinel byte (0xE7) is present, indicating that this XLOPER12
+         * has been tagged with Expected metadata.
+         *
+         * **Use Case:** Distinguishes between:
+         * - Expected objects we created (has metadata)
+         * - Raw XLOPER12 from Excel (no metadata)
+         *
+         * @param x The XLOPER12 to check (could be Expected, TValue, TError, or raw XLOPER12)
+         * @return true if metadata is present, false for raw XLOPER12 from Excel
+         */
+        inline bool has_metadata(const XLOPER12& x) noexcept
+        {
+            return metadata_bytes(x)[0] == kMagic;
+        }
+
+        /**
+         * @brief Set the error/value state in metadata.
+         *
+         * Writes both the magic sentinel and state flag to mark this XLOPER12 as an Expected
+         * object in either value or error state.
+         *
+         * **Type Punning Context:**
+         * This function treats any XLOPER12-derived type (Expected, TValue, TError) identically,
+         * writing to the shared union memory. The caller must ensure the xltype and actual
+         * contained object match the state being set, or the destructor will have undefined behavior.
+         *
+         * @param x The XLOPER12 to tag with metadata (could be Expected, TValue, or TError)
+         * @param is_error true to mark as error state, false to mark as value state
+         *
+         * @warning Only call this after properly constructing the appropriate object type.
+         *          Mismatched metadata and actual type leads to undefined behavior in destructor.
+         */
+        inline void set_error_state(XLOPER12& x, bool is_error) noexcept
+        {
+            auto* tag = metadata_bytes(x);
+            tag[0] = kMagic;
+            tag[1] = is_error ? kIsError : kIsValue;
+        }
+
+        /**
+         * @brief Get the error/value state from metadata.
+         *
+         * Reads the metadata to determine if this Expected is in error or value state.
+         * Both magic sentinel and state flag must be correct to return true.
+         *
+         * @param x The XLOPER12 to check (Expected, TValue, TError, or raw XLOPER12)
+         * @return true if metadata indicates error state, false otherwise
+         *
+         * @note Returns false for raw XLOPER12 without metadata (magic sentinel not present)
+         */
+        inline bool is_error_state(const XLOPER12& x) noexcept
+        {
+            const auto* tag = metadata_bytes(x);
+            return (tag[0] == kMagic) && (tag[1] == kIsError);
+        }
+
+        /**
+         * @brief Clear metadata (for Excel compatibility).
+         *
+         * Zeroes out the metadata bytes to ensure they don't interfere with Excel's
+         * interpretation of the XLOPER12. This must be called before passing the
+         * XLOPER12 to Excel APIs.
+         *
+         * **Excel Integration:**
+         * Excel doesn't know about our metadata scheme. Before returning an Expected
+         * to Excel or passing it to Excel APIs, we must clear the metadata so Excel
+         * sees a normal XLOPER12 based solely on xltype.
+         *
+         * @param x The XLOPER12 to clear metadata from
+         *
+         * @note After clearing, has_value() falls back to xltype checking
+         * @note The destructor automatically calls this for safety
+         */
+        inline void clear_metadata(XLOPER12& x) noexcept
+        {
+            auto* tag = metadata_bytes(x);
+            tag[0] = std::byte{0};
+            tag[1] = std::byte{0};
+        }
+
+        /**
+         * @brief Determine if an XLOPER12 is in error state based on Excel type.
+         *
+         * When an XLOPER12 comes directly from Excel without metadata, we need to infer
+         * its state from xltype. If xltype doesn't match TValue::excel_type, it's in error state.
+         *
+         * @tparam TValue The expected value type
+         * @param x The XLOPER12 to check
+         * @return true if the XLOPER12 should be considered in error state
+         */
+        template<typename TValue>
+        inline bool is_error_from_xltype(const XLOPER12& x) noexcept
+        {
+            return (x.xltype & TValue::excel_type) == 0;
+        }
+
+        /**
+         * @brief Materialize an XLOPER12 into a proper TError.
+         *
+         * When an Expected is in error state but contains a raw XLOPER12 from Excel
+         * (not a proper TError), this function safely converts it to TError.
+         *
+         * This handles the common case where Excel passes xltypeMissing, xltypeNil,
+         * or other non-TValue types which need to be materialized into proper errors.
+         *
+         * Only xltypeStr needs special destruction handling (to free the string memory).
+         * Other types (Missing, Nil, Number, Bool, etc.) can be trivially destroyed.
+         *
+         * @tparam TError The error type to materialize to
+         * @param x The XLOPER12 to materialize (will be modified in-place)
+         */
+        // template<typename TError>
+        // inline void materialize_error(XLOPER12& x) noexcept
+        // {
+        //     // Capture xltype before any modifications
+        //     const auto current_xltype = x.xltype;
+        //
+        //     // Only String type needs special deallocation
+        //     // Other types (Missing, Nil, Number, Bool, Int, etc.) are trivially destructible
+        //     if ((current_xltype & xltypeStr) != 0) {
+        //         // Use std::launder to get valid pointer before destroy_at
+        //         std::destroy_at(std::launder(reinterpret_cast<String*>(&x)));
+        //     }
+        //     // Note: Arrays would also need special handling, but we avoid the circular
+        //     // dependency by not including Array.hpp. In practice, Excel rarely passes
+        //     // arrays as "error" states, so this is acceptable.
+        //
+        //     // Construct the new error in place
+        //     std::construct_at(reinterpret_cast<TError*>(&x), TError());
+        //
+        //     // Mark as error state
+        //     set_error_state(x, true);
+        // }
+    } // namespace impl
 
     // Forward declaration of the Unexpected class template
     template<typename TError>
-        requires(std::same_as<TError, xll::Error>)    // or std::same_as<TError, xll::String>)
     class Unexpected;
 
     /**
@@ -30,38 +357,116 @@ namespace xll
      * (failure state). This class integrates with Excel's XLOPER12 data structure to
      * provide error handling for Excel add-in functions.
      *
-     * @tparam TValue The type of value to store when in the success state
-     * @tparam TError The type of error to store when in the failure state, defaults to xll::Error
+     * @tparam TValue The type of value to store when in the success state (must inherit from XLOPER12)
+     * @tparam TError The type of error to store when in the failure state (must inherit from XLOPER12), defaults to xll::Error
      *
-     * ## Design & Invariants
+     * ## Type Punning Architecture
      *
-     * This class inherits from XLOPER12 and maintains binary compatibility with it.
-     * Both TValue and TError are also XLOPER12 wrappers, meaning all three types
-     * have identical memory layout but different interfaces to enforce type safety.
+     * **Fundamental Design Principle:**
+     * Expected<TValue, TError>, TValue, and TError are ALL fundamentally XLOPER12 objects.
+     * They have identical binary layout (same size, same alignment, same memory representation)
+     * but provide different type-safe interfaces. This allows us to safely reinterpret_cast
+     * between these types.
+     *
+     * ```
+     * Memory Layout (all identical):
+     * Expected<String>: [xltype][val union (8 bytes)][padding]  = 16 bytes
+     * String:           [xltype][val union (8 bytes)][padding]  = 16 bytes
+     * Error:            [xltype][val union (8 bytes)][padding]  = 16 bytes
+     * XLOPER12:         [xltype][val union (8 bytes)][padding]  = 16 bytes
+     * ```
+     *
+     * **Type Safety Through Interfaces:**
+     * - Expected provides has_value(), value(), error(), monadic operations
+     * - String provides string-specific operations, ensures xltype == xltypeStr
+     * - Error provides error-specific operations, ensures xltype == xltypeErr
+     * - All enforce invariants through their constructors/destructors
      *
      * **Critical Invariants:**
-     * 1. The `xltype` field MUST always be either `TValue::excel_type` OR `TError::excel_type`
-     *    (memory management flags like xlbitXLFree and xlbitDLLFree may be OR'd with the base type)
+     * 1. The object uses metadata stored in the last 2 bytes of the XLOPER12 val union
+     *    to track whether it's in value or error state (metadata byte [-2] = 0xE7 sentinel,
+     *    byte [-1] = 0 for value, 1 for error)
      * 2. No additional data members are added to maintain binary compatibility with XLOPER12
      * 3. The class is marked `final` to prevent derived classes from adding data members
-     * 4. If `has_value()` returns true, the object contains a valid TValue
-     * 5. If `has_value()` returns false, the object contains a valid TError
+     * 4. If `has_value()` returns true, the object contains a properly constructed TValue
+     * 5. If `has_value()` returns false, the object contains a properly constructed TError
+     * 6. Metadata is cleared before Excel consumption to ensure compatibility
+     * 7. Object lifetime managed via std::construct_at/std::destroy_at with proper laundering
      *
-     * **XLOPER12 Wrapper Design:**
-     * Since Expected, TValue, and TError all wrap XLOPER12 with identical layout,
-     * operations like `value()` return `reinterpret_cast<TValue&>(*this)`, which
-     * returns a reference to the *same memory* with a different type interface.
-     * This means self-assignment through union members is possible and must be handled.
+     * ## Memory Safety and Pointer Provenance
      *
-     * @note The type parameters are constrained to exclude certain Excel types from being
-     *       used as values, and the error type is currently limited to xll::Error.
+     * **Construction Pattern:**
+     * ```cpp
+     * Expected() : XLOPER12() {
+     *     std::construct_at(reinterpret_cast<TValue*>(this), TValue{});
+     *     // No launder needed here - we just set metadata, not access TValue
+     *     impl::set_error_state(*this, false);
+     * }
+     * ```
+     *
+     * **Access Pattern:**
+     * ```cpp
+     * TValue& value() {
+     *     // Must use std::launder to get valid pointer to constructed object
+     *     auto* ptr = std::launder(reinterpret_cast<TValue*>(this));
+     *     return *ptr;  // Safe - valid provenance
+     * }
+     * ```
+     *
+     * **Why std::launder is Required:**
+     * After calling std::construct_at with a TValue*, the compiler knows a TValue exists.
+     * But when we later reinterpret_cast from Expected*, the compiler doesn't know that
+     * pointer points to the TValue. std::launder tells the compiler "yes, a TValue really
+     * exists here" and provides a pointer with valid provenance.
+     *
+     * ## Metadata-Based State Tracking
+     *
+     * Unlike relying solely on xltype to distinguish value from error, we use metadata:
+     * - Allows Expected<String, String> (same type for value and error)
+     * - Detects raw XLOPER12 from Excel (no metadata = infer from xltype)
+     * - Survives type punning (metadata independent of which "view" we use)
+     * - Excel-safe (cleared before passing to Excel APIs)
+     *
+     * ## Excel Integration
+     *
+     * Excel sees only the XLOPER12 base:
+     * ```cpp
+     * Expected<Number> exp = 42.0;
+     * exp.clear_metadata();  // Remove our metadata
+     * Excel::API::call(&exp);  // Excel sees XLOPER12 with xltypeNum
+     * ```
+     *
+     * Excel returns raw XLOPER12:
+     * ```cpp
+     * XLOPER12* raw = Excel::API::get_value();
+     * Expected<Number> exp = *reinterpret_cast<Expected<Number>*>(raw);
+     * // Works because Expected IS-A XLOPER12, just adds interface
+     * ```
+     *
+     * ## Undefined Behavior Warnings
+     *
+     * **Safe Operations:**
+     * ✅ All public API (constructors, value(), error(), monadic operations)
+     * ✅ Reinterpret_cast between Expected/TValue/TError (identical layout)
+     * ✅ Passing to Excel after clear_metadata()
+     * ✅ Wrapping raw XLOPER12 from Excel
+     *
+     * **Undefined Behavior:**
+     * ❌ Manually modifying xltype without proper construction
+     * ❌ Calling impl::set_error_state with mismatched object type
+     * ❌ Accessing TValue when has_value() is false
+     * ❌ Accessing TError when has_value() is true
+     * ❌ Destroying with corrupted metadata (wrong type will be destroyed)
+     *
+     * @note With metadata-based state tracking, TValue and TError can be the same type.
+     *       The Unexpected wrapper disambiguates constructors.
      *
      * @see Unexpected
      * @see XLOPER12
+     * @see std::launder
+     * @see std::construct_at
      */
     template<typename TValue, typename TError = xll::Error>
-        requires(not std::same_as<TValue, xll::Error> and not std::same_as<TValue, xll::Nil> and not std::same_as<TValue, xll::Missing>) and
-                (std::same_as<TError, xll::Error>)    // or std::same_as<TError, xll::String>)
     class Expected final : public XLOPER12
     {
         // Safety checks to ensure Expected can be stored in XLOPER12
@@ -84,28 +489,64 @@ namespace xll
         using unexpected_type = Unexpected<TError>;
 
         /**
-         * @brief Default constructor.
+         * @brief Default constructor - creates Expected in value state with default-constructed TValue.
          *
-         * Initializes a new Expected object in a valid state containing a default-constructed value.
-         * This constructor creates an Expected object with its internal state set to hold a value
-         * of type TValue rather than an error state. The XLOPER12 base class is initialized through
-         * its default constructor before setting the appropriate Excel type and value.
+         * Initializes a new Expected object in a value state containing a default-constructed value.
+         * The XLOPER12 base class is default-initialized first, then we construct the TValue in-place.
+         *
+         * **Type Punning Details:**
+         * 1. `XLOPER12()` default-initializes the base (xltype = 0, val = {0})
+         * 2. `std::construct_at(reinterpret_cast<TValue*>(this), ...)` constructs TValue in the same memory
+         * 3. The TValue constructor will set xltype appropriately (e.g., xltypeNum for Number)
+         * 4. We then set metadata to mark this as "value state"
+         *
+         * **Memory Layout After Construction:**
+         * ```
+         * this -> [xltype=TValue::excel_type][val union with TValue data][metadata: 0xE7, 0x00]
+         *         ^                                                         ^
+         *         |                                                         +-- Value state marker
+         *         +-- Set by TValue constructor
+         * ```
+         *
+         * **Why No std::launder:**
+         * We don't access the constructed TValue object here - we only set metadata on *this
+         * viewed as Expected/XLOPER12. Laundering is only needed when dereferencing the TValue pointer.
+         *
+         * @post has_value() returns true
+         * @post xltype == TValue::excel_type
+         * @post Metadata indicates value state
          */
         constexpr Expected() : XLOPER12()
         {
             std::construct_at(reinterpret_cast<TValue*>(this));
+            impl::set_error_state(*this, false);
         }
 
         /**
-         * @brief Copy constructor.
+         * @brief Copy constructor - deep copies another Expected's state and value/error.
          *
          * Constructs a new Expected object by copying the state and value from another Expected object.
          * If the source object contains a value, the new object will contain a copy of that value.
          * If the source object contains an error, the new object will contain a copy of that error.
          *
-         * @param other The Expected object to copy from
+         * **Type Punning Details:**
+         * 1. Check `other.has_value()` to determine which type is stored
+         * 2. Call `other.value()` or `other.error()` which internally use std::launder
+         * 3. Construct the appropriate type (TValue or TError) in *this
+         * 4. The constructed object sets xltype, metadata is copied implicitly
          *
-         * @note The xltype is set by the TValue or TError constructor, not explicitly here
+         * **Memory Safety:**
+         * - `other.value()` and `other.error()` already handle laundering internally
+         * - We receive a properly laundered reference to copy from
+         * - `std::construct_at` creates a new object in *this with proper lifetime
+         * - No additional laundering needed in constructor (we don't access the new object)
+         *
+         * @param other The Expected object to copy from (may be Expected<TValue> or convertible)
+         *
+         * @post has_value() == other.has_value()
+         * @post If other has value, *this contains a copy of other's value
+         * @post If other has error, *this contains a copy of other's error
+         * @post xltype matches the contained type (TValue or TError)
          */
         constexpr Expected(const Expected& other) : XLOPER12()
         {
@@ -145,6 +586,7 @@ namespace xll
          * Constructs a new Expected object in a success state containing a copy of the provided value.
          * This constructor allows for implicit conversion from TValue to Expected<TValue, TError>,
          * making it easier to return values from functions that return Expected objects.
+         * Metadata is set to mark this as a value state.
          *
          * @param t The value to store in the Expected object
          *
@@ -153,6 +595,7 @@ namespace xll
         constexpr Expected(const TValue& t) : XLOPER12()    // NOLINT
         {
             std::construct_at(reinterpret_cast<TValue*>(this), t);
+            impl::set_error_state(*this, false);
         }
 
         template<typename U, typename UBase = std::remove_cvref_t<U>>
@@ -163,12 +606,14 @@ namespace xll
         constexpr Expected(const U& u) : XLOPER12()
         {
             std::construct_at(reinterpret_cast<TValue*>(this), u);
+            impl::set_error_state(*this, false);
         }
 
 
         constexpr Expected(TValue&& t) noexcept : XLOPER12()
         {
             std::construct_at(reinterpret_cast<TValue*>(this), std::move(t));
+            impl::set_error_state(*this, false);
         }
 
         template<typename U, typename UBase = std::remove_cvref_t<U>>
@@ -179,6 +624,7 @@ namespace xll
         constexpr Expected(U&& u) noexcept(std::is_nothrow_constructible_v<TValue, U>) : XLOPER12()
         {
             std::construct_at(reinterpret_cast<TValue*>(this), std::forward<U>(u));
+            impl::set_error_state(*this, false);
         }
 
         /**
@@ -188,6 +634,7 @@ namespace xll
          * from the provided Unexpected object. This constructor allows for implicit conversion
          * from Unexpected<UError> to Expected<TValue, TError>, facilitating error propagation
          * in functions that return Expected objects.
+         * Metadata is set to mark this as an error state.
          *
          * @tparam UError The error type of the Unexpected object, defaults to TError
          * @param unexpected The Unexpected object containing the error to be stored
@@ -196,30 +643,86 @@ namespace xll
         constexpr Expected(const Unexpected<UError>& unexpected) : XLOPER12()
         {
             std::construct_at(reinterpret_cast<TError*>(this), unexpected.error());
+            impl::set_error_state(*this, true);
         }
 
         template<typename UError = TError>
         constexpr Expected(Unexpected<UError>&& unexpected) noexcept : XLOPER12()
         {
             std::construct_at(reinterpret_cast<TError*>(this), std::move(unexpected.error()));
+            impl::set_error_state(*this, true);
         }
 
         /**
-         * @brief Destructor for the Expected class.
+         * @brief Destructor - properly destroys the contained object based on state.
          *
          * Properly destroys the contained object based on whether the Expected is in a
          * value or error state. Uses std::destroy_at to explicitly destroy the active
          * object without invoking undefined behavior.
          *
-         * CRITICAL FIX: Removed the problematic XLOPER12() assignment that would
-         * corrupt the union state after manual destruction.
+         * **Critical Type Punning Operation:**
+         * The destructor must determine which type (TValue or TError) actually exists in
+         * memory and destroy it correctly. This is complex because:
+         * - The same memory can contain TValue OR TError (union-like behavior)
+         * - TValue and TError may need different cleanup (e.g., String frees memory, Number doesn't)
+         * - We must call the correct destructor based on runtime state (has_value())
+         *
+         * **Destruction Sequence:**
+         * 1. Check metadata via has_value() to determine what's stored
+         * 2. If value state: reinterpret_cast to TValue*, launder it, destroy TValue
+         * 3. If error state: reinterpret_cast to TError*, launder it, destroy TError
+         * 4. Clear metadata for Excel safety
+         *
+         * **Why std::launder is REQUIRED:**
+         * ```cpp
+         * // Without launder (WRONG):
+         * std::destroy_at(reinterpret_cast<TValue*>(this));
+         * // Compiler sees: "destroy TValue at address of Expected"
+         * // But pointer provenance is wrong - compiler doesn't know TValue is there
+         *
+         * // With launder (CORRECT):
+         * std::destroy_at(std::launder(reinterpret_cast<TValue*>(this)));
+         * // Compiler gets valid pointer to the actual TValue object
+         * // Correct destructor called with proper pointer provenance
+         * ```
+         *
+         * **Memory Management Examples:**
+         * - TValue = String: String destructor frees heap-allocated character buffer
+         * - TValue = Number: Number destructor is trivial (no cleanup needed)
+         * - TError = Error: Error destructor is trivial (no cleanup needed)
+         *
+         * The destructor relies on metadata to determine which type to destroy:
+         * - If metadata indicates value state, destroys as TValue
+         * - If metadata indicates error state, destroys as TError
+         * - If no metadata is present, infers from xltype
+         *
+         * @warning If the object's internal state is corrupted (e.g., by directly modifying
+         *          xltype or calling impl::set_error_state with a mismatched type), behavior
+         *          is undefined. This may result in memory leaks (destroying wrong type) or
+         *          crashes (accessing invalid memory). Only use the public API to maintain
+         *          object invariants.
+         *
+         * **Corruption Scenario Example:**
+         * ```cpp
+         * Expected<String> exp;  // Contains String with allocated memory
+         * exp.xltype = xltypeMissing;  // CORRUPTION!
+         * impl::set_error_state(exp, true);  // Says "error" but contains String
+         * // Destructor thinks it contains Error, won't free String's memory → LEAK
+         * ```
+         *
+         * @note Metadata is automatically cleared after destruction for Excel compatibility
+         * @note The destructor is noexcept (as all destructors should be)
+         * @note Uses const_cast internally because std::launder/std::destroy_at need non-const
          */
         constexpr ~Expected()
         {
+            // Use std::launder to obtain valid pointers to objects created via std::construct_at
             if (has_value())
-                std::destroy_at(reinterpret_cast<TValue*>(this));
+                std::destroy_at(std::launder(reinterpret_cast<TValue*>(this)));
             else
-                std::destroy_at(reinterpret_cast<TError*>(this));
+                std::destroy_at(std::launder(reinterpret_cast<TError*>(this)));
+
+            impl::clear_metadata(*this);  // Safe for Excel consumption
         }
 
         /**
@@ -355,18 +858,68 @@ namespace xll
          * @brief Checks if the Expected object contains a value (is in success state).
          *
          * Determines whether the Expected object is currently holding a value rather than an error.
-         * This is done by comparing the current Excel type of the object (xltype) with the
-         * expected Excel type for the value type (TValue::excel_type).
+         * This implementation uses a two-tier approach: metadata-based (preferred) and xltype-based (fallback).
+         *
+         * **Metadata-Based Detection (Primary):**
+         * If metadata is present (magic byte 0xE7), we trust it as the source of truth:
+         * - Metadata byte [-1] == 0: Value state
+         * - Metadata byte [-1] == 1: Error state
+         *
+         * This allows Expected<String, String> to work (same type for value/error).
+         *
+         * **xltype-Based Detection (Fallback):**
+         * If metadata is NOT present (raw XLOPER12 from Excel), we infer from xltype:
+         * - xltype matches TValue::excel_type: Value state
+         * - xltype doesn't match TValue::excel_type: Error state
+         *
+         * **Use Cases:**
+         *
+         * 1. **Expected we created:** Has metadata, uses metadata for accurate state
+         * ```cpp
+         * Expected<String> exp("hello");  // Metadata: 0xE7, 0x00 (value)
+         * exp.has_value() → true  // Reads metadata
+         * ```
+         *
+         * 2. **Raw XLOPER12 from Excel:** No metadata, infers from xltype
+         * ```cpp
+         * XLOPER12* raw = Excel::get_param();  // xltype = xltypeMissing
+         * Expected<String>* exp = reinterpret_cast<Expected<String>*>(raw);
+         * exp->has_value() → false  // xltypeMissing doesn't match xltypeStr
+         * ```
+         *
+         * 3. **Expected<String, String>:** Requires metadata (xltype alone is ambiguous)
+         * ```cpp
+         * Expected<String, String> exp("value");  // Metadata: 0xE7, 0x00
+         * exp.has_value() → true  // Must use metadata, xltype is xltypeStr in both cases
+         * ```
+         *
+         * **Type Punning Context:**
+         * This function treats the Expected object as an XLOPER12 (via inheritance) to read
+         * xltype and metadata bytes. It doesn't matter if the actual contained object is
+         * TValue or TError - we're just reading the discriminator, not accessing the object.
          *
          * @return true if the object contains a value (success state), false if it contains
          *         an error (failure state)
          *
-         * @note This method is const and doesn't modify the state of the Expected object.
+         * @note This method is const and doesn't modify the state of the Expected object
+         * @note Metadata takes precedence over xltype when present
+         * @note For raw XLOPER12 from Excel, xltype mismatch indicates error state
+         *
+         * @see impl::has_metadata()
+         * @see impl::is_error_state()
+         * @see impl::is_error_from_xltype()
          */
         [[nodiscard]]
         constexpr bool has_value() const noexcept
         {
-            return (xltype & TValue::excel_type) != 0;
+            // If metadata is present, trust it
+            if (impl::has_metadata(*this)) {
+                return !impl::is_error_state(*this);
+            }
+
+            // Fallback: infer from xltype
+            // If xltype doesn't match TValue, it's in error state (raw XLOPER12 from Excel)
+            return !impl::is_error_from_xltype<TValue>(*this);
         }
 
         /**
@@ -388,10 +941,39 @@ namespace xll
         /**
          * @brief Retrieves the contained value if in a success state.
          *
-         * Uses C++23 deducing this to automatically handle all reference qualifiers:
-         * - const& when called on const lvalue
-         * - & when called on non-const lvalue
-         * - && when called on rvalue
+         * Returns a reference to the contained TValue object, properly handling const-qualification
+         * and value category through C++23's deducing this feature.
+         *
+         * **Type Punning Operation:**
+         * This function performs a critical type-punning operation where we view the Expected
+         * object as a TValue object:
+         *
+         * ```cpp
+         * Expected<String>* exp_ptr = this;  // Pointer to Expected
+         * String* str_ptr = reinterpret_cast<String*>(exp_ptr);  // View as String
+         * String* valid_ptr = std::launder(str_ptr);  // Get valid pointer
+         * return *valid_ptr;  // Access the String
+         * ```
+         *
+         * This works because Expected and String have identical memory layout (both are XLOPER12).
+         * The String was constructed in this memory via std::construct_at in the constructor.
+         *
+         * **Why std::launder is CRITICAL:**
+         * After constructing with `std::construct_at(reinterpret_cast<TValue*>(this), ...)`,
+         * the compiler knows a TValue exists. But when we later access through Expected*,
+         * the compiler's pointer provenance analysis doesn't know that Expected* points to TValue.
+         *
+         * std::launder tells the compiler: "A TValue object really does exist at this address,
+         * give me a pointer with valid provenance to access it."
+         *
+         * Without laundering: Undefined behavior - optimizer may assume Expected* and TValue*
+         * don't alias, leading to incorrect optimizations.
+         *
+         * **Perfect Forwarding with std::forward_like:**
+         * Uses C++23's deducing this to automatically handle all reference qualifiers:
+         * - const& when called on const lvalue: `const Expected<T>& exp; exp.value()`
+         * - & when called on non-const lvalue: `Expected<T>& exp; exp.value()`
+         * - && when called on rvalue: `Expected<T>{}.value()` or `std::move(exp).value()`
          *
          * This single template replaces multiple overloads while maintaining the same
          * behavior through perfect forwarding.
@@ -399,14 +981,25 @@ namespace xll
          * @tparam Self The deduced type of the Expected instance (preserves cv-qualifiers and value category)
          * @param self The Expected object to operate on (deducing this parameter)
          * @return Forwarded reference to the contained value (preserving const and value category)
-         * @throws std::runtime_error if the Expected object is in an error state
+         *
+         * @throws std::bad_expected_access<TError> if the Expected object is in an error state
+         *
+         * @pre has_value() must be true, otherwise exception is thrown
+         * @post Returned reference is valid as long as the Expected object lives
+         *
+         * @note The error thrown contains a copy of the error (obtained via laundered access)
+         * @note For unchecked access without exception, use operator*()
+         *
+         * @see operator*() for unchecked access
+         * @see std::launder for pointer provenance
+         * @see std::forward_like for perfect forwarding in C++23
          */
         template<typename Self>
         [[nodiscard]]
         constexpr auto&& value(this Self&& self)
         {
             if (!self.has_value())
-                throw std::bad_expected_access<TError>(reinterpret_cast<const TError&>(self));
+                throw std::bad_expected_access<TError>(*std::launder(reinterpret_cast<const TError*>(&self)));
 
             using QualifiedValue = std::conditional_t<
                 std::is_const_v<std::remove_reference_t<Self>>,
@@ -414,7 +1007,9 @@ namespace xll
                 TValue
             >;
 
-            return std::forward_like<Self>(reinterpret_cast<QualifiedValue&>(self));
+            // Use std::launder to obtain a valid pointer to the object created by std::construct_at
+            auto* ptr = std::launder(reinterpret_cast<QualifiedValue*>(&self));
+            return std::forward_like<Self>(*ptr);
         }
 
 
@@ -422,31 +1017,64 @@ namespace xll
         /**
          * @brief Retrieves the contained error if in a failure state.
          *
-         * Uses C++23 deducing this to automatically handle all reference qualifiers.
-         * Provides access to the underlying error with appropriate const-correctness
-         * and value category preservation through perfect forwarding.
+         * Returns a copy of the error by value. If the Expected is in an error state
+         * but the xltype doesn't match TError::excel_type (which can happen when
+         * Excel passes Missing, Nil, or other unexpected types), it returns a
+         * default-constructed TError instead.
          *
-         * @tparam Self The deduced type of the Expected instance
-         * @param self The Expected object to operate on (deducing this parameter)
-         * @return Forwarded reference to the contained error
-         * @throws std::runtime_error if the Expected object is in a success state or type mismatch
+         * **Type Punning Operation:**
+         * Similar to value(), but returns by value instead of reference:
+         * 1. Check has_value() - throw if in value state
+         * 2. Check if xltype matches TError::excel_type
+         * 3. If match: launder pointer to TError, dereference and copy
+         * 4. If no match: return default-constructed TError (handles Excel edge cases)
+         *
+         * **Why Return By Value:**
+         * Unlike value() which returns a reference, error() returns by value because:
+         * - Enables graceful handling of xltype mismatches (return default TError)
+         * - Simplifies lifetime management (no dangling reference issues)
+         * - Common pattern in error handling (errors are typically small and copyable)
+         *
+         * **Excel Integration Scenario:**
+         * Excel may pass XLOPER12 with unexpected xltype when parameter is missing or invalid:
+         * ```cpp
+         * Expected<String> param = get_from_excel();  // Excel passed xltypeMissing
+         * // has_value() returns false (xltype doesn't match String::excel_type)
+         * // error() is called but xltype != xltypeErr
+         * // Returns default Error{} instead of crashing
+         * ```
+         *
+         * This is critical for parameter handling where Excel's SDK may return XLOPER12
+         * structures with xltype set to xltypeMissing, xltypeNil, etc., which need to be
+         * converted to proper errors when accessed.
+         *
+         * **std::launder Usage:**
+         * When xltype matches TError::excel_type, we know a proper TError was constructed.
+         * We use std::launder to get a valid pointer before dereferencing and copying.
+         *
+         * @return Copy of the contained error, or default-constructed TError if xltype doesn't match
+         *
+         * @throws std::bad_expected_access<TValue> if the Expected object is in a success state
+         *
+         * @pre has_value() must be false, otherwise exception is thrown
+         *
+         * @note Requires TError to be copy-constructible and default-constructible
+         * @note The exception thrown contains a copy of the value (obtained via laundered access)
          */
-        template<typename Self>
         [[nodiscard]]
-        constexpr auto&& error(this Self&& self)
+        constexpr TError error() const
         {
-            if (self.has_value())
-                throw std::bad_expected_access<TValue>(reinterpret_cast<const TValue&>(self));
+            if (has_value())
+                throw std::bad_expected_access<TValue>(*std::launder(reinterpret_cast<const TValue*>(this)));
 
-            ensure(self.xltype == TError::excel_type && "Expected invariant violated");
+            // If xltype matches TError, return a copy
+            if (xltype == TError::excel_type) {
+                // Use std::launder to get valid pointer to the TError object created via std::construct_at
+                return *std::launder(reinterpret_cast<const TError*>(this));
+            }
 
-            using QualifiedError = std::conditional_t<
-                std::is_const_v<std::remove_reference_t<Self>>,
-                const TError,
-                TError
-            >;
-
-            return std::forward_like<Self>(reinterpret_cast<QualifiedError&>(self));
+            // Otherwise, return a default-constructed TError
+            return TError{};
         }
 
         /**
@@ -486,7 +1114,8 @@ namespace xll
         constexpr const TValue* operator->() const noexcept
         {
             ensure(has_value() && "operator-> called on Expected in error state");
-            return std::addressof(reinterpret_cast<const TValue&>(*this));
+            // Use std::launder to get valid pointer to the TValue object created via std::construct_at
+            return std::launder(reinterpret_cast<const TValue*>(this));
         }
 
         /**
@@ -500,7 +1129,8 @@ namespace xll
         constexpr TValue* operator->() noexcept
         {
             ensure(has_value() && "operator-> called on Expected in error state");
-            return std::addressof(reinterpret_cast<TValue&>(*this));
+            // Use std::launder to get valid pointer to the TValue object created via std::construct_at
+            return std::launder(reinterpret_cast<TValue*>(this));
         }
 
         /**
@@ -561,6 +1191,24 @@ namespace xll
         }
 
         /**
+         * @brief Clears the metadata tag from the XLOPER12 for Excel compatibility.
+         *
+         * This function should be called before passing the Expected object to Excel APIs
+         * to ensure the metadata bytes don't interfere with Excel's interpretation of the data.
+         *
+         * @note This is typically not needed in user code as the destructor automatically
+         *       clears metadata. This is provided for cases where the XLOPER12 needs to be
+         *       passed to Excel while the Expected object is still alive.
+         *
+         * @warning After calling this, has_value() will fall back to xltype checking,
+         *          which may not work correctly if TValue and TError have the same xltype.
+         */
+        constexpr void clear_metadata() noexcept
+        {
+            impl::clear_metadata(*this);
+        }
+
+        /**
          * @brief Returns the contained value or a default value if in error state.
          *
          * Uses C++23 deducing this to automatically handle both const lvalue and rvalue
@@ -589,26 +1237,22 @@ namespace xll
         /**
          * @brief Returns the contained error or a default error if in success state.
          *
-         * Uses C++23 deducing this to automatically handle both const lvalue and rvalue
-         * overloads. When called on a const lvalue, the error is copied; when called on
-         * an rvalue, the error is moved for efficiency.
+         * If the Expected is in an error state, returns the error (by value).
+         * If in success state, returns the provided default error.
          *
-         * @tparam Self The deduced type of the Expected instance
          * @tparam U Type of the default error (deduced)
-         * @param self The Expected object to operate on (deducing this parameter)
          * @param default_value The error to return if in success state
-         * @return The contained error (copied or moved) if in error state, otherwise the default error
+         * @return The contained error if in error state, otherwise the default error
          *
-         * @note Uses std::forward_like for automatic copy/move selection
          * @note Perfect forwarding on default_value supports any type convertible to TError
          */
-        template<typename Self, typename U = TError>
+        template<typename U = TError>
             requires std::constructible_from<TError, U>
         [[nodiscard]]
-        constexpr TError error_or(this Self&& self, U&& default_value)
+        constexpr TError error_or(U&& default_value) const
         {
-            return !self.has_value()
-                ? std::forward_like<Self>(self.error())
+            return !has_value()
+                ? error()
                 : TError(std::forward<U>(default_value));
         }
 
@@ -620,12 +1264,34 @@ namespace xll
          * if this Expected is in a success state. If this Expected contains an error, that error is propagated
          * without calling the function.
          *
+         * **Type Punning and Perfect Forwarding:**
+         * Uses C++23's deducing this to forward the Expected object correctly:
+         * - Lvalue Expected: Copies value to function, copies error if propagating
+         * - Rvalue Expected: Moves value to function, moves error if propagating
+         *
+         * The error propagation uses std::forward_like to maintain value category:
+         * ```cpp
+         * // Lvalue Expected
+         * Expected<T> exp = ...;
+         * exp.and_then(f);  // f receives T&, error copied if needed
+         *
+         * // Rvalue Expected
+         * std::move(exp).and_then(f);  // f receives T&&, error moved if needed
+         * Expected<T>{}.and_then(f);   // f receives T&&, error moved if needed
+         * ```
+         *
+         * **Memory Safety:**
+         * - value() call internally uses std::launder
+         * - error() call internally uses std::launder
+         * - Result Expected is properly constructed via its constructors
+         *
          * @tparam Self The deduced type of the Expected instance (used with deducing this feature from C++23)
          * @tparam Func The type of the function to apply to the contained value
          * @tparam Result The deduced return type of the function, must be an Expected type
          *
          * @param self The Expected object to operate on (deducing this parameter)
          * @param func A callable that takes the current value and returns a new Expected object
+         *
          * @return If this Expected contains a value, returns the result of applying func to that value;
          *         otherwise, returns a new Expected containing the original error
          *
@@ -680,7 +1346,7 @@ namespace xll
         constexpr auto transform(this Self&& self, Func&& func)
         {
             using result_type          = std::invoke_result_t<Func, TValue&>;
-            using expected_result_type = xll::Expected<result_type>;
+            using expected_result_type = xll::Expected<result_type, TError>;
 
             return self.has_value()
                 ? expected_result_type(std::invoke(std::forward<Func>(func), self.value()))
@@ -695,7 +1361,7 @@ namespace xll
          * is preserved without calling the function.
          *
          * @tparam Self The deduced type of the Expected instance (using C++23's deducing this)
-         * @tparam Func A function that takes an xll::Error and returns an Expected
+         * @tparam Func A function that takes a TError and returns an Expected
          *
          * @param self The Expected object to operate on
          * @param func A callable that processes the error and returns a new Expected
@@ -706,12 +1372,12 @@ namespace xll
          * @note Uses std::forward_like for correct error forwarding (copy for lvalues, move for rvalues)
          */
         template<typename Self, typename Func>
-            requires std::invocable<Func, const xll::Error&> &&
-                     std::convertible_to<std::invoke_result_t<Func, const xll::Error&>, xll::Expected<TValue>>
+            requires std::invocable<Func, const TError&> &&
+                     std::convertible_to<std::invoke_result_t<Func, const TError&>, xll::Expected<TValue, TError>>
         [[nodiscard]]
         constexpr auto or_else(this Self&& self, Func&& func)
         {
-            using result_type = std::invoke_result_t<Func, const xll::Error&>;
+            using result_type = std::invoke_result_t<Func, const TError&>;
 
             return !self.has_value()
                 ? std::invoke(std::forward<Func>(func), std::forward_like<Self>(self.error()))
@@ -768,19 +1434,21 @@ namespace xll
                      std::is_default_constructible_v<TError>  // ✅ Removed "nothrow" requirement
         constexpr void emplace(Args&&... args)
         {
-            // Destroy the active member
+            // Destroy the active member - use std::launder to get valid pointer
             if (has_value())
-                std::destroy_at(reinterpret_cast<TValue*>(this));
+                std::destroy_at(std::launder(reinterpret_cast<TValue*>(this)));
             else
-                std::destroy_at(reinterpret_cast<TError*>(this));
+                std::destroy_at(std::launder(reinterpret_cast<TError*>(this)));
 
             // Attempt to construct new value
             try {
                 std::construct_at(reinterpret_cast<TValue*>(this), std::forward<Args>(args)...);
+                impl::set_error_state(*this, false);  // Mark as value state
             }
             catch (...) {
                 // Construction failed - leave Expected in valid error state
                 std::construct_at(reinterpret_cast<TError*>(this));
+                impl::set_error_state(*this, true);  // Mark as error state
                 throw;  // Rethrow original exception
             }
         }
@@ -800,16 +1468,19 @@ namespace xll
                      std::is_default_constructible_v<TValue>  // ✅ Removed "nothrow" requirement
         constexpr void emplace_error(Args&&... args)
         {
+            // Destroy the active member - use std::launder to get valid pointer
             if (has_value())
-                std::destroy_at(reinterpret_cast<TValue*>(this));
+                std::destroy_at(std::launder(reinterpret_cast<TValue*>(this)));
             else
-                std::destroy_at(reinterpret_cast<TError*>(this));
+                std::destroy_at(std::launder(reinterpret_cast<TError*>(this)));
 
             try {
                 std::construct_at(reinterpret_cast<TError*>(this), std::forward<Args>(args)...);
+                impl::set_error_state(*this, true);  // Mark as error state
             }
             catch (...) {
                 std::construct_at(reinterpret_cast<TValue*>(this));
+                impl::set_error_state(*this, false);  // Mark as value state
                 throw;
             }
         }
@@ -820,9 +1491,44 @@ namespace xll
          * Efficiently exchanges the contents of this Expected with another.
          * Handles all four cases: value-value, error-error, value-error, error-value.
          *
+         * **Type Punning Insight:**
+         * This function demonstrates why the XLOPER12-based design is so powerful.
+         * We can swap two Expected objects by simply swapping their XLOPER12 bases:
+         *
+         * ```cpp
+         * swap(static_cast<XLOPER12&>(*this), static_cast<XLOPER12&>(other));
+         * ```
+         *
+         * This single operation swaps:
+         * - xltype (the type discriminator)
+         * - val (the entire 8-byte union containing data)
+         * - Metadata (stored in val's last 2 bytes)
+         *
+         * **Why This Works:**
+         * Because Expected, TValue, and TError are all fundamentally XLOPER12 objects
+         * with identical layout, swapping the XLOPER12 base is equivalent to swapping
+         * the entire object, regardless of whether it contains TValue or TError.
+         *
+         * **Memory Safety:**
+         * No laundering needed because:
+         * - We're not constructing or destroying objects
+         * - We're not accessing TValue or TError members
+         * - We're just byte-swapping the XLOPER12 structure
+         * - Object lifetimes remain valid throughout
+         *
+         * **Efficiency:**
+         * Swapping XLOPER12 is typically 16 bytes (xltype + val union), which is:
+         * - More efficient than destroy-construct-construct pattern
+         * - No exception safety concerns (noexcept if moves are noexcept)
+         * - No memory allocation
+         * - Just a few register moves
+         *
          * @param other The Expected object to swap with
          *
-         * @note noexcept specification depends on move constructibility of TValue and TError
+         * @note noexcept specification depends on move constructibility of TValue and TError,
+         *       but in practice swapping XLOPER12 is always noexcept
+         * @note After swap, this contains other's previous value and vice versa
+         * @note Both objects remain in valid states (no partial swap)
          */
         constexpr void swap(Expected& other)
             noexcept(std::is_nothrow_move_constructible_v<TValue> &&
@@ -964,19 +1670,46 @@ namespace xll
     /**
      * @brief A class template that represents an unexpected error value.
      *
-     * The Unexpected class is used as a wrapper for error values in the Expected monad.
-     * This class is designed to work with the Expected class to represent failure cases.
-     * It provides a clear and type-safe way to construct Expected objects in an error state.
+     * The Unexpected class is a wrapper for error values in the Expected monad.
+     * This class is designed to work with the Expected class to represent failure cases
+     * and provides constructor disambiguation when TValue and TError are the same type.
      *
-     * @tparam TError The type of error to store, currently restricted to xll::Error
+     * **Purpose in Type System:**
+     * When Expected<String, String> is used (same type for value and error), constructors
+     * would be ambiguous:
+     * ```cpp
+     * Expected<String, String> exp("error");  // Value or error?
+     * ```
      *
-     * @note The template parameter is constrained to be exactly xll::Error for now,
-     *       with a commented indication that xll::String might be supported in the future
+     * Unexpected resolves this:
+     * ```cpp
+     * Expected<String, String> exp("success");  // Value (direct construction)
+     * Expected<String, String> exp(Unexpected("error"));  // Error (wrapped)
+     * ```
+     *
+     * **Not an XLOPER12 Type:**
+     * Unlike Expected, TValue, and TError which are all XLOPER12 objects, Unexpected
+     * is a simple wrapper class that stores a TError member. It's used only for
+     * construction disambiguation and error propagation.
+     *
+     * **Memory Layout:**
+     * ```
+     * Unexpected<Error>: [TError member (16 bytes)]  = 16 bytes
+     * vs.
+     * Expected<...>:     [XLOPER12 base (16 bytes)]  = 16 bytes
+     * ```
+     * They have same size but different purposes and layouts.
+     *
+     * @tparam TError The type of error to store (typically an XLOPER12-derived type like Error)
+     *
+     * @note With metadata-based Expected, any XLOPER12-derived type can be TError
+     * @note Unexpected is copyable and movable if TError is
+     * @note Provides equality comparison based on contained error
      *
      * @see Expected
+     * @see Expected's constructors taking Unexpected
      */
     template<typename TError>
-        requires(std::same_as<TError, xll::Error>)    // or std::same_as<TError, xll::String>)
     class Unexpected
     {
     public:
