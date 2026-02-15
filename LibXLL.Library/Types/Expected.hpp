@@ -305,44 +305,6 @@ namespace xll
         {
             return (x.xltype & TValue::excel_type) == 0;
         }
-
-        /**
-         * @brief Materialize an XLOPER12 into a proper TError.
-         *
-         * When an Expected is in error state but contains a raw XLOPER12 from Excel
-         * (not a proper TError), this function safely converts it to TError.
-         *
-         * This handles the common case where Excel passes xltypeMissing, xltypeNil,
-         * or other non-TValue types which need to be materialized into proper errors.
-         *
-         * Only xltypeStr needs special destruction handling (to free the string memory).
-         * Other types (Missing, Nil, Number, Bool, etc.) can be trivially destroyed.
-         *
-         * @tparam TError The error type to materialize to
-         * @param x The XLOPER12 to materialize (will be modified in-place)
-         */
-        // template<typename TError>
-        // inline void materialize_error(XLOPER12& x) noexcept
-        // {
-        //     // Capture xltype before any modifications
-        //     const auto current_xltype = x.xltype;
-        //
-        //     // Only String type needs special deallocation
-        //     // Other types (Missing, Nil, Number, Bool, Int, etc.) are trivially destructible
-        //     if ((current_xltype & xltypeStr) != 0) {
-        //         // Use std::launder to get valid pointer before destroy_at
-        //         std::destroy_at(std::launder(reinterpret_cast<String*>(&x)));
-        //     }
-        //     // Note: Arrays would also need special handling, but we avoid the circular
-        //     // dependency by not including Array.hpp. In practice, Excel rarely passes
-        //     // arrays as "error" states, so this is acceptable.
-        //
-        //     // Construct the new error in place
-        //     std::construct_at(reinterpret_cast<TError*>(&x), TError());
-        //
-        //     // Mark as error state
-        //     set_error_state(x, true);
-        // }
     } // namespace impl
 
     // Forward declaration of the Unexpected class template
