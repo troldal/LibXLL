@@ -65,7 +65,7 @@ namespace xll::traits
     };
 
     template<typename T>
-    struct arg_traits<Expected<T>>
+    struct arg_traits<Expected<T, xll::Error>>
     {
         static constexpr std::string_view excel_type = "Q";
     };

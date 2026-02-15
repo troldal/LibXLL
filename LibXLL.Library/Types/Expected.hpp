@@ -307,9 +307,88 @@ namespace xll
         }
     } // namespace impl
 
+    /**
+     * @brief Concept that checks if a type is a valid xll type for use in Expected.
+     *
+     * This concept ensures that types used in Expected<TValue, TError> are proper xll types
+     * that inherit from impl::Base and have the required static members for Excel integration.
+     *
+     * Valid xll types include:
+     * - xll::String
+     * - xll::Number
+     * - xll::Int
+     * - xll::Bool
+     * - xll::Error
+     * - xll::Missing
+     * - xll::Nil
+     * - xll::Array<T>
+     * - xll::Variant<T, Ts...>
+     *
+     * @tparam T The type to check
+     *
+     * @note This concept checks for:
+     *       - Inheritance from XLOPER12
+     *       - Presence of has_crtp_base static member (indicating impl::Base inheritance)
+     *       - Presence of excel_type static member (defining the xltype constant)
+     *       - Proper size and alignment constraints
+     */
+    template<typename T>
+    concept is_xll_type = requires {
+        // Must inherit from XLOPER12 (fundamental requirement)
+        requires std::is_base_of_v<XLOPER12, T>;
+
+        // Must have the CRTP base marker (indicates impl::Base<...> inheritance)
+        requires T::has_crtp_base == true;
+
+        // Must have excel_type static member defining the xltype
+        { T::excel_type } -> std::convertible_to<size_t>;
+
+        // Must fit within XLOPER12 constraints
+        requires sizeof(T) == sizeof(XLOPER12);
+        requires alignof(T) <= alignof(XLOPER12);
+
+        // Must not have virtual functions (would corrupt vtable during type punning)
+        requires !std::is_polymorphic_v<T>;
+    };
+
     // Forward declaration of the Unexpected class template
     template<typename TError>
     class Unexpected;
+
+    /**
+     * @brief Concept that checks if a type is a valid error policy.
+     *
+     * An error policy must provide a static `create()` method that returns a TError instance.
+     * This is used to create default error values when construction fails in Expected.
+     *
+     * @tparam TPolicy The policy type to check
+     * @tparam TError The error type the policy creates
+     */
+    template<typename TPolicy, typename TError>
+    concept ErrorPolicy = requires {
+        { TPolicy::create() } -> std::same_as<TError>;
+    };
+
+    /**
+     * @brief Default error policy that uses default construction.
+     *
+     * This policy creates error values using the default constructor of TError.
+     * It's used as the default policy for Expected when no custom policy is specified.
+     *
+     * @tparam TError The error type to create
+     *
+     * @example
+     * @code
+     * Expected<Number, Error> exp;  // Uses DefaultErrorPolicy<Error>
+     * // On construction failure, creates Error{}
+     * @endcode
+     */
+    template<typename TError>
+    struct DefaultErrorPolicy {
+        static constexpr TError create() {
+            return TError{};
+        }
+    };
 
     /**
      * @brief A class template that represents a value that could be either valid or an error.
@@ -319,8 +398,72 @@ namespace xll
      * (failure state). This class integrates with Excel's XLOPER12 data structure to
      * provide error handling for Excel add-in functions.
      *
-     * @tparam TValue The type of value to store when in the success state (must inherit from XLOPER12)
-     * @tparam TError The type of error to store when in the failure state (must inherit from XLOPER12), defaults to xll::Error
+     * @tparam TValue The type of value to store when in the success state (must satisfy XllType concept)
+     * @tparam TError The type of error to store when in the failure state (must satisfy XllType concept), defaults to xll::Error
+     * @tparam TErrorPolicy Policy for creating default error values on construction failure, defaults to DefaultErrorPolicy<TError>
+     *
+     * ## Type Constraints
+     *
+     * Both TValue and TError must satisfy the XllType concept, which enforces that they are valid
+     * xll types that inherit from impl::Base<...> and ultimately from XLOPER12. Valid types include:
+     * - xll::String
+     * - xll::Number
+     * - xll::Int
+     * - xll::Bool
+     * - xll::Error
+     * - xll::Missing
+     * - xll::Nil
+     * - xll::Array<T>
+     * - xll::Variant<T, Ts...>
+     *
+     * The TErrorPolicy must satisfy the ErrorPolicy concept, providing a static `create()` method
+     * that returns a TError instance. This is used when construction fails in methods like `emplace()`.
+     *
+     * Attempting to instantiate Expected with non-xll types (e.g., int, std::string, custom classes)
+     * will result in a compile-time error due to the XllType concept constraint.
+     *
+     * ## Error Policy System
+     *
+     * The error policy template parameter allows customization of default error values created when
+     * operations like `emplace()` fail. This is particularly useful when default construction of
+     * TError is insufficient or when you want specific error messages for different contexts.
+     *
+     * **Built-in Policies:**
+     * - `DefaultErrorPolicy<TError>`: Uses default construction (e.g., `TError{}`)
+     * - `StringErrorPolicy<"message">`: Creates String errors with a compile-time message
+     * - `ErrorCodePolicy<ErrorCode>`: Creates specific Excel error codes (e.g., #VALUE!, #DIV/0!)
+     *
+     * **Example - Default Policy:**
+     * ```cpp
+     * Expected<Number, Error> exp;  // Uses DefaultErrorPolicy<Error>
+     * exp.emplace(throw_something);  // On failure, creates Error{} (ErrNull)
+     * ```
+     *
+     * **Example - String Error Policy:**
+     * ```cpp
+     * using ValidationExpected = Expected<Number, String, StringErrorPolicy<"Invalid input">>;
+     * ValidationExpected exp;
+     * exp.emplace(invalid_data);  // On failure, creates String("Invalid input")
+     * ```
+     *
+     * **Example - Error Code Policy:**
+     * ```cpp
+     * using CalcExpected = Expected<Number, Error, ErrorCodePolicy<ErrValue>>;
+     * CalcExpected exp;
+     * exp.emplace(bad_calc);  // On failure, creates ErrValue (#VALUE!)
+     * ```
+     *
+     * **Example - Custom Policy:**
+     * ```cpp
+     * struct MyPolicy {
+     *     static constexpr String create() { return String("Custom error"); }
+     * };
+     * Expected<Number, String, MyPolicy> exp;
+     * exp.emplace(data);  // On failure, creates String("Custom error")
+     * ```
+     *
+     * The policy is only used when operations need to create a default error (like emplace()
+     * catching an exception). Explicit error construction via Unexpected still works normally.
      *
      * ## Type Punning Architecture
      *
@@ -428,7 +571,8 @@ namespace xll
      * @see std::launder
      * @see std::construct_at
      */
-    template<typename TValue, typename TError = xll::Error>
+    template<typename TValue, typename TError = xll::Error, typename TErrorPolicy = DefaultErrorPolicy<TError>>
+        requires is_xll_type<TValue> && is_xll_type<TError> && ErrorPolicy<TErrorPolicy, TError>
     class Expected final : public XLOPER12
     {
         // Safety checks to ensure Expected can be stored in XLOPER12
@@ -448,6 +592,7 @@ namespace xll
     public:
         using value_type      = TValue;
         using error_type      = TError;
+        using error_policy    = TErrorPolicy;
         using unexpected_type = Unexpected<TError>;
 
         /**
@@ -1036,7 +1181,7 @@ namespace xll
             }
 
             // Otherwise, return a default-constructed TError
-            return TError{};
+            return TErrorPolicy::create();
         }
 
         /**
@@ -1382,18 +1527,17 @@ namespace xll
          *
          * Destroys the currently contained value or error, then constructs a new value
          * in-place using the provided arguments. If construction throws, the Expected
-         * is left in an error state containing a default-constructed TError.
+         * is left in an error state containing an error created by the TErrorPolicy.
          *
          * @tparam Args Types of arguments to forward to TValue's constructor
          * @param args Arguments to forward to the TValue constructor
          *
-         * @throws Any exception thrown by TValue's constructor (Expected will contain TError)
-         * @note Provides basic exception safety - if construction throws, Expected contains default TError
-         * @note Requires TError to be default constructible for exception safety
+         * @throws Any exception thrown by TValue's constructor (Expected will contain error from policy)
+         * @note Provides basic exception safety - if construction throws, Expected contains error from TErrorPolicy::create()
+         * @note The error policy determines what error value is created on construction failure
          */
         template<typename... Args>
-            requires std::constructible_from<TValue, Args...> &&
-                     std::is_default_constructible_v<TError>  // ✅ Removed "nothrow" requirement
+            requires std::constructible_from<TValue, Args...>
         constexpr void emplace(Args&&... args)
         {
             // Destroy the active member - use std::launder to get valid pointer
@@ -1408,8 +1552,8 @@ namespace xll
                 impl::set_error_state(*this, false);  // Mark as value state
             }
             catch (...) {
-                // Construction failed - leave Expected in valid error state
-                std::construct_at(reinterpret_cast<TError*>(this));
+                // Construction failed - use error policy to create default error
+                std::construct_at(reinterpret_cast<TError*>(this), TErrorPolicy::create());
                 impl::set_error_state(*this, true);  // Mark as error state
                 throw;  // Rethrow original exception
             }
@@ -1570,8 +1714,8 @@ namespace xll
         {
         };
 
-        template<typename TValue, typename TError>
-        struct is_expected_impl<Expected<TValue, TError>> : std::true_type
+        template<typename TValue, typename TError, typename TErrorPolicy>
+        struct is_expected_impl<Expected<TValue, TError, TErrorPolicy>> : std::true_type
         {
         };
 
@@ -1851,7 +1995,7 @@ namespace xll
      * This type provides a convenient shorthand for Expected<Number>, representing
      * numeric values that might be in an error state.
      */
-    using ExpNumber = Expected<Number>;
+    using ExpNumber = Expected<Number, xll::Error>;
 
     /**
      * @brief Type alias for Expected<String> representing string values that may contain errors.
@@ -1859,7 +2003,7 @@ namespace xll
      * This type provides a convenient shorthand for Expected<String>, representing
      * string values that might be in an error state.
      */
-    using ExpString = Expected<String>;
+    using ExpString = Expected<String, xll::Error>;
 
     /**
      * @brief Type alias for Expected<Int> representing integer values that may contain errors.
@@ -1867,7 +2011,7 @@ namespace xll
      * This type provides a convenient shorthand for Expected<Int>, representing
      * integer values that might be in an error state.
      */
-    using ExpInt = Expected<Int>;
+    using ExpInt = Expected<Int, xll::Error>;
 
     /**
      * @brief Type alias for Expected<Bool> representing boolean values that may contain errors.
@@ -1875,7 +2019,7 @@ namespace xll
      * This type provides a convenient shorthand for Expected<Bool>, representing
      * boolean values that might be in an error state.
      */
-    using ExpBool = Expected<Bool>;
+    using ExpBool = Expected<Bool, xll::Error>;
 
     /**
      * @brief Pipe operator for chaining operations on xll::Expected objects.
@@ -2121,8 +2265,4 @@ namespace xll
             }
         };
     }
-
-
-
-
 }    // namespace xll

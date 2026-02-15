@@ -565,7 +565,7 @@ namespace xll
             xll::Number,
             std::conditional_t<std::integral<T>, xll::Int, std::conditional_t<std::convertible_to<T, std::string>, xll::String, void>>>;
 
-        Array<Expected<value_t>> result(input.size(), 1);
+        Array<Expected<value_t, xll::Error>> result(input.size(), 1);
         for (unsigned i = 0; i < input.size(); ++i) {
             if (input[i].has_value())
                 result[i].value() = *input[i];
