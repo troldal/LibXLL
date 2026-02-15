@@ -572,7 +572,7 @@ namespace xll
      * @see std::construct_at
      */
     template<typename TValue, typename TError = xll::Error, typename TErrorPolicy = DefaultErrorPolicy<TError>>
-        requires is_xll_type<TValue> && is_xll_type<TError> && ErrorPolicy<TErrorPolicy, TError>
+        //requires is_xll_type<TValue> && is_xll_type<TError> && ErrorPolicy<TErrorPolicy, TError>
     class Expected final : public XLOPER12
     {
         // Safety checks to ensure Expected can be stored in XLOPER12
