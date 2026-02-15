@@ -115,19 +115,20 @@
 
 #pragma once
 
+#include "../ExcelSDK/xlcall.hpp"
+#include "Bool.hpp"
+#include "Error.hpp"
+#include "Int.hpp"
+#include "Missing.hpp"
+#include "Nil.hpp"
+#include "Number.hpp"
+#include "String.hpp"
+#include "Utils/Concepts.hpp"
+#include "Variant.hpp"
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <fxt.hpp>
-#include "../ExcelSDK/xlcall.hpp"
-#include "Error.hpp"
-#include "Nil.hpp"
-#include "Missing.hpp"
-#include "Number.hpp"
-#include "Int.hpp"
-#include "Bool.hpp"
-#include "String.hpp"
-#include "Variant.hpp"
 
 namespace xll
 {
@@ -306,50 +307,6 @@ namespace xll
             return (x.xltype & TValue::excel_type) == 0;
         }
     } // namespace impl
-
-    /**
-     * @brief Concept that checks if a type is a valid xll type for use in Expected.
-     *
-     * This concept ensures that types used in Expected<TValue, TError> are proper xll types
-     * that inherit from impl::Base and have the required static members for Excel integration.
-     *
-     * Valid xll types include:
-     * - xll::String
-     * - xll::Number
-     * - xll::Int
-     * - xll::Bool
-     * - xll::Error
-     * - xll::Missing
-     * - xll::Nil
-     * - xll::Array<T>
-     * - xll::Variant<T, Ts...>
-     *
-     * @tparam T The type to check
-     *
-     * @note This concept checks for:
-     *       - Inheritance from XLOPER12
-     *       - Presence of has_crtp_base static member (indicating impl::Base inheritance)
-     *       - Presence of excel_type static member (defining the xltype constant)
-     *       - Proper size and alignment constraints
-     */
-    template<typename T>
-    concept is_xll_type = requires {
-        // Must inherit from XLOPER12 (fundamental requirement)
-        requires std::is_base_of_v<XLOPER12, T>;
-
-        // Must have the CRTP base marker (indicates impl::Base<...> inheritance)
-        //requires T::has_crtp_base == true;
-
-        // Must have excel_type static member defining the xltype
-        { T::excel_type } -> std::convertible_to<size_t>;
-
-        // Must fit within XLOPER12 constraints
-        requires sizeof(T) == sizeof(XLOPER12);
-        requires alignof(T) <= alignof(XLOPER12);
-
-        // Must not have virtual functions (would corrupt vtable during type punning)
-        requires !std::is_polymorphic_v<T>;
-    };
 
     // Forward declaration of the Unexpected class template
     template<typename TError>
