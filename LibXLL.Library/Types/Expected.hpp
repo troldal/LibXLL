@@ -338,7 +338,7 @@ namespace xll
         requires std::is_base_of_v<XLOPER12, T>;
 
         // Must have the CRTP base marker (indicates impl::Base<...> inheritance)
-        requires T::has_crtp_base == true;
+        //requires T::has_crtp_base == true;
 
         // Must have excel_type static member defining the xltype
         { T::excel_type } -> std::convertible_to<size_t>;
@@ -572,7 +572,7 @@ namespace xll
      * @see std::construct_at
      */
     template<typename TValue, typename TError = xll::Error, typename TErrorPolicy = DefaultErrorPolicy<TError>>
-        //requires is_xll_type<TValue> && is_xll_type<TError> && ErrorPolicy<TErrorPolicy, TError>
+        requires is_xll_type<TValue> && is_xll_type<TError> && ErrorPolicy<TErrorPolicy, TError>
     class Expected final : public XLOPER12
     {
         // Safety checks to ensure Expected can be stored in XLOPER12
