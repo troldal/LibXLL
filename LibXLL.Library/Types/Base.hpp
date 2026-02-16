@@ -48,46 +48,34 @@ namespace xll::impl
     protected:
         constexpr ~Base() = default;
 
-        constexpr auto& value()
+        template<typename Self>
+        constexpr auto&& value(this Self&& self)
         {
             if constexpr (XLType == xltypeNum)
-                return val.num;
+                return std::forward<Self>(self).val.num;
             else if constexpr (XLType == xltypeStr)
-                return val.str;
+                return std::forward<Self>(self).val.str;
             else if constexpr (XLType == xltypeBool)
-                return val.xbool;
+                return std::forward<Self>(self).val.xbool;
             else if constexpr (XLType == xltypeErr)
-                return val.err;
+                return std::forward<Self>(self).val.err;
             else if constexpr (XLType == xltypeMulti)
-                return val.array;
+                return std::forward<Self>(self).val.array;
             else if constexpr (XLType == xltypeInt)
-                return val.w;
+                return std::forward<Self>(self).val.w;
             else
-                throw std::bad_cast();    // Handle other types
-        }
-
-        constexpr auto value() const
-        {
-            if constexpr (XLType == xltypeNum)
-                return val.num;
-            else if constexpr (XLType == xltypeStr)
-                return val.str;
-            else if constexpr (XLType == xltypeBool)
-                return val.xbool;
-            else if constexpr (XLType == xltypeErr)
-                return val.err;
-            else if constexpr (XLType == xltypeMulti)
-                return val.array;
-            else if constexpr (XLType == xltypeInt)
-                return val.w;
-            else
-                throw std::bad_cast();    // Handle other types
+                throw std::bad_cast();
         }
 
     public:
-        static constexpr size_t excel_type = XLType;
-        constexpr bool is_valid() const { return xltype == XLType; }
         static constexpr bool has_crtp_base = true;
+        static constexpr size_t excel_type = XLType;
+
+        [[nodiscard]]
+        constexpr bool is_valid() const {
+            constexpr int TYPE_MASK = ~(xlbitDLLFree | xlbitXLFree);
+            return (xltype & TYPE_MASK) == XLType;
+        }
 
         // clang-format off
         using value_type =
@@ -120,14 +108,9 @@ namespace xll::impl
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>>
             : Base()
         {
-            switch (v.xltype == XLType) {
-                case true:
-                    xltype = v.xltype;
-                    val    = v.val;
-                    break;
-                default:
-                    throw std::runtime_error("XLOPER12 type not convertible to type");
-            }
+            ensure(v.xltype == XLType, "XLOPER12 type not convertible to type");
+            xltype = v.xltype;
+            val    = v.val;
         }
 
         /**

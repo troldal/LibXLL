@@ -4,7 +4,7 @@ target_include_directories(Catch2ForOpenXLL PUBLIC Catch2)
 
 include(FetchContent)
 
-add_executable(LibXLL.Tests
+add_executable(LibXLL.Tests.default
         String.cpp
         Bool.cpp
         Expected.cpp
@@ -13,7 +13,7 @@ add_executable(LibXLL.Tests
         Variant.cpp
         Array.cpp
 )
-target_link_libraries(LibXLL.Tests PRIVATE Catch2ForOpenXLL LibXLL)
+target_link_libraries(LibXLL.Tests.default PRIVATE Catch2ForOpenXLL LibXLL)
 
 if (NOT WIN32)
     foreach (sanitizer IN ITEMS address undefined thread memory)
