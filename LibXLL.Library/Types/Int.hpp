@@ -51,27 +51,6 @@ namespace xll
             return old;
         }
 
-        // Int& operator%=(const Int& rhs)
-        // {
-        //     // ensure(is_valid());
-        //     // ensure(rhs.is_valid());
-        //     // ensure(rhs.value() != 0 && "Modulo by zero");
-        //     value() %= rhs.value();
-        //     return *this;
-        // }
-
-        // template<typename TOther>
-        //     requires (std::same_as<TOther, Int> || std::same_as<TOther, Bool>)
-        // Int& operator%=(const TOther& rhs)
-        // {
-        //     // ensure(is_valid());
-        //     // ensure(rhs.is_valid());
-        //     auto rhsValue = static_cast<int>(rhs);
-        //     // ensure(rhsValue != 0 && "Modulo by zero");
-        //     value() %= rhsValue;
-        //     return *this;
-        // }
-
         template<typename TValue>
         constexpr Int& operator%=(TValue rhs)
             requires std::convertible_to<TValue, int>
@@ -84,7 +63,7 @@ namespace xll
         }
 
         template<typename TOther>
-            requires (std::same_as<TOther, Int> || std::same_as<TOther, xll::Bool>)
+            requires (std::same_as<std::remove_cvref_t<TOther>, Int> || std::same_as<std::remove_cvref_t<TOther>, xll::Bool>)
         constexpr friend Int operator%(const Int& lhs, TOther&& rhs)
         {
             Int result = lhs;

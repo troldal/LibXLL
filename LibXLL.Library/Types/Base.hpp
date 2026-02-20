@@ -577,7 +577,8 @@ namespace xll::impl
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && (XLType != xltypeErr) && (!std::is_fundamental_v<TOther>) &&
                      (std::convertible_to<TOther, TDerived> || contains_value<TOther::excel_type, OtherTypes...>)
         {
-            return lhs.value() == rhs.value();
+            using result_t = std::common_type_t<value_type, typename TOther::value_type>;
+            return static_cast<result_t>(lhs.value()) == static_cast<result_t>(rhs);
         }
 
         /**
@@ -635,7 +636,8 @@ namespace xll::impl
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && (XLType != xltypeErr) && (!std::is_fundamental_v<TOther>) &&
                      (std::convertible_to<TOther, TDerived> || contains_value<TOther::excel_type, OtherTypes...>)
         {
-            return lhs.value() <=> rhs.value();
+            using result_t = std::common_type_t<value_type, typename TOther::value_type>;
+            return static_cast<result_t>(lhs.value()) <=> static_cast<result_t>(rhs);
         }
 
         /**

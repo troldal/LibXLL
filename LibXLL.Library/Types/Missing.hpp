@@ -12,10 +12,10 @@ namespace xll
 
     class Missing : public impl::Base<Missing, xltypeMissing>
     {
-        using BASE = impl::Base<Missing, xltypeMissing>;
+        // using BASE = impl::Base<Missing, xltypeMissing>;
 
     public:
-        using BASE::BASE;
+        // using BASE::BASE;
 
         constexpr Missing() = default;
 

@@ -1,341 +1,513 @@
-#include "../Types/Bool.hpp"
+// ============================================================
+// Tests for xll::Bool
+// Covers: construction, assignment, arithmetic, comparison,
+//         conversion, stream output, swap, and type safety.
+// ============================================================
 
-#include "../Types/Int.hpp"
-#include "../Types/Number.hpp"
 #include "catch_amalgamated.hpp"
-// #include <catch2/catch_test_macros.hpp>
 #include <xlcall.hpp>
 
-TEST_CASE("Bool Construction", "[xll::Bool]")
+#include "../Types/Bool.hpp"
+#include "../Types/Int.hpp"
+#include "../Types/Missing.hpp"
+#include "../Types/Nil.hpp"
+#include "../Types/Number.hpp"
+
+#include <concepts>
+#include <sstream>
+#include <type_traits>
+
+// ---------------------------------------------------------------------------
+// Static / compile-time assertions
+// ---------------------------------------------------------------------------
+
+static_assert(sizeof(xll::Bool) == sizeof(XLOPER12));
+static_assert(alignof(xll::Bool) == alignof(XLOPER12));
+static_assert(xll::Bool::has_crtp_base);
+static_assert(xll::Bool::excel_type == xltypeBool);
+static_assert(std::is_same_v<xll::Bool::value_type, decltype(XLOPER12{}.val.xbool)>);
+
+// Bool IS directly constructible from Nil/Missing: both inherit from XLOPER12,
+// and Base has an explicit Base(const XLOPER12&) constructor.
+// However that constructor is explicit, so no IMPLICIT conversion is possible.
+// Note: the constructor will throw at runtime if xltype != xltypeBool.
+static_assert(std::is_constructible_v<xll::Bool, xll::Nil>);
+static_assert(std::is_constructible_v<xll::Bool, xll::Missing>);
+static_assert(!std::is_convertible_v<xll::Bool, xll::Nil>);
+static_assert(!std::is_convertible_v<xll::Bool, xll::Missing>);
+
+// Legal constructions from OtherTypes
+static_assert(std::is_constructible_v<xll::Bool, xll::Int>);
+static_assert(std::is_constructible_v<xll::Bool, xll::Number>);
+
+// Legal constructions from fundamentals
+static_assert(std::is_constructible_v<xll::Bool, bool>);
+static_assert(std::is_constructible_v<xll::Bool, int>);
+static_assert(std::is_constructible_v<xll::Bool, double>);
+
+// operator bool is EXPLICIT – no implicit conversion to bool
+static_assert(!std::is_convertible_v<xll::Bool, bool>);
+
+// Implicit conversion to other arithmetic types via operator T()
+static_assert(std::is_convertible_v<xll::Bool, int>);
+static_assert(std::is_convertible_v<xll::Bool, double>);
+
+// ---------------------------------------------------------------------------
+// Construction
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Bool – default construction", "[xll::Bool][construction]")
 {
-    // Default construction:
-    xll::Bool b01;
-    REQUIRE(b01 == false);
-    REQUIRE_FALSE(b01 == true);
-    REQUIRE(b01.xltype == xltypeBool);
-    REQUIRE(b01.val.xbool == false);
+    xll::Bool b;
+    REQUIRE(b.xltype == xltypeBool);
+    REQUIRE(b.is_valid());
+    REQUIRE(b == false);
+    REQUIRE(b.val.xbool == 0);
+}
 
-    // Construction from bool:
-    xll::Bool b02 = true;
-    REQUIRE(b02 == true);
-    REQUIRE_FALSE(b02 == false);
-    REQUIRE(b02.xltype == xltypeBool);
-    REQUIRE(b02.val.xbool == true);
+TEST_CASE("Bool – construction from bool literal", "[xll::Bool][construction]")
+{
+    xll::Bool t = true;
+    REQUIRE(t.xltype == xltypeBool);
+    REQUIRE(t.is_valid());
+    REQUIRE(t == true);
+    REQUIRE(t.val.xbool != 0);
 
-    // Construction from int:
-    xll::Bool b03 = 1;
-    REQUIRE(b03 == true);
-    REQUIRE_FALSE(b03 == false);
-    REQUIRE(b03.xltype == xltypeBool);
-    REQUIRE(b03.val.xbool == true);
+    xll::Bool f = false;
+    REQUIRE(f.xltype == xltypeBool);
+    REQUIRE(f.is_valid());
+    REQUIRE(f == false);
+    REQUIRE(f.val.xbool == 0);
+}
 
-    xll::Bool b04 = 0;
-    REQUIRE(b04 == false);
-    REQUIRE_FALSE(b04 == true);
-    REQUIRE(b04.xltype == xltypeBool);
-    REQUIRE(b04.val.xbool == false);
+TEST_CASE("Bool – construction from int", "[xll::Bool][construction]")
+{
+    xll::Bool b1 = 1;
+    REQUIRE(b1 == true);
+    REQUIRE(b1.xltype == xltypeBool);
 
-    // Construction from float:
-    xll::Bool b05 = 3.14;
-    REQUIRE(b05 == true);
-    REQUIRE_FALSE(b05 == false);
-    REQUIRE(b05.xltype == xltypeBool);
-    REQUIRE(b05.val.xbool != false);
+    xll::Bool b0 = 0;
+    REQUIRE(b0 == false);
+    REQUIRE(b0.xltype == xltypeBool);
 
-    xll::Bool b06 = 0.0;
-    REQUIRE(b06 == false);
-    REQUIRE_FALSE(b06 == true);
-    REQUIRE(b06.xltype == xltypeBool);
-    REQUIRE(b06.val.xbool == false);
+    xll::Bool bn = 42;
+    REQUIRE(bn == true);
+    REQUIRE(bn.xltype == xltypeBool);
+}
 
-    // XLOPER12 construction
-    auto xl01      = XLOPER12();
-    xl01.xltype    = xltypeBool;
-    xl01.val.xbool = true;
-    xll::Bool b07  = xll::Bool(xl01);
-    REQUIRE(b07 == true);
-    REQUIRE_FALSE(b07 == false);
-    REQUIRE(b07.xltype == xltypeBool);
-    REQUIRE(b07.val.xbool != false);
+TEST_CASE("Bool – construction from double", "[xll::Bool][construction]")
+{
+    xll::Bool bt = 3.14;
+    REQUIRE(bt == true);
+    REQUIRE(bt.xltype == xltypeBool);
 
-    // Invalid XLOPER12 construction
-    auto xl02 = XLOPER12();
-    REQUIRE_THROWS(xll::Bool(xl02));
+    xll::Bool bf = 0.0;
+    REQUIRE(bf == false);
+    REQUIRE(bf.xltype == xltypeBool);
+}
 
-    // Copy construction:
-    xll::Bool b08 = b02;
-    REQUIRE(b08 == b02);
-    REQUIRE_FALSE(b08 != b02);
-    REQUIRE(b08 == true);
-    REQUIRE_FALSE(b08 != true);
-    REQUIRE(b08.xltype == xltypeBool);
-    REQUIRE(b08.val.xbool != false);
+TEST_CASE("Bool – construction from XLOPER12", "[xll::Bool][construction]")
+{
+    XLOPER12 xl{};
+    xl.xltype    = xltypeBool;
+    xl.val.xbool = 1;
 
-    // Move construction:
-    xll::Bool b09 = std::move(b08);
-    REQUIRE(b09 == b02);
-    REQUIRE_FALSE(b09 != b02);
-    REQUIRE(b09 == true);
-    REQUIRE_FALSE(b09 != true);
-    REQUIRE(b09.xltype == xltypeBool);
-    REQUIRE(b09.val.xbool != false);
+    xll::Bool b(xl);
+    REQUIRE(b.xltype == xltypeBool);
+    REQUIRE(b.is_valid());
+    REQUIRE(b == true);
+}
 
-    // Construction from xll::Int
-    xll::Bool b10 = xll::Int(1);
-    REQUIRE(b10 == true);
-    REQUIRE_FALSE(b10 == false);
-    REQUIRE(b10.xltype == xltypeBool);
-    REQUIRE(b10.val.xbool != false);
+TEST_CASE("Bool – construction from XLOPER12 with wrong type throws", "[xll::Bool][construction]")
+{
+    XLOPER12 xl{};
+    xl.xltype = xltypeNum;
+    REQUIRE_THROWS(xll::Bool(xl));
+}
 
-    xll::Bool b11 = xll::Int(0);
-    REQUIRE(b11 == false);
-    REQUIRE_FALSE(b11 == true);
-    REQUIRE(b11.xltype == xltypeBool);
-    REQUIRE(b11.val.xbool == false);
+TEST_CASE("Bool – explicit construction from Nil throws (wrong xltype)", "[xll::Bool][construction]")
+{
+    // Nil IS-A XLOPER12; the explicit XLOPER12 ctor is reachable but throws at runtime
+    xll::Nil n;
+    REQUIRE_THROWS(xll::Bool(static_cast<const XLOPER12&>(n)));
+}
 
-    // Construction from xll::Number
-    xll::Bool b12 = xll::Number(3.14);
-    REQUIRE(b12 == true);
-    REQUIRE_FALSE(b12 == false);
-    REQUIRE(b12.xltype == xltypeBool);
-    REQUIRE(b12.val.xbool != false);
+TEST_CASE("Bool – explicit construction from Missing throws (wrong xltype)", "[xll::Bool][construction]")
+{
+    xll::Missing m;
+    REQUIRE_THROWS(xll::Bool(static_cast<const XLOPER12&>(m)));
+}
 
-    xll::Bool b13 = xll::Number(0.0);
-    REQUIRE(b13 == false);
-    REQUIRE_FALSE(b13 == true);
-    REQUIRE(b13.xltype == xltypeBool);
-    REQUIRE(b13.val.xbool == false);
+TEST_CASE("Bool – copy construction", "[xll::Bool][construction]")
+{
+    xll::Bool src = true;
+    xll::Bool dst = src;
+    REQUIRE(dst == src);
+    REQUIRE(dst == true);
+    REQUIRE(dst.xltype == xltypeBool);
+    REQUIRE(dst.is_valid());
+}
 
+TEST_CASE("Bool – copy construction from invalid object throws", "[xll::Bool][construction]")
+{
     xll::Bool invalid;
     invalid.xltype = xltypeNil;
-
-    // Invalid copy construction
     REQUIRE_THROWS(xll::Bool(invalid));
 }
 
-TEST_CASE("Bool Assignment", "[xll::Bool]")
+TEST_CASE("Bool – move construction", "[xll::Bool][construction]")
 {
-    xll::Bool b01;
-
-    // Assignment with bool:
-    b01 = true;
-    REQUIRE(b01 == true);
-    REQUIRE_FALSE(b01 == false);
-    REQUIRE(b01.xltype == xltypeBool);
-    REQUIRE(b01.val.xbool == true);
-
-    // Assignment with int:
-    b01 = 0;
-    REQUIRE(b01 == false);
-    REQUIRE_FALSE(b01 == true);
-    REQUIRE(b01.xltype == xltypeBool);
-    REQUIRE(b01.val.xbool == false);
-
-    b01 = 42;
-    REQUIRE(b01 == true);
-    REQUIRE_FALSE(b01 == false);
-    REQUIRE(b01.xltype == xltypeBool);
-    REQUIRE(b01.val.xbool != false);
-
-    // Assignment with float:
-    b01 = 0.0;
-    REQUIRE(b01 == false);
-    REQUIRE_FALSE(b01 == true);
-    REQUIRE(b01.xltype == xltypeBool);
-    REQUIRE(b01.val.xbool == false);
-
-    b01 = 3.14;
-    REQUIRE(b01 == true);
-    REQUIRE_FALSE(b01 == false);
-    REQUIRE(b01.xltype == xltypeBool);
-    REQUIRE(b01.val.xbool != false);
-
-    // Assignment of XLOPER12:
-    auto xl01      = XLOPER12();
-    xl01.xltype    = xltypeBool;
-    xl01.val.xbool = true;
-    b01            = xll::Bool(xl01);
-    REQUIRE(b01 == true);
-    REQUIRE_FALSE(b01 == false);
-    REQUIRE(b01.xltype == xltypeBool);
-    REQUIRE(b01.val.xbool == true);
-
-    xll::Bool to_be_copied = false;
-
-    // Copy assignment:
-    b01 = to_be_copied;
-    REQUIRE(b01 == to_be_copied);
-    REQUIRE_FALSE(b01 != to_be_copied);
-    REQUIRE(b01 == false);
-    REQUIRE_FALSE(b01 != false);
-    REQUIRE(b01.xltype == xltypeBool);
-    REQUIRE(b01.val.xbool == false);
-
-    xll::Bool to_be_moved = true;
-
-    // Move assignment:
-    b01 = std::move(to_be_moved);
-    REQUIRE(b01 == true);
-    REQUIRE_FALSE(b01 == false);
-    REQUIRE(b01.xltype == xltypeBool);
-    REQUIRE(b01.val.xbool == true);
-
-    // Assignment of xll::Int
-    b01 = xll::Int(0);
-    REQUIRE(b01 == false);
-    REQUIRE_FALSE(b01 == true);
-    REQUIRE(b01.xltype == xltypeBool);
-    REQUIRE(b01.val.xbool == false);
-
-    b01 = xll::Int(42);
-    REQUIRE(b01 == true);
-    REQUIRE_FALSE(b01 == false);
-    REQUIRE(b01.xltype == xltypeBool);
-    REQUIRE(b01.val.xbool != false);
-
-    // Assignment of xll::Number
-    b01 = xll::Number(0.0);
-    REQUIRE(b01 == false);
-    REQUIRE_FALSE(b01 == true);
-    REQUIRE(b01.xltype == xltypeBool);
-    REQUIRE(b01.val.xbool == false);
-
-    b01 = xll::Number(3.14);
-    REQUIRE(b01 == true);
-    REQUIRE_FALSE(b01 == false);
-    REQUIRE(b01.xltype == xltypeBool);
-    REQUIRE(b01.val.xbool != false);
+    xll::Bool src  = true;
+    xll::Bool dst  = std::move(src);
+    REQUIRE(dst == true);
+    REQUIRE(dst.xltype == xltypeBool);
+    REQUIRE(dst.is_valid());
 }
 
-TEST_CASE("Bool Operations", "[xll::Bool]")
+TEST_CASE("Bool – construction from xll::Int", "[xll::Bool][construction][cross-type]")
 {
-    xll::Bool b01(false);
-    bool      b01_ = false;
+    xll::Bool bt(xll::Int(7));
+    REQUIRE(bt == true);
+    REQUIRE(bt.xltype == xltypeBool);
 
-    // Logical NOT
-    xll::Bool b02  = !b01;
-    auto      b02_ = !b01_;
-    REQUIRE(b02 == b02_);
-    REQUIRE(b02 == true);
-    REQUIRE_FALSE(b02 == false);
-    REQUIRE(b02.xltype == xltypeBool);
-    REQUIRE(b02.val.xbool == true);
+    xll::Bool bf(xll::Int(0));
+    REQUIRE(bf == false);
+    REQUIRE(bf.xltype == xltypeBool);
+}
 
-    // Logical AND with xll::Bool
-    xll::Bool b03(true);
-    b01  = b02 && b03;
-    b01_ = b02_ && true;
-    REQUIRE(b01 == b01_);
-    REQUIRE(b01 == true);
-    REQUIRE_FALSE(b01 == false);
-    REQUIRE(b01.xltype == xltypeBool);
-    REQUIRE(b01.val.xbool == true);
+TEST_CASE("Bool – construction from xll::Number", "[xll::Bool][construction][cross-type]")
+{
+    xll::Bool bt(xll::Number(2.71828));
+    REQUIRE(bt == true);
+    REQUIRE(bt.xltype == xltypeBool);
 
-    // Logical AND with bool
-    b01  = b02 && true;
-    b01_ = b02_ && true;
-    REQUIRE(b01 == b01_);
-    REQUIRE(b01 == true);
-    REQUIRE_FALSE(b01 == false);
-    REQUIRE(b01.xltype == xltypeBool);
-    REQUIRE(b01.val.xbool == true);
+    xll::Bool bf(xll::Number(0.0));
+    REQUIRE(bf == false);
+    REQUIRE(bf.xltype == xltypeBool);
+}
 
-    // Logical AND with int
-    b01  = b02 && 1;
-    b01_ = b02_ && 1;
-    REQUIRE(b01 == b01_);
-    REQUIRE(b01 == true);
-    REQUIRE_FALSE(b01 == false);
-    REQUIRE(b01.xltype == xltypeBool);
-    REQUIRE(b01.val.xbool == true);
+// ---------------------------------------------------------------------------
+// Assignment
+// ---------------------------------------------------------------------------
 
-    // Logical AND with xll::Int
-    b01  = b02 && xll::Int(1);
-    b01_ = b02_ && 1;
-    REQUIRE(b01 == b01_);
-    REQUIRE(b01 == true);
-    REQUIRE_FALSE(b01 == false);
-    REQUIRE(b01.xltype == xltypeBool);
-    REQUIRE(b01.val.xbool == true);
+TEST_CASE("Bool – assignment from bool", "[xll::Bool][assignment]")
+{
+    xll::Bool b;
+    b = true;
+    REQUIRE(b == true);
+    b = false;
+    REQUIRE(b == false);
+    REQUIRE(b.xltype == xltypeBool);
+}
 
-    // Logical AND with xll::Number
-    b01  = b02 && xll::Number(1.0);
-    b01_ = b02_ && true;
-    REQUIRE(b01 == b01_);
-    REQUIRE(b01 == true);
-    REQUIRE_FALSE(b01 == false);
-    REQUIRE(b01.xltype == xltypeBool);
-    REQUIRE(b01.val.xbool == true);
+TEST_CASE("Bool – assignment from int", "[xll::Bool][assignment]")
+{
+    xll::Bool b;
+    b = 1;
+    REQUIRE(b == true);
+    b = 0;
+    REQUIRE(b == false);
+    REQUIRE(b.xltype == xltypeBool);
+}
 
-    // Logical OR with xll::Bool
-    b01  = false;
-    b01_ = false;
-    xll::Bool b04(false);
-    b01  = b01 || b04;
-    b01_ = b01_ || false;
-    REQUIRE(b01 == b01_);
-    REQUIRE(b01 == false);
-    REQUIRE_FALSE(b01 == true);
-    REQUIRE(b01.xltype == xltypeBool);
-    REQUIRE(b01.val.xbool == false);
+TEST_CASE("Bool – assignment from double", "[xll::Bool][assignment]")
+{
+    xll::Bool b;
+    b = 3.14;
+    REQUIRE(b == true);
+    b = 0.0;
+    REQUIRE(b == false);
+    REQUIRE(b.xltype == xltypeBool);
+}
 
-    // Logical OR with bool
-    b01  = b01 || true;
-    b01_ = b01_ || true;
-    REQUIRE(b01 == b01_);
-    REQUIRE(b01 == true);
-    REQUIRE_FALSE(b01 == false);
-    REQUIRE(b01.xltype == xltypeBool);
-    REQUIRE(b01.val.xbool == true);
+TEST_CASE("Bool – copy assignment", "[xll::Bool][assignment]")
+{
+    xll::Bool src = true;
+    xll::Bool dst;
+    dst = src;
+    REQUIRE(dst == src);
+    REQUIRE(dst == true);
+    REQUIRE(dst.xltype == xltypeBool);
+}
 
-    // Logical OR with int
-    b01  = false;
-    b01_ = false;
-    b01  = b01 || 1;
-    b01_ = b01_ || 1;
-    REQUIRE(b01 == b01_);
-    REQUIRE(b01 == true);
-    REQUIRE_FALSE(b01 == false);
-    REQUIRE(b01.xltype == xltypeBool);
-    REQUIRE(b01.val.xbool == true);
+TEST_CASE("Bool – copy self-assignment", "[xll::Bool][assignment]")
+{
+    xll::Bool b = true;
+    b           = b;    // NOLINT(self-assign)
+    REQUIRE(b == true);
+    REQUIRE(b.xltype == xltypeBool);
+}
 
-    // Logical OR with xll::Int
-    b01  = false;
-    b01_ = false;
-    b01  = b01 || xll::Int(0);
-    b01_ = b01_ || 0;
-    REQUIRE(b01 == b01_);
-    REQUIRE(b01 == false);
-    REQUIRE_FALSE(b01 == true);
-    REQUIRE(b01.xltype == xltypeBool);
-    REQUIRE(b01.val.xbool == false);
+TEST_CASE("Bool – move assignment", "[xll::Bool][assignment]")
+{
+    xll::Bool src = true;
+    xll::Bool dst;
+    dst = std::move(src);
+    REQUIRE(dst == true);
+    REQUIRE(dst.xltype == xltypeBool);
+}
 
-    // Logical OR with xll::Number
-    b01  = false;
-    b01_ = false;
-    b01  = b01 || xll::Number(1.0);
-    b01_ = b01_ || true;
-    REQUIRE(b01 == b01_);
-    REQUIRE(b01 == true);
-    REQUIRE_FALSE(b01 == false);
-    REQUIRE(b01.xltype == xltypeBool);
-    REQUIRE(b01.val.xbool == true);
+TEST_CASE("Bool – assignment from xll::Int", "[xll::Bool][assignment][cross-type]")
+{
+    xll::Bool b;
+    b = xll::Int(5);
+    REQUIRE(b == true);
+    b = xll::Int(0);
+    REQUIRE(b == false);
+    REQUIRE(b.xltype == xltypeBool);
+}
 
-    // Implicit conversion to bool in if statement
-    xll::Bool b_true(true);
-    xll::Bool b_false(false);
-    int       count = 0;
+TEST_CASE("Bool – assignment from xll::Number", "[xll::Bool][assignment][cross-type]")
+{
+    xll::Bool b;
+    b = xll::Number(1.0);
+    REQUIRE(b == true);
+    b = xll::Number(0.0);
+    REQUIRE(b == false);
+    REQUIRE(b.xltype == xltypeBool);
+}
 
-    if (b_true) count++;
-    if (b_false) count--;
+// ---------------------------------------------------------------------------
+// Comparison
+// ---------------------------------------------------------------------------
 
-    REQUIRE(count == 1);
+TEST_CASE("Bool – equality with bool", "[xll::Bool][comparison]")
+{
+    xll::Bool t = true;
+    xll::Bool f = false;
+    REQUIRE(t == true);
+    REQUIRE(f == false);
+    REQUIRE_FALSE(t == false);
+    REQUIRE_FALSE(f == true);
+}
 
-    // Comparison operators
-    REQUIRE((b_true == true));
-    REQUIRE((b_true != false));
-    REQUIRE((b_false == false));
-    REQUIRE((b_false != true));
-    REQUIRE((b_true == xll::Bool(true)));
-    REQUIRE((b_true != xll::Bool(false)));
+TEST_CASE("Bool – equality with xll::Bool", "[xll::Bool][comparison]")
+{
+    xll::Bool a = true;
+    xll::Bool b = true;
+    xll::Bool c = false;
+    REQUIRE(a == b);
+    REQUIRE_FALSE(a == c);
+    REQUIRE(a != c);
+}
+
+TEST_CASE("Bool – equality with xll::Int", "[xll::Bool][comparison][cross-type]")
+{
+    xll::Bool t = true;
+    xll::Bool f = false;
+    REQUIRE(t == xll::Int(1));
+    REQUIRE(f == xll::Int(0));
+    REQUIRE_FALSE(t == xll::Int(0));
+}
+
+TEST_CASE("Bool – equality with xll::Number", "[xll::Bool][comparison][cross-type]")
+{
+    xll::Bool t = true;
+    xll::Bool f = false;
+    REQUIRE(t == xll::Number(1.0));
+    REQUIRE(f == xll::Number(0.0));
+}
+
+TEST_CASE("Bool – three-way comparison (spaceship)", "[xll::Bool][comparison]")
+{
+    xll::Bool t = true;
+    xll::Bool f = false;
+    REQUIRE((f <=> t) < 0);
+    REQUIRE((t <=> f) > 0);
+    REQUIRE((t <=> t) == 0);
+    REQUIRE(f < t);
+    REQUIRE(t > f);
+    REQUIRE(t >= t);
+    REQUIRE(f <= f);
+    REQUIRE(f <= t);
+    REQUIRE(t >= f);
+}
+
+TEST_CASE("Bool – three-way comparison with fundamental", "[xll::Bool][comparison]")
+{
+    xll::Bool t = true;
+    REQUIRE((t <=> 1) == 0);
+    REQUIRE((t <=> 0) > 0);
+}
+
+// ---------------------------------------------------------------------------
+// Arithmetic
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Bool – unary plus", "[xll::Bool][arithmetic]")
+{
+    xll::Bool t = true;
+    auto      p = +t;
+    REQUIRE(p == true);
+    REQUIRE(p.xltype == xltypeBool);
+}
+
+TEST_CASE("Bool – unary minus", "[xll::Bool][arithmetic]")
+{
+    xll::Bool f = false;
+    auto      n = -f;
+    REQUIRE(n == false);
+    REQUIRE(n.xltype == xltypeBool);
+}
+
+TEST_CASE("Bool – addition with Bool", "[xll::Bool][arithmetic]")
+{
+    xll::Bool t = true;
+    xll::Bool f = false;
+    auto      r = t + f;
+    REQUIRE(r == true);
+    REQUIRE(r.xltype == xltypeBool);
+}
+
+TEST_CASE("Bool – addition with fundamental", "[xll::Bool][arithmetic]")
+{
+    xll::Bool t = true;
+    auto      r = t + 0;
+    REQUIRE(r == true);
+    REQUIRE(r.xltype == xltypeBool);
+}
+
+TEST_CASE("Bool – subtraction", "[xll::Bool][arithmetic]")
+{
+    xll::Bool t = true;
+    xll::Bool f = false;
+    auto      r = t - f;
+    REQUIRE(r == true);
+    REQUIRE(r.xltype == xltypeBool);
+}
+
+TEST_CASE("Bool – multiplication", "[xll::Bool][arithmetic]")
+{
+    xll::Bool t = true;
+    xll::Bool f = false;
+    REQUIRE((t * t) == true);
+    REQUIRE((t * f) == false);
+    REQUIRE((f * f) == false);
+}
+
+TEST_CASE("Bool – addition assignment with fundamental", "[xll::Bool][arithmetic]")
+{
+    xll::Bool b = false;
+    b += 1;
+    REQUIRE(b == true);
+    REQUIRE(b.xltype == xltypeBool);
+}
+
+TEST_CASE("Bool – subtraction assignment", "[xll::Bool][arithmetic]")
+{
+    xll::Bool b = true;
+    b -= 1;
+    REQUIRE(b == false);
+    REQUIRE(b.xltype == xltypeBool);
+}
+
+TEST_CASE("Bool – addition with xll::Int", "[xll::Bool][arithmetic][cross-type]")
+{
+    xll::Bool t = true;
+    auto      r = t + xll::Int(0);
+    REQUIRE(r == true);
+    REQUIRE(r.xltype == xltypeBool);
+}
+
+TEST_CASE("Bool – addition with xll::Number", "[xll::Bool][arithmetic][cross-type]")
+{
+    xll::Bool f = false;
+    auto      r = f + xll::Number(1.0);
+    REQUIRE(r == true);
+    REQUIRE(r.xltype == xltypeBool);
+}
+
+// ---------------------------------------------------------------------------
+// Conversion
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Bool – explicit conversion to bool", "[xll::Bool][conversion]")
+{
+    xll::Bool t = true;
+    xll::Bool f = false;
+    REQUIRE(static_cast<bool>(t) == true);
+    REQUIRE(static_cast<bool>(f) == false);
+}
+
+TEST_CASE("Bool – implicit conversion to int", "[xll::Bool][conversion]")
+{
+    xll::Bool t  = true;
+    int       i  = t;
+    REQUIRE(i != 0);
+
+    xll::Bool f  = false;
+    int       j  = f;
+    REQUIRE(j == 0);
+}
+
+TEST_CASE("Bool – implicit conversion to double", "[xll::Bool][conversion]")
+{
+    xll::Bool t  = true;
+    double    d  = t;
+    REQUIRE(d != 0.0);
+
+    xll::Bool f  = false;
+    double    e  = f;
+    REQUIRE(e == 0.0);
+}
+
+TEST_CASE("Bool – .to<int>()", "[xll::Bool][conversion]")
+{
+    REQUIRE(xll::Bool(true).to<int>() != 0);
+    REQUIRE(xll::Bool(false).to<int>() == 0);
+}
+
+TEST_CASE("Bool – .to<double>()", "[xll::Bool][conversion]")
+{
+    REQUIRE(xll::Bool(true).to<double>() != 0.0);
+    REQUIRE(xll::Bool(false).to<double>() == 0.0);
+}
+
+// ---------------------------------------------------------------------------
+// Stream output
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Bool – stream output produces non-empty string", "[xll::Bool][stream]")
+{
+    std::ostringstream os;
+    os << xll::Bool(true);
+    REQUIRE(!os.str().empty());
+}
+
+// ---------------------------------------------------------------------------
+// Swap
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Bool – swap", "[xll::Bool][swap]")
+{
+    xll::Bool a = true;
+    xll::Bool b = false;
+    using std::swap;
+    swap(a, b);
+    REQUIRE(a == false);
+    REQUIRE(b == true);
+    REQUIRE(a.xltype == xltypeBool);
+    REQUIRE(b.xltype == xltypeBool);
+}
+
+// ---------------------------------------------------------------------------
+// Validity
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Bool – is_valid reflects xltype", "[xll::Bool][validity]")
+{
+    xll::Bool b = true;
+    REQUIRE(b.is_valid());
+
+    b.xltype = xltypeNil;
+    REQUIRE_FALSE(b.is_valid());
+}
+
+// ---------------------------------------------------------------------------
+// Layout
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Bool – sizeof equals XLOPER12", "[xll::Bool][layout]")
+{
+    REQUIRE(sizeof(xll::Bool) == sizeof(XLOPER12));
 }

@@ -8,14 +8,12 @@
 
 namespace xll
 {
-    class Missing;
-
     class Nil : public impl::Base<Nil, xltypeNil>
     {
-        using BASE = impl::Base<Nil, xltypeNil>;
+        // using BASE = impl::Base<Nil, xltypeNil>;
 
     public:
-        using BASE::BASE;
+        // using BASE::BASE;
 
         constexpr Nil() = default;
 
@@ -24,18 +22,7 @@ namespace xll
             xltype = xltypeNil;
         }
 
-        constexpr Nil(const xll::Missing&)
-        {
-            xltype = xltypeNil;
-        }
-
         constexpr Nil& operator=(const Nil&)
-        {
-            xltype = xltypeNil;
-            return *this;
-        }
-
-        constexpr Nil& operator=(const Missing&)
         {
             xltype = xltypeNil;
             return *this;

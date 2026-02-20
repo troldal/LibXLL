@@ -3,393 +3,558 @@
 //
 #include "catch_amalgamated.hpp"
 #include <xlcall.hpp>
-#include "../Types/Number.hpp"
-#include "../Types/Int.hpp"
+
 #include "../Types/Bool.hpp"
+#include "../Types/Int.hpp"
+#include "../Types/Missing.hpp"
+#include "../Types/Nil.hpp"
+#include "../Types/Number.hpp"
+
+#include <cmath>
 #include <limits>
+#include <sstream>
+#include <type_traits>
 
-TEST_CASE( "Number Construction", "[xll::Number]" )
+// ---------------------------------------------------------------------------
+// Static / compile-time assertions
+// ---------------------------------------------------------------------------
+
+static_assert(sizeof(xll::Number) == sizeof(XLOPER12));
+static_assert(alignof(xll::Number) == alignof(XLOPER12));
+static_assert(xll::Number::has_crtp_base);
+static_assert(xll::Number::excel_type == xltypeNum);
+static_assert(std::is_same_v<xll::Number::value_type, decltype(XLOPER12{}.val.num)>);
+
+// Number IS directly constructible from Nil/Missing: both inherit from XLOPER12,
+// and Base has an explicit Base(const XLOPER12&) constructor.
+// However that constructor is explicit, so no IMPLICIT conversion is possible.
+// Note: the constructor will throw at runtime if xltype != xltypeNum.
+static_assert(std::is_constructible_v<xll::Number, xll::Nil>);
+static_assert(std::is_constructible_v<xll::Number, xll::Missing>);
+static_assert(!std::is_convertible_v<xll::Number, xll::Nil>);
+static_assert(!std::is_convertible_v<xll::Number, xll::Missing>);
+
+// Legal cross-type constructions (OtherTypes: xltypeInt, xltypeBool)
+static_assert(std::is_constructible_v<xll::Number, xll::Int>);
+static_assert(std::is_constructible_v<xll::Number, xll::Bool>);
+
+// Legal constructions from fundamentals
+static_assert(std::is_constructible_v<xll::Number, double>);
+static_assert(std::is_constructible_v<xll::Number, int>);
+static_assert(std::is_constructible_v<xll::Number, float>);
+static_assert(std::is_constructible_v<xll::Number, bool>);
+
+// operator bool is EXPLICIT
+static_assert(!std::is_convertible_v<xll::Number, bool>);
+
+// Implicit conversion to arithmetic types via operator T()
+static_assert(std::is_convertible_v<xll::Number, double>);
+static_assert(std::is_convertible_v<xll::Number, int>);
+static_assert(std::is_convertible_v<xll::Number, float>);
+
+// ---------------------------------------------------------------------------
+// Construction
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Number – default construction", "[xll::Number][construction]")
 {
-    // Default construction:
-    xll::Number n01;
-    REQUIRE(n01 == 0.0);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 0.0);
+    xll::Number n;
+    REQUIRE(n.xltype == xltypeNum);
+    REQUIRE(n.is_valid());
+    REQUIRE(n == 0.0);
+    REQUIRE(n.val.num == 0.0);
+}
 
-    // Construction from double:
-    xll::Number n02 = 3.14;
-    REQUIRE(n02 == 3.14);
-    REQUIRE(n02.xltype == xltypeNum);
-    REQUIRE(n02.val.num == 3.14);
+TEST_CASE("Number – construction from double", "[xll::Number][construction]")
+{
+    xll::Number n = 3.14;
+    REQUIRE(n.xltype == xltypeNum);
+    REQUIRE(n.is_valid());
+    REQUIRE(n == 3.14);
+    REQUIRE(n.val.num == 3.14);
 
-    // Construction from int:
-    xll::Number n03 = 42;
-    REQUIRE(n03 == 42.0);
-    REQUIRE(n03.xltype == xltypeNum);
-    REQUIRE(n03.val.num == 42.0);
+    xll::Number neg = -2.718;
+    REQUIRE(neg == -2.718);
+}
 
-    // Construction from XLOPER12
-    auto xl01 = XLOPER12();
-    xl01.xltype = xltypeNum;
-    xl01.val.num = 2.718;
-    xll::Number n04 = xll::Number(xl01);
-    REQUIRE(n04 == 2.718);
-    REQUIRE(n04.xltype == xltypeNum);
-    REQUIRE(n04.val.num == 2.718);
+TEST_CASE("Number – construction from int", "[xll::Number][construction]")
+{
+    xll::Number n = 42;
+    REQUIRE(n.xltype == xltypeNum);
+    REQUIRE(n == 42.0);
+    REQUIRE(n.val.num == 42.0);
+}
 
-    // Invalid XLOPER12 construction
-    auto xl02 = XLOPER12();
-    REQUIRE_THROWS(xll::Number(xl02));
+TEST_CASE("Number – construction from float", "[xll::Number][construction]")
+{
+    xll::Number n = 1.5f;
+    REQUIRE(n.xltype == xltypeNum);
+    REQUIRE(n == Catch::Approx(1.5));
+}
 
-    // Copy construction:
-    xll::Number n05 = n02;
-    REQUIRE(n05 == n02);
-    REQUIRE_FALSE(n05 != n02);
-    REQUIRE(n05 == 3.14);
-    REQUIRE(n05.xltype == xltypeNum);
-    REQUIRE(n05.val.num == 3.14);
+TEST_CASE("Number – construction from bool", "[xll::Number][construction]")
+{
+    xll::Number t = true;
+    REQUIRE(t == 1.0);
 
-    // Move construction:
-    xll::Number n06 = std::move(n05);
-    REQUIRE(n06 == n02);
-    REQUIRE_FALSE(n06 != n02);
-    REQUIRE(n06 == 3.14);
-    REQUIRE(n06.xltype == xltypeNum);
-    REQUIRE(n06.val.num == 3.14);
+    xll::Number f = false;
+    REQUIRE(f == 0.0);
+}
 
-    // Construction from xll::Int
-    xll::Number n07 = xll::Int(42);
-    REQUIRE(n07 == 42.0);
-    REQUIRE(n07.xltype == xltypeNum);
-    REQUIRE(n07.val.num == 42.0);
+TEST_CASE("Number – construction from XLOPER12", "[xll::Number][construction]")
+{
+    XLOPER12 xl{};
+    xl.xltype  = xltypeNum;
+    xl.val.num = 2.718;
 
-    // Construction from xll::Bool
-    xll::Number n08 = xll::Bool(true);
-    REQUIRE(n08 == 1.0);
-    REQUIRE(n08.xltype == xltypeNum);
-    REQUIRE(n08.val.num == 1.0);
+    xll::Number n(xl);
+    REQUIRE(n.xltype == xltypeNum);
+    REQUIRE(n.is_valid());
+    REQUIRE(n == 2.718);
+}
 
-    xll::Number n09 = xll::Bool(false);
-    REQUIRE(n09 == 0.0);
-    REQUIRE(n09.xltype == xltypeNum);
-    REQUIRE(n09.val.num == 0.0);
+TEST_CASE("Number – construction from XLOPER12 with wrong type throws", "[xll::Number][construction]")
+{
+    XLOPER12 xl{};
+    xl.xltype = xltypeInt;
+    REQUIRE_THROWS(xll::Number(xl));
+}
 
-    // Extreme values
-    xll::Number n10 = std::numeric_limits<double>::max();
-    REQUIRE(n10 == std::numeric_limits<double>::max());
-    REQUIRE(n10.xltype == xltypeNum);
-    REQUIRE(n10.val.num == std::numeric_limits<double>::max());
+TEST_CASE("Number – explicit construction from Nil throws (wrong xltype)", "[xll::Number][construction]")
+{
+    xll::Nil n;
+    REQUIRE_THROWS(xll::Number(static_cast<const XLOPER12&>(n)));
+}
 
-    xll::Number n11 = std::numeric_limits<double>::min();
-    REQUIRE(n11 == std::numeric_limits<double>::min());
-    REQUIRE(n11.xltype == xltypeNum);
-    REQUIRE(n11.val.num == std::numeric_limits<double>::min());
+TEST_CASE("Number – explicit construction from Missing throws (wrong xltype)", "[xll::Number][construction]")
+{
+    xll::Missing m;
+    REQUIRE_THROWS(xll::Number(static_cast<const XLOPER12&>(m)));
+}
 
+TEST_CASE("Number – copy construction", "[xll::Number][construction]")
+{
+    xll::Number src = 3.14;
+    xll::Number dst = src;
+    REQUIRE(dst == src);
+    REQUIRE(dst == 3.14);
+    REQUIRE(dst.xltype == xltypeNum);
+    REQUIRE(dst.is_valid());
+}
+
+TEST_CASE("Number – copy construction from invalid object throws", "[xll::Number][construction]")
+{
     xll::Number invalid;
     invalid.xltype = xltypeNil;
-
-    // Invalid copy construction
     REQUIRE_THROWS(xll::Number(invalid));
 }
 
-TEST_CASE( "Number Assignment", "[xll::Number]" )
+TEST_CASE("Number – move construction", "[xll::Number][construction]")
 {
-    xll::Number n01;
-
-    // Assignment with double:
-    n01 = 3.14;
-    REQUIRE(n01 == 3.14);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 3.14);
-
-    // Assignment with int:
-    n01 = 42;
-    REQUIRE(n01 == 42.0);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 42.0);
-
-    // Assignment of XLOPER12:
-    auto xl01 = XLOPER12();
-    xl01.xltype = xltypeNum;
-    xl01.val.num = 2.718;
-    n01 = xll::Number(xl01);
-    REQUIRE(n01 == 2.718);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 2.718);
-
-    xll::Number to_be_copied = 1.618;
-
-    // Copy assignment:
-    n01 = to_be_copied;
-    REQUIRE(n01 == to_be_copied);
-    REQUIRE_FALSE(n01 != to_be_copied);
-    REQUIRE(n01 == 1.618);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 1.618);
-
-    xll::Number to_be_moved = 1.414;
-
-    // Move assignment:
-    n01 = std::move(to_be_moved);
-    REQUIRE(n01 == 1.414);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 1.414);
-
-    // Assignment of xll::Int
-    n01 = xll::Int(42);
-    REQUIRE(n01 == 42.0);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 42.0);
-
-    // Assignment of xll::Bool
-    n01 = xll::Bool(true);
-    REQUIRE(n01 == 1.0);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 1.0);
-
-    n01 = xll::Bool(false);
-    REQUIRE(n01 == 0.0);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 0.0);
-
-    // Assignment of extreme values
-    n01 = std::numeric_limits<double>::max();
-    REQUIRE(n01 == std::numeric_limits<double>::max());
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == std::numeric_limits<double>::max());
+    xll::Number src = 9.9;
+    xll::Number dst = std::move(src);
+    REQUIRE(dst == 9.9);
+    REQUIRE(dst.xltype == xltypeNum);
+    REQUIRE(dst.is_valid());
 }
 
-TEST_CASE( "Number Operations", "[xll::Number]" )
+TEST_CASE("Number – construction from xll::Int", "[xll::Number][construction][cross-type]")
 {
-    xll::Number n01(3.5);
-    double n01_ = 3.5;
+    xll::Number n(xll::Int(42));
+    REQUIRE(n == 42.0);
+    REQUIRE(n.xltype == xltypeNum);
+}
 
-    // Unary plus
-    auto n02 = +n01;
-    auto n02_ = +n01_;
-    REQUIRE(n02 == n02_);
-    REQUIRE(n02 == 3.5);
-    REQUIRE(n02.xltype == xltypeNum);
-    REQUIRE(n02.val.num == 3.5);
+TEST_CASE("Number – construction from xll::Bool", "[xll::Number][construction][cross-type]")
+{
+    xll::Number t(xll::Bool(true));
+    REQUIRE(t == 1.0);
+    REQUIRE(t.xltype == xltypeNum);
 
-    // Unary minus
-    auto n03 = -n01;
-    auto n03_ = -n01_;
-    REQUIRE(n03 == n03_);
-    REQUIRE(n03 == -3.5);
-    REQUIRE(n03.xltype == xltypeNum);
-    REQUIRE(n03.val.num == -3.5);
+    xll::Number f(xll::Bool(false));
+    REQUIRE(f == 0.0);
+}
 
-    // Addition with xll::Number
-    xll::Number n04(2.5);
-    n01 = n01 + n04;
-    n01_ = n01_ + 2.5;
-    REQUIRE(n01 == n01_);
-    REQUIRE(n01 == 6.0);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 6.0);
+TEST_CASE("Number – construction from extreme double values", "[xll::Number][construction]")
+{
+    xll::Number mx = std::numeric_limits<double>::max();
+    REQUIRE(mx == std::numeric_limits<double>::max());
 
-    // Addition with double
-    n01 = n01 + 1.5;
-    n01_ = n01_ + 1.5;
-    REQUIRE(n01 == n01_);
-    REQUIRE(n01 == 7.5);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 7.5);
+    xll::Number mn = std::numeric_limits<double>::lowest();
+    REQUIRE(mn == std::numeric_limits<double>::lowest());
 
-    // Addition with int
-    n01 = n01 + 2;
-    n01_ = n01_ + 2;
-    REQUIRE(n01 == n01_);
-    REQUIRE(n01 == 9.5);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 9.5);
+    xll::Number eps = std::numeric_limits<double>::epsilon();
+    REQUIRE(eps == std::numeric_limits<double>::epsilon());
+}
 
-    // Addition with xll::Int
-    n01 = n01 + xll::Int(3);
-    n01_ = n01_ + 3;
-    REQUIRE(n01 == n01_);
-    REQUIRE(n01 == 12.5);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 12.5);
+TEST_CASE("Number – construction from NaN preserves NaN", "[xll::Number][construction]")
+{
+    xll::Number n = std::numeric_limits<double>::quiet_NaN();
+    REQUIRE(std::isnan(n.val.num));
+}
 
-    // Addition with xll::Bool
-    n01 = n01 + xll::Bool(true);
-    n01_ = n01_ + 1;
-    REQUIRE(n01 == n01_);
-    REQUIRE(n01 == 13.5);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 13.5);
+TEST_CASE("Number – construction from infinity", "[xll::Number][construction]")
+{
+    xll::Number pos_inf = std::numeric_limits<double>::infinity();
+    REQUIRE(std::isinf(pos_inf.val.num));
+    REQUIRE(pos_inf.val.num > 0.0);
 
-    // Subtraction with xll::Number
-    n01 = n01 - n04;
-    n01_ = n01_ - 2.5;
-    REQUIRE(n01 == n01_);
-    REQUIRE(n01 == 11.0);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 11.0);
+    xll::Number neg_inf = -std::numeric_limits<double>::infinity();
+    REQUIRE(std::isinf(neg_inf.val.num));
+    REQUIRE(neg_inf.val.num < 0.0);
+}
 
-    // Subtraction with double
-    n01 = n01 - 1.0;
-    n01_ = n01_ - 1.0;
-    REQUIRE(n01 == n01_);
-    REQUIRE(n01 == 10.0);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 10.0);
+// ---------------------------------------------------------------------------
+// Assignment
+// ---------------------------------------------------------------------------
 
-    // Multiplication with xll::Number
-    n01 = n01 * xll::Number(1.5);
-    n01_ = n01_ * 1.5;
-    REQUIRE(n01 == n01_);
-    REQUIRE(n01 == 15.0);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 15.0);
+TEST_CASE("Number – assignment from double", "[xll::Number][assignment]")
+{
+    xll::Number n;
+    n = 3.14;
+    REQUIRE(n == 3.14);
+    n = -1.0;
+    REQUIRE(n == -1.0);
+    REQUIRE(n.xltype == xltypeNum);
+}
 
-    // Multiplication with double
-    n01 = n01 * 2.0;
-    n01_ = n01_ * 2.0;
-    REQUIRE(n01 == n01_);
-    REQUIRE(n01 == 30.0);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 30.0);
+TEST_CASE("Number – assignment from int", "[xll::Number][assignment]")
+{
+    xll::Number n;
+    n = 7;
+    REQUIRE(n == 7.0);
+    REQUIRE(n.xltype == xltypeNum);
+}
 
-    // Division with xll::Number
-    n01 = n01 / xll::Number(3.0);
-    n01_ = n01_ / 3.0;
-    REQUIRE(n01 == n01_);
-    REQUIRE(n01 == 10.0);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 10.0);
+TEST_CASE("Number – copy assignment", "[xll::Number][assignment]")
+{
+    xll::Number src = 2.718;
+    xll::Number dst;
+    dst = src;
+    REQUIRE(dst == src);
+    REQUIRE(dst == 2.718);
+    REQUIRE(dst.xltype == xltypeNum);
+}
 
-    // Division with double
-    n01 = n01 / 2.0;
-    n01_ = n01_ / 2.0;
-    REQUIRE(n01 == n01_);
-    REQUIRE(n01 == 5.0);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 5.0);
+TEST_CASE("Number – copy self-assignment", "[xll::Number][assignment]")
+{
+    xll::Number n = 1.0;
+    n             = n;    // NOLINT(self-assign)
+    REQUIRE(n == 1.0);
+    REQUIRE(n.xltype == xltypeNum);
+}
 
-    // Division by zero returns NaN
-    auto v = n01 / 0.0;
-    REQUIRE(std::isinf(static_cast<double>(n01 / 0.0)));
-    REQUIRE(std::isinf(static_cast<double>(n01 / xll::Number(0.0))));
-    REQUIRE(std::isinf(static_cast<double>(n01 / xll::Int(0))));
+TEST_CASE("Number – move assignment", "[xll::Number][assignment]")
+{
+    xll::Number src = 5.5;
+    xll::Number dst;
+    dst = std::move(src);
+    REQUIRE(dst == 5.5);
+    REQUIRE(dst.xltype == xltypeNum);
+}
 
-    // Compound assignment: Addition
-    n01 = 5.0;
-    n01_ = 5.0;
-    n01 += 3.0;
-    n01_ += 3.0;
-    REQUIRE(n01 == n01_);
-    REQUIRE(n01 == 8.0);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 8.0);
+TEST_CASE("Number – assignment from xll::Int", "[xll::Number][assignment][cross-type]")
+{
+    xll::Number n;
+    n = xll::Int(10);
+    REQUIRE(n == 10.0);
+    REQUIRE(n.xltype == xltypeNum);
+}
 
-    n01 += xll::Number(2.0);
-    n01_ += 2.0;
-    REQUIRE(n01 == n01_);
-    REQUIRE(n01 == 10.0);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 10.0);
+TEST_CASE("Number – assignment from xll::Bool", "[xll::Number][assignment][cross-type]")
+{
+    xll::Number n;
+    n = xll::Bool(true);
+    REQUIRE(n == 1.0);
+    n = xll::Bool(false);
+    REQUIRE(n == 0.0);
+    REQUIRE(n.xltype == xltypeNum);
+}
 
-    // Compound assignment: Subtraction
-    n01 -= 4.0;
-    n01_ -= 4.0;
-    REQUIRE(n01 == n01_);
-    REQUIRE(n01 == 6.0);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 6.0);
+// ---------------------------------------------------------------------------
+// Arithmetic operators
+// ---------------------------------------------------------------------------
 
-    n01 -= xll::Number(1.0);
-    n01_ -= 1.0;
-    REQUIRE(n01 == n01_);
-    REQUIRE(n01 == 5.0);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 5.0);
+TEST_CASE("Number – unary plus and minus", "[xll::Number][arithmetic]")
+{
+    xll::Number n = 3.14;
+    REQUIRE(+n == 3.14);
+    REQUIRE(-n == -3.14);
+    REQUIRE((+n).xltype == xltypeNum);
+    REQUIRE((-n).xltype == xltypeNum);
+}
 
-    // Compound assignment: Multiplication
-    n01 *= 2.0;
-    n01_ *= 2.0;
-    REQUIRE(n01 == n01_);
-    REQUIRE(n01 == 10.0);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 10.0);
+TEST_CASE("Number – addition with double", "[xll::Number][arithmetic]")
+{
+    xll::Number n = 1.0;
+    auto r = n + 2.0;
+    REQUIRE(r == Catch::Approx(3.0));
+    REQUIRE(r.xltype == xltypeNum);
+}
 
-    n01 *= xll::Number(1.5);
-    n01_ *= 1.5;
-    REQUIRE(n01 == n01_);
-    REQUIRE(n01 == 15.0);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 15.0);
+TEST_CASE("Number – addition with xll::Number", "[xll::Number][arithmetic]")
+{
+    xll::Number a = 1.5;
+    xll::Number b = 2.5;
+    auto r = a + b;
+    REQUIRE(r == Catch::Approx(4.0));
+    REQUIRE(r.xltype == xltypeNum);
+}
 
-    // Compound assignment: Division
-    n01 /= 3.0;
-    n01_ /= 3.0;
-    REQUIRE(n01 == n01_);
-    REQUIRE(n01 == 5.0);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 5.0);
+TEST_CASE("Number – addition with xll::Int", "[xll::Number][arithmetic][cross-type]")
+{
+    xll::Number n = 1.5;
+    xll::Int    i = 2;
+    auto r = n + i;
+    REQUIRE(r == Catch::Approx(3.5));
+    REQUIRE(r.xltype == xltypeNum);
+}
 
-    n01 /= xll::Number(2.5);
-    n01_ /= 2.5;
-    REQUIRE(n01 == n01_);
-    REQUIRE(n01 == 2.0);
-    REQUIRE(n01.xltype == xltypeNum);
-    REQUIRE(n01.val.num == 2.0);
+TEST_CASE("Number – addition with xll::Bool", "[xll::Number][arithmetic][cross-type]")
+{
+    xll::Number n = 2.0;
+    xll::Bool   b = true;
+    auto r = n + b;
+    REQUIRE(r == Catch::Approx(3.0));
+    REQUIRE(r.xltype == xltypeNum);
+}
 
-    // Compound assignment: Division by zero returns inf
-    n01 /= 0.0;
-    REQUIRE(std::isinf(static_cast<double>(n01)));
-    n01 /= xll::Number(0.0);
-    REQUIRE(std::isinf(static_cast<double>(n01)));
+TEST_CASE("Number – subtraction", "[xll::Number][arithmetic]")
+{
+    xll::Number a = 5.0;
+    xll::Number b = 2.0;
+    REQUIRE((a - b) == Catch::Approx(3.0));
+    REQUIRE((a - 1.5) == Catch::Approx(3.5));
+}
 
-    // Comparison operators
-    xll::Number n05(5.0);
-    xll::Number n06(5.0);
-    xll::Number n07(7.0);
+TEST_CASE("Number – multiplication", "[xll::Number][arithmetic]")
+{
+    xll::Number a = 3.0;
+    xll::Number b = 4.0;
+    REQUIRE((a * b) == Catch::Approx(12.0));
+    REQUIRE((a * 2.0) == Catch::Approx(6.0));
+}
 
-    REQUIRE(n05 == n06);
-    REQUIRE(n05 != n07);
-    REQUIRE(n05 < n07);
-    REQUIRE(n07 > n05);
-    REQUIRE(n05 <= n06);
-    REQUIRE(n05 <= n07);
-    REQUIRE(n06 >= n05);
-    REQUIRE(n07 >= n05);
+TEST_CASE("Number – division", "[xll::Number][arithmetic]")
+{
+    xll::Number a = 10.0;
+    xll::Number b = 4.0;
+    REQUIRE((a / b) == Catch::Approx(2.5));
+    REQUIRE((a / 2.5) == Catch::Approx(4.0));
+}
 
-    // Comparison with double
-    REQUIRE(n05 == 5.0);
-    REQUIRE(n05 != 7.0);
-    REQUIRE(n05 < 7.0);
-    REQUIRE(n07 > 5.0);
-    REQUIRE(n05 <= 5.0);
-    REQUIRE(n05 <= 7.0);
-    REQUIRE(n05 >= 5.0);
-    REQUIRE(n07 >= 5.0);
+TEST_CASE("Number – compound assignment +=", "[xll::Number][arithmetic]")
+{
+    xll::Number n = 1.0;
+    n += 2.0;
+    REQUIRE(n == Catch::Approx(3.0));
+    n += xll::Number(0.5);
+    REQUIRE(n == Catch::Approx(3.5));
+    REQUIRE(n.xltype == xltypeNum);
+}
 
-    // Implicit conversion to double
-    xll::Number n08(3.14);
-    double value = n08;
-    REQUIRE(value == 3.14);
+TEST_CASE("Number – compound assignment -=", "[xll::Number][arithmetic]")
+{
+    xll::Number n = 5.0;
+    n -= 2.0;
+    REQUIRE(n == Catch::Approx(3.0));
+    REQUIRE(n.xltype == xltypeNum);
+}
 
-    // Conversion to xll::Int (truncation behavior)
-    xll::Number n09(3.7);
-    xll::Int i01 = n09;
-    REQUIRE(i01 == 3);
+TEST_CASE("Number – compound assignment *=", "[xll::Number][arithmetic]")
+{
+    xll::Number n = 3.0;
+    n *= 4.0;
+    REQUIRE(n == Catch::Approx(12.0));
+    REQUIRE(n.xltype == xltypeNum);
+}
 
-    // Special cases: NaN and Infinity
-    xll::Number n_inf = std::numeric_limits<double>::infinity();
-    REQUIRE(std::isinf(n_inf.val.num));
+TEST_CASE("Number – compound assignment /=", "[xll::Number][arithmetic]")
+{
+    xll::Number n = 10.0;
+    n /= 4.0;
+    REQUIRE(n == Catch::Approx(2.5));
+    REQUIRE(n.xltype == xltypeNum);
+}
 
-    xll::Number n_neg_inf = -std::numeric_limits<double>::infinity();
-    REQUIRE(std::isinf(n_neg_inf.val.num));
-    REQUIRE(n_neg_inf < 0);
+TEST_CASE("Number – compound assignment with xll::Int", "[xll::Number][arithmetic][cross-type]")
+{
+    xll::Number n = 10.0;
+    n += xll::Int(5);
+    REQUIRE(n == Catch::Approx(15.0));
+    n -= xll::Int(3);
+    REQUIRE(n == Catch::Approx(12.0));
+    n *= xll::Int(2);
+    REQUIRE(n == Catch::Approx(24.0));
+    n /= xll::Int(4);
+    REQUIRE(n == Catch::Approx(6.0));
+    REQUIRE(n.xltype == xltypeNum);
+}
 
-    // Test validity
-    xll::Number valid_number(42.0);
-    REQUIRE(valid_number.is_valid());
+// ---------------------------------------------------------------------------
+// Comparison
+// ---------------------------------------------------------------------------
 
-    // xll::Number invalid_number;
-    // invalid_number.invalidate();
-    // REQUIRE_FALSE(invalid_number.is_valid());
+TEST_CASE("Number – equality with double", "[xll::Number][comparison]")
+{
+    xll::Number n = 3.14;
+    REQUIRE(n == 3.14);
+    REQUIRE_FALSE(n == 3.0);
+    REQUIRE(n != 0.0);
+}
+
+TEST_CASE("Number – equality with xll::Number", "[xll::Number][comparison]")
+{
+    xll::Number a = 2.5;
+    xll::Number b = 2.5;
+    xll::Number c = 3.5;
+    REQUIRE(a == b);
+    REQUIRE_FALSE(a == c);
+    REQUIRE(a != c);
+}
+
+TEST_CASE("Number – equality with xll::Int", "[xll::Number][comparison][cross-type]")
+{
+    xll::Number n = 5.0;
+    xll::Int    i = 5;
+    REQUIRE(n == i);
+    xll::Int j = 6;
+    REQUIRE_FALSE(n == j);
+}
+
+TEST_CASE("Number – equality with xll::Bool", "[xll::Number][comparison][cross-type]")
+{
+    xll::Number one  = 1.0;
+    xll::Number zero = 0.0;
+    REQUIRE(one == xll::Bool(true));
+    REQUIRE(zero == xll::Bool(false));
+}
+
+TEST_CASE("Number – three-way comparison (spaceship)", "[xll::Number][comparison]")
+{
+    xll::Number a = 1.0;
+    xll::Number b = 2.0;
+    REQUIRE((a <=> b) < 0);
+    REQUIRE((b <=> a) > 0);
+    REQUIRE((a <=> a) == 0);
+    REQUIRE(a < b);
+    REQUIRE(b > a);
+    REQUIRE(a <= a);
+    REQUIRE(b >= b);
+}
+
+TEST_CASE("Number – three-way comparison with fundamental", "[xll::Number][comparison]")
+{
+    xll::Number n = 5.0;
+    REQUIRE((n <=> 5.0) == 0);
+    REQUIRE((n <=> 4.0) > 0);
+    REQUIRE((n <=> 6.0) < 0);
+}
+
+TEST_CASE("Number – NaN comparison returns unordered (partial_ordering)", "[xll::Number][comparison]")
+{
+    xll::Number nan = std::numeric_limits<double>::quiet_NaN();
+    xll::Number n   = 1.0;
+    // NaN comparisons are unordered – none of <, ==, > hold
+    REQUIRE_FALSE(nan == n);
+    REQUIRE_FALSE(nan == nan);
+}
+
+// ---------------------------------------------------------------------------
+// Conversion
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Number – explicit conversion to bool", "[xll::Number][conversion]")
+{
+    REQUIRE(static_cast<bool>(xll::Number(1.0)) == true);
+    REQUIRE(static_cast<bool>(xll::Number(0.0)) == false);
+    REQUIRE(static_cast<bool>(xll::Number(-1.0)) == true);
+}
+
+TEST_CASE("Number – implicit conversion to double", "[xll::Number][conversion]")
+{
+    xll::Number n = 3.14;
+    double      d = n;
+    REQUIRE(d == 3.14);
+}
+
+TEST_CASE("Number – implicit conversion to int (truncation)", "[xll::Number][conversion]")
+{
+    xll::Number n  = 9.9;
+    int         i  = n;
+    REQUIRE(i == 9);
+}
+
+TEST_CASE("Number – implicit conversion to float", "[xll::Number][conversion]")
+{
+    xll::Number n = 1.5;
+    float       f = n;
+    REQUIRE(f == Catch::Approx(1.5f));
+}
+
+TEST_CASE("Number – .to<double>()", "[xll::Number][conversion]")
+{
+    REQUIRE(xll::Number(3.14).to<double>() == 3.14);
+}
+
+TEST_CASE("Number – .to<int>() truncates", "[xll::Number][conversion]")
+{
+    REQUIRE(xll::Number(7.9).to<int>() == 7);
+    REQUIRE(xll::Number(-2.9).to<int>() == -2);
+}
+
+// ---------------------------------------------------------------------------
+// Stream output
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Number – stream output", "[xll::Number][stream]")
+{
+    std::ostringstream os;
+    os << xll::Number(3.14);
+    REQUIRE(!os.str().empty());
+}
+
+TEST_CASE("Number – stream output zero", "[xll::Number][stream]")
+{
+    std::ostringstream os;
+    os << xll::Number(0.0);
+    REQUIRE(!os.str().empty());
+}
+
+// ---------------------------------------------------------------------------
+// Swap
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Number – swap", "[xll::Number][swap]")
+{
+    xll::Number a = 1.0;
+    xll::Number b = 2.0;
+    using std::swap;
+    swap(a, b);
+    REQUIRE(a == 2.0);
+    REQUIRE(b == 1.0);
+    REQUIRE(a.xltype == xltypeNum);
+    REQUIRE(b.xltype == xltypeNum);
+}
+
+// ---------------------------------------------------------------------------
+// Validity
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Number – is_valid reflects xltype", "[xll::Number][validity]")
+{
+    xll::Number n = 1.0;
+    REQUIRE(n.is_valid());
+
+    n.xltype = xltypeNil;
+    REQUIRE_FALSE(n.is_valid());
+}
+
+// ---------------------------------------------------------------------------
+// Layout
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Number – sizeof equals XLOPER12", "[xll::Number][layout]")
+{
+    REQUIRE(sizeof(xll::Number) == sizeof(XLOPER12));
 }

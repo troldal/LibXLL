@@ -10,6 +10,8 @@ add_executable(LibXLL.Tests.default
         Expected.cpp
         Int.cpp
         Number.cpp
+        Nil.cpp
+        Missing.cpp
         Variant.cpp
         Array.cpp
 )
@@ -23,6 +25,8 @@ if (NOT WIN32)
                 Expected.cpp
                 Int.cpp
                 Number.cpp
+                Nil.cpp
+                Missing.cpp
                 Variant.cpp
                 Array.cpp
         )

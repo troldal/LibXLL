@@ -27,19 +27,19 @@ namespace xll
         constexpr xll::String to_string() const
         {
             switch (val.err) {
-                case 0:
+                case xlerrNull:
                     return "#NULL!";
-                case 7:
+                case xlerrDiv0:
                     return "#DIV/0!";
-                case 15:
+                case xlerrValue:
                     return "#VALUE!";
-                case 23:
+                case xlerrRef:
                     return "#REF!";
-                case 29:
+                case xlerrName:
                     return "#NAME?";
-                case 36:
+                case xlerrNum:
                     return "#NUM!";
-                case 42:
+                case xlerrNA:
                     return "#N/A";
                 default:
                     throw std::runtime_error("Unknown error");
@@ -52,29 +52,29 @@ namespace xll
             return error_index();
         }
 
-        constexpr explicit operator int() const
-        {
-            return error_index();
-        }
+        // constexpr explicit operator int() const
+        // {
+        //     return error_index();
+        // }
 
         [[nodiscard]]
         constexpr int error_index() const
         {
             ensure(xltype == xltypeErr);
             switch (val.err) {
-                case 0:
+                case xlerrNull:
                     return 0;
-                case 7:
+                case xlerrDiv0:
                     return 1;
-                case 15:
+                case xlerrValue:
                     return 2;
-                case 23:
+                case xlerrRef:
                     return 3;
-                case 29:
+                case xlerrName:
                     return 4;
-                case 36:
+                case xlerrNum:
                     return 5;
-                case 42:
+                case xlerrNA:
                     return 6;
                 default:
                     throw std::runtime_error("Unknown error");
@@ -97,13 +97,13 @@ namespace xll
         friend std::ostream& operator<<(std::ostream& os, const Error& error) { return os << error.to_string(); }
     };
 
-    static const Error ErrNull  = Error([] { auto err = XLOPER12(); err.xltype = xltypeErr; err.val.err = 0; return err; }());
-    static const Error ErrDiv0  = Error([] { auto err = XLOPER12(); err.xltype = xltypeErr; err.val.err = 7; return err; }());
-    static const Error ErrValue = Error([] { auto err = XLOPER12(); err.xltype = xltypeErr; err.val.err = 15; return err; }());
-    static const Error ErrRef   = Error([] { auto err = XLOPER12(); err.xltype = xltypeErr; err.val.err = 23; return err; }());
-    static const Error ErrName  = Error([] { auto err = XLOPER12(); err.xltype = xltypeErr; err.val.err = 29; return err; }());
-    static const Error ErrNum   = Error([] { auto err = XLOPER12(); err.xltype = xltypeErr; err.val.err = 36; return err; }());
-    static const Error ErrNA    = Error([] { auto err = XLOPER12(); err.xltype = xltypeErr; err.val.err = 42; return err; }());
+    inline static const Error ErrNull  = Error([] { auto err = XLOPER12(); err.xltype = xltypeErr; err.val.err = xlerrNull; return err; }());
+    inline static const Error ErrDiv0  = Error([] { auto err = XLOPER12(); err.xltype = xltypeErr; err.val.err = xlerrDiv0; return err; }());
+    inline static const Error ErrValue = Error([] { auto err = XLOPER12(); err.xltype = xltypeErr; err.val.err = xlerrValue; return err; }());
+    inline static const Error ErrRef   = Error([] { auto err = XLOPER12(); err.xltype = xltypeErr; err.val.err = xlerrRef; return err; }());
+    inline static const Error ErrName  = Error([] { auto err = XLOPER12(); err.xltype = xltypeErr; err.val.err = xlerrName; return err; }());
+    inline static const Error ErrNum   = Error([] { auto err = XLOPER12(); err.xltype = xltypeErr; err.val.err = xlerrNum; return err; }());
+    inline static const Error ErrNA    = Error([] { auto err = XLOPER12(); err.xltype = xltypeErr; err.val.err = xlerrNA; return err; }());
 
 }    // namespace xll
 
