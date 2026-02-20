@@ -290,9 +290,9 @@ TEST_CASE("Bool - Comparison", "[xll::Bool][comparison]")
     SECTION("Three-way comparison (spaceship) with xll::Bool") {
         xll::Bool t = true;
         xll::Bool f = false;
-        REQUIRE((f <=> t) < 0);
-        REQUIRE((t <=> f) > 0);
-        REQUIRE((t <=> t) == 0);
+        REQUIRE(bool((f <=> t) < 0));
+        REQUIRE(bool((t <=> f) > 0));
+        REQUIRE(bool((t <=> t) == 0));
         REQUIRE(f < t);
         REQUIRE(t > f);
         REQUIRE(t >= t);
@@ -303,8 +303,8 @@ TEST_CASE("Bool - Comparison", "[xll::Bool][comparison]")
 
     SECTION("Three-way comparison with fundamental") {
         xll::Bool t = true;
-        REQUIRE((t <=> 1) == 0);
-        REQUIRE((t <=> 0) > 0);
+        REQUIRE(bool((t <=> 1) == 0));
+        REQUIRE(bool((t <=> 0) > 0));
     }
 }
 

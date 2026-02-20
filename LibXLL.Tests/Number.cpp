@@ -398,9 +398,9 @@ TEST_CASE("Number - Comparison", "[xll::Number][comparison]")
     SECTION("Three-way comparison (spaceship)") {
         xll::Number a = 1.0;
         xll::Number b = 2.0;
-        REQUIRE((a <=> b) < 0);
-        REQUIRE((b <=> a) > 0);
-        REQUIRE((a <=> a) == 0);
+        REQUIRE(bool((a <=> b) < 0));
+        REQUIRE(bool((b <=> a) > 0));
+        REQUIRE(bool((a <=> a) == 0));
         REQUIRE(a < b);
         REQUIRE(b > a);
         REQUIRE(a <= a);
@@ -409,9 +409,9 @@ TEST_CASE("Number - Comparison", "[xll::Number][comparison]")
 
     SECTION("Three-way comparison with fundamental") {
         xll::Number n = 5.0;
-        REQUIRE((n <=> 5.0) == 0);
-        REQUIRE((n <=> 4.0) > 0);
-        REQUIRE((n <=> 6.0) < 0);
+        REQUIRE(bool((n <=> 5.0) == 0));
+        REQUIRE(bool((n <=> 4.0) > 0));
+        REQUIRE(bool((n <=> 6.0) < 0));
     }
 
     SECTION("NaN comparisons are unordered (partial_ordering)") {

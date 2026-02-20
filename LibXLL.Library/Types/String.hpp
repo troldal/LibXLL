@@ -38,13 +38,8 @@ namespace xll
 
         constexpr explicit String(const XLOPER12& v)
         {
-            switch (v.xltype == xltypeStr) {
-                case true:
-                    value() = make_string(to_string(v.val.str)).release();
-                    break;
-                default:
-                    throw std::runtime_error("XLOPER12 type not convertible to type");
-            }
+            ensure(xltype == xltypeStr);
+            value() = make_string(to_string(v.val.str)).release();
         }
 
         constexpr String(const String& other)

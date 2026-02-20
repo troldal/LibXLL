@@ -12,6 +12,7 @@ add_executable(LibXLL.Tests.default
         Number.cpp
         Nil.cpp
         Missing.cpp
+        Error.cpp
         Variant.cpp
         Array.cpp
 )
@@ -27,6 +28,7 @@ if (NOT WIN32)
                 Number.cpp
                 Nil.cpp
                 Missing.cpp
+                Error.cpp
                 Variant.cpp
                 Array.cpp
         )

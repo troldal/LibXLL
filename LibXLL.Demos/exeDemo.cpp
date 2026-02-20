@@ -2,49 +2,53 @@
 // Created by kenne on 24/03/2025.
 //
 
-#include "Types/Array.hpp"
-#include "Types/String.hpp"
-#include "Types/Variant.hpp"
-#include <Register.hpp>
+// #include "Types/Array.hpp"
+// #include "Types/String.hpp"
+// #include "Types/Variant.hpp"
+// #include <Register.hpp>
 #include <Types/Expected.hpp>
-#include <chrono>
+// #include <chrono>
 #include <iostream>
-#include <thread>
-#include <vector>
-#include <ranges>
+// #include <thread>
+// #include <vector>
+// #include <ranges>
 #include <OpenXLL.hpp>
 
 // extern "C" xll::Number* XLLAPI MakeNum(xll::Number const* d, xll::Number const* arr);
 // extern "C" void XLLAPI xlAutoFree12(LPXLOPER12 px);
 
+#define NOMINMAX
+
 int main() {
 
-    using namespace xll::literals;
-
-    // auto value = xll::Array<xll::Expected<xll::String>>();
-    // value = xll::Array<xll::Expected<xll::String>>(4,1);
-    // auto value2 = value;
-    // //value = value2;
+    // using namespace xll::literals;
     //
-    // xll::Int invalid;
-    // invalid.xltype = xltypeNil;
+    // // auto value = xll::Array<xll::Expected<xll::String>>();
+    // // value = xll::Array<xll::Expected<xll::String>>(4,1);
+    // // auto value2 = value;
+    // // //value = value2;
+    // //
+    // // xll::Int invalid;
+    // // invalid.xltype = xltypeNil;
+    // //
+    // // // Invalid copy construction
+    // // auto i = xll::Int(invalid);
     //
-    // // Invalid copy construction
-    // auto i = xll::Int(invalid);
+    // //for (auto& e : value) e = "Blah"_xs;
+    // using namespace xll::literals;
+    //
+    // auto value = xll::Array<xll::String>(4,1);
+    // for (auto& v : value) { v = "Hello"_xs; }
+    // auto arr = value.to<std::vector, std::string>();
+    //
+    // auto inp = xll::Expected<xll::String>("Input");
+    // auto exp = inp.to_expected();
+    // auto out = exp | fxt::transform([](xll::String) { return "Hello, World!"_xs; });
+    //
+    // std::cout << *out << std::endl;
 
-    //for (auto& e : value) e = "Blah"_xs;
-    using namespace xll::literals;
-
-    auto value = xll::Array<xll::String>(4,1);
-    for (auto& v : value) { v = "Hello"_xs; }
-    auto arr = value.to<std::vector, std::string>();
-
-    auto inp = xll::Expected<xll::String>("Input");
-    auto exp = inp.to_expected();
-    auto out = exp | fxt::transform([](xll::String) { return "Hello, World!"_xs; });
-
-    std::cout << *out << std::endl;
-
+    auto xl = XLOPER12();
+    std::cout << sizeof(xl.val) << std::endl;
 
 
     return 0;

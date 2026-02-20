@@ -1140,7 +1140,7 @@ TEST_CASE("Expected - Lazy Error Materialization", "[xll::Expected][lazy_materia
         REQUIRE_FALSE(exp.has_value());
 
         // Materialize
-        exp.error();
+        auto err = exp.error();
 
         // Should still be in error state
         REQUIRE_FALSE(exp.has_value());

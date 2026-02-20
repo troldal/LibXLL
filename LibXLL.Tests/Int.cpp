@@ -443,9 +443,9 @@ TEST_CASE("Int - Comparison", "[xll::Int][comparison]")
     SECTION("Three-way comparison (spaceship)") {
         xll::Int a = 3;
         xll::Int b = 5;
-        REQUIRE((a <=> b) < 0);
-        REQUIRE((b <=> a) > 0);
-        REQUIRE((a <=> a) == 0);
+        REQUIRE(bool((a <=> b) < 0));
+        REQUIRE(bool((b <=> a) > 0));
+        REQUIRE(bool((a <=> a) == 0));
         REQUIRE(a < b);
         REQUIRE(b > a);
         REQUIRE(a <= a);
@@ -454,9 +454,9 @@ TEST_CASE("Int - Comparison", "[xll::Int][comparison]")
 
     SECTION("Three-way comparison with fundamental") {
         xll::Int i = 10;
-        REQUIRE((i <=> 10) == 0);
-        REQUIRE((i <=> 9)  > 0);
-        REQUIRE((i <=> 11) < 0);
+        REQUIRE(bool((i <=> 10) == 0));
+        REQUIRE(bool((i <=> 9)  > 0));
+        REQUIRE(bool((i <=> 11) < 0));
     }
 }
 

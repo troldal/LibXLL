@@ -616,9 +616,11 @@ namespace xll
         {
             if (other.has_value()) {
                 std::construct_at(reinterpret_cast<TValue*>(this), other.value());
+                impl::set_error_state(*this, false);
             }
             else {
                 std::construct_at(reinterpret_cast<TError*>(this), other.error());
+                impl::set_error_state(*this, true);
             }
         }
 
@@ -638,9 +640,11 @@ namespace xll
         {
             if (other.has_value()) {
                 std::construct_at(reinterpret_cast<TValue*>(this), std::move(other.value()));
+                impl::set_error_state(*this, false);
             }
             else {
                 std::construct_at(reinterpret_cast<TError*>(this), std::move(other.error()));
+                impl::set_error_state(*this, true);
             }
         }
 
@@ -976,6 +980,9 @@ namespace xll
         [[nodiscard]]
         constexpr bool has_value() const noexcept
         {
+
+            auto error_state = xll::impl::is_error_state(*this);
+
             // If metadata is present, trust it
             if (impl::has_metadata(*this)) {
                 return !impl::is_error_state(*this);
