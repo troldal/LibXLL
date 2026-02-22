@@ -7,9 +7,12 @@
 #include <Types/Number.hpp>
 #include <Types/String.hpp>
 
+#include <algorithm>
 #include <deque>
 #include <iostream>
+#include <numeric>
 #include <ranges>
+#include <span>
 #include <vector>
 
 using NumberArray = xll::Array<xll::Number>;
@@ -261,6 +264,73 @@ int main()
     std::vector<std::string> std_str_vec { "alpha", "beta", "gamma" };
     StringArray from_std_str(std_str_vec, StringArray::TwoDimensional(2, 2), xll::String("-"));
     print_string_array("8i. std::vector<std::string>, TwoDimensional(2,2), fill = \"-\":", from_std_str);
+
+    // -----------------------------------------------------------------------
+    // 9. std::ranges compatibility
+    // -----------------------------------------------------------------------
+
+    NumberArray rng({ 3.0, 1.0, 4.0, 1.0, 5.0, 9.0, 2.0, 6.0 }, NumberArray::Horizontal{});
+
+    // 9a. std::ranges concepts satisfied
+    static_assert(std::ranges::contiguous_range<NumberArray>);
+    static_assert(std::ranges::random_access_range<NumberArray>);
+    static_assert(std::ranges::sized_range<NumberArray>);
+    static_assert(std::ranges::common_range<NumberArray>);
+    std::cout << "9a. std::ranges concepts: contiguous_range, random_access_range,\n"
+                 "    sized_range, and common_range — all satisfied.\n\n";
+
+    // 9b. data() pointer
+    std::cout << "9b. data() == &arr[0]: "
+              << (rng.data() == &rng[0] ? "true" : "false") << "\n\n";
+
+    // 9c. std::span over the array (requires contiguous_range + sized_range)
+    std::span<xll::Number> sp(rng);
+    std::cout << "9c. std::span over Array, size = " << sp.size() << "\n";
+    std::cout << "    values: ";
+    for (const auto& v : sp) std::cout << static_cast<double>(v) << " ";
+    std::cout << "\n\n";
+
+    // 9d. std::ranges::sort
+    NumberArray sorted(rng);   // copy
+    std::ranges::sort(sorted, [](const xll::Number& a, const xll::Number& b) {
+        return static_cast<double>(a) < static_cast<double>(b);
+    });
+    print_array("9d. std::ranges::sort (ascending copy):", sorted);
+
+    // 9e. std::ranges::min_element / max_element
+    auto min_it = std::ranges::min_element(rng, [](const xll::Number& a, const xll::Number& b) {
+        return static_cast<double>(a) < static_cast<double>(b);
+    });
+    auto max_it = std::ranges::max_element(rng, [](const xll::Number& a, const xll::Number& b) {
+        return static_cast<double>(a) < static_cast<double>(b);
+    });
+    std::cout << "9e. min = " << static_cast<double>(*min_it)
+              << ", max = " << static_cast<double>(*max_it) << "\n\n";
+
+    // 9f. std::accumulate via iterators (uses begin()/end())
+    double sum = std::accumulate(rng.begin(), rng.end(), 0.0,
+        [](double acc, const xll::Number& v) { return acc + static_cast<double>(v); });
+    std::cout << "9f. std::accumulate sum = " << sum << "\n\n";
+
+    // 9g. Range adaptor pipeline: filter even-indexed elements via views::stride (C++23),
+    //     or views::filter on value as a fallback
+    auto above_three = rng | std::views::filter([](const xll::Number& v) {
+        return static_cast<double>(v) > 3.0;
+    });
+    std::cout << "9g. views::filter (values > 3.0): ";
+    for (const auto& v : above_three) std::cout << static_cast<double>(v) << " ";
+    std::cout << "\n\n";
+
+    // 9h. Construct a new Array from a range adaptor pipeline applied to an Array
+    auto transformed = rng | std::views::transform([](const xll::Number& v) {
+        return xll::Number(static_cast<double>(v) * 2.0);
+    });
+    NumberArray doubled(transformed, NumberArray::Horizontal{});
+    print_array("9h. Construct Array from transform_view of Array (×2):", doubled);
+
+    // 9i. cbegin() / cend()
+    std::cout << "9i. cbegin() / cend() distance = "
+              << std::distance(rng.cbegin(), rng.cend()) << "\n\n";
 
     return 0;
 }

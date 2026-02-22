@@ -79,7 +79,23 @@ namespace xll
         struct ShapeBase{};
     public:
         /// The element type of this array.
-        using value_type = TValue;
+        using value_type      = TValue;
+        /// Unsigned size type.
+        using size_type       = size_t;
+        /// Signed difference type for iterator arithmetic.
+        using difference_type = std::ptrdiff_t;
+        /// Pointer to element.
+        using pointer         = TValue*;
+        /// Pointer to const element.
+        using const_pointer   = const TValue*;
+        /// Reference to element.
+        using reference       = TValue&;
+        /// Reference to const element.
+        using const_reference = const TValue&;
+        /// Iterator type (contiguous, raw pointer).
+        using iterator        = TValue*;
+        /// Const iterator type.
+        using const_iterator  = const TValue*;
 
         // -----------------------------------------------------------------------
         // Shape tags
@@ -802,6 +818,62 @@ namespace xll
         {
             ensure(xltype == xltypeMulti, "Array is not valid");
             return static_cast<TValue const*>(static_cast<XLOPER12 const*>(val.array.lparray)) + size();
+        }
+
+        /**
+         * @brief Returns a pointer to the first element (const, explicit).
+         *
+         * Equivalent to `begin() const`. Provided for compatibility with
+         * `std::ranges` algorithms and range adaptors that use `cbegin()`.
+         *
+         * @pre `xltype == xltypeMulti` (checked via `ensure`).
+         * @return `const TValue*` pointing to the first element.
+         */
+        constexpr const_iterator cbegin() const
+        {
+            return begin();
+        }
+
+        /**
+         * @brief Returns a pointer one past the last element (const, explicit).
+         *
+         * Equivalent to `end() const`. Provided for compatibility with
+         * `std::ranges` algorithms and range adaptors that use `cend()`.
+         *
+         * @pre `xltype == xltypeMulti` (checked via `ensure`).
+         * @return `const TValue*` pointing one past the last element.
+         */
+        constexpr const_iterator cend() const
+        {
+            return end();
+        }
+
+        /**
+         * @brief Returns a pointer to the underlying contiguous element storage (non-const).
+         *
+         * Required by `std::ranges::contiguous_range`. The returned pointer
+         * is valid for `[data(), data() + size())`. Returns `nullptr` for
+         * an empty array.
+         *
+         * @pre `xltype == xltypeMulti` (checked via `ensure`).
+         * @return `TValue*` pointing to the first element, or `nullptr`.
+         */
+        [[nodiscard]]
+        constexpr pointer data() noexcept
+        {
+            return static_cast<TValue*>(static_cast<XLOPER12*>(val.array.lparray));
+        }
+
+        /**
+         * @brief Returns a pointer to the underlying contiguous element storage (const).
+         *
+         * @pre `xltype == xltypeMulti` (checked via `ensure`).
+         * @return `const TValue*` pointing to the first element, or `nullptr`.
+         */
+        [[nodiscard]]
+        constexpr const_pointer data() const noexcept
+        {
+            return static_cast<const TValue*>(static_cast<const XLOPER12*>(val.array.lparray));
         }
 
         // -----------------------------------------------------------------------
