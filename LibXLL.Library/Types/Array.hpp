@@ -247,22 +247,13 @@ namespace xll
          */
         constexpr Array(Array&& other) noexcept : Array()
         {
-            if (other.xltype == xltypeMulti) {
-                val.array.lparray       = other.val.array.lparray;
-                other.val.array.lparray = nullptr;
-                val.array.rows          = other.rows();
-                val.array.columns       = other.cols();
-                other.val.array.rows    = 0;
-                other.val.array.columns = 0;
-                return;
-            }
-
-            // if (other.xltype == TValue::excel_type) {
-            else {
-                xltype = other.xltype;
-                reinterpret_cast<TValue*>(this)->operator=(std::move(*reinterpret_cast<TValue*>(&other)));
-                return;
-            }
+            ensure(other.xltype == xltypeMulti);
+            val.array.lparray       = other.val.array.lparray;
+            other.val.array.lparray = nullptr;
+            val.array.rows          = other.rows();
+            val.array.columns       = other.cols();
+            other.val.array.rows    = 0;
+            other.val.array.columns = 0;
         }
 
         /**
@@ -281,15 +272,12 @@ namespace xll
          */
         constexpr ~Array()
         {
-            if (xltype == xltypeMulti && val.array.lparray != nullptr) {
-                for (auto& item : *this) item.~TValue();
+            if (xltype != xltypeMulti) std::unreachable();
+            if (val.array.lparray != nullptr) {
+                std::destroy(static_cast<TValue*>(val.array.lparray),
+                             static_cast<TValue*>(val.array.lparray) + size());
                 delete[] val.array.lparray;
                 val.array.lparray = nullptr;
-            }
-            else if (xltype != xltypeMulti) {
-                // For single values, we need to call the destructor
-                // but not delete anything, as this is part of the XLOPER12 itself
-                reinterpret_cast<TValue*>(this)->~TValue();
             }
 
             xltype            = xltypeMulti;
@@ -320,30 +308,9 @@ namespace xll
          */
         constexpr Array& operator=(const Array& other)
         {
-            if (this == &other) return *this;
-
-            if (other.xltype == xltypeMulti) {
-                this->~Array();
-                xltype            = other.xltype;
-                val.array.lparray = make_array(other.size()).release();
-                val.array.rows    = other.rows();
-                val.array.columns = other.cols();
-                for (unsigned i = 0; i < size(); ++i) {
-                    static_cast<TValue&>(val.array.lparray[i]) = static_cast<TValue&>(other.val.array.lparray[i]);
-                }
-                return *this;
-            }
-
-            // if (other.xltype == TValue::excel_type) {
-            else {
-                this->~Array();
-                xltype = other.xltype;
-                reinterpret_cast<TValue*>(this)->operator=(*reinterpret_cast<TValue const*>(&other));
-                return *this;
-            }
-
-            // Should not reach this point:
-            throw std::runtime_error("Array assignment failed");
+            Array tmp(other);          // copy constructor handles allocation + element construction
+            *this = std::move(tmp);    // move assignment steals the buffer
+            return *this;
         }
 
         /**
@@ -371,29 +338,16 @@ namespace xll
         constexpr Array& operator=(Array&& other) noexcept
         {
             if (this == &other) return *this;
+            if (other.xltype != xltypeMulti) std::unreachable();
 
-            if (other.xltype == xltypeMulti) {
-                this->~Array();
-                xltype                  = other.xltype;
-                val.array.lparray       = other.val.array.lparray;
-                other.val.array.lparray = nullptr;
-                val.array.rows          = other.rows();
-                val.array.columns       = other.cols();
-                other.val.array.rows    = 0;
-                other.val.array.columns = 0;
-                return *this;
-            }
-
-            // if (other.xltype == TValue::excel_type) {
-            else {
-                this->~Array();
-                xltype = other.xltype;
-                reinterpret_cast<TValue*>(this)->operator=(*reinterpret_cast<TValue const*>(&other));
-                return *this;
-            }
-
-            // Should not reach this point:
-            throw std::runtime_error("Array assignment failed");
+            std::destroy_at(this);
+            val.array.lparray       = other.val.array.lparray;
+            val.array.rows          = other.rows();
+            val.array.columns       = other.cols();
+            other.val.array.lparray = nullptr;
+            other.val.array.rows    = 0;
+            other.val.array.columns = 0;
+            return *this;
         }
 
         /**
@@ -411,15 +365,13 @@ namespace xll
          * @note This operator allows Arrays to be reset to empty state when
          *       assigned Missing values, which is useful in Excel contexts.
          */
-        constexpr Array& operator=(const Missing& _)
+        constexpr Array& operator=(const Missing&) noexcept
         {
-            this->~Array();
-            xltype            = xltypeMulti;
-            val.array.lparray = nullptr;
-            val.array.rows    = 0;
-            val.array.columns = 0;
+            std::destroy_at(this);
+            // destructor already resets xltype and array fields; nothing more to do
             return *this;
         }
+
         /**
          * @brief Determines the shape of the array.
          *
@@ -436,46 +388,38 @@ namespace xll
         [[nodiscard]]
         constexpr Shape shape() const
         {
-            if (rows() * cols() == 0) return Empty{};
-            if (rows() * cols() == 1) return Singular{};
-            if (rows() > 1 && cols() == 1) return Vertical{};
-            if (rows() == 1 && cols() > 1) return Horizontal{};
-            return TwoDimensional{0,0};
+            const size_t r = rows();
+            const size_t c = cols();
+            const size_t n = size();    // avoids repeated multiply and potential overflow
+            if (n == 0) return Empty{};
+            if (n == 1) return Singular{};
+            if (r > 1 && c == 1) return Vertical{r};
+            if (r == 1 && c > 1) return Horizontal{c};
+            return TwoDimensional{r, c};
         }
 
         [[nodiscard]]
         constexpr size_t rows() const
         {
-            if (xltype == xltypeMulti) return val.array.rows;
-            if (xltype == xltypeNil || xltype == xltypeMissing || xltype == 0) return 0;
-            // if (xltype == TValue::excel_type) return 1;
-            //
-            // throw std::runtime_error("Array is not a multi-cell array");
-
-            return 1;
+            ensure(xltype == xltypeMulti, "Array is not valid");
+            return static_cast<size_t>(val.array.rows);
         }
 
         [[nodiscard]]
         constexpr size_t cols() const
         {
-            if (xltype == xltypeMulti) return val.array.columns;
-            if (xltype == xltypeNil || xltype == xltypeMissing || xltype == 0) return 0;
-            // if (xltype == TValue::excel_type) return 1;
-            //
-            // throw std::runtime_error("Array is not a multi-cell array");
-            return 1;
+            ensure(xltype == xltypeMulti, "Array is not valid");
+            return static_cast<size_t>(val.array.columns);
         }
 
         [[nodiscard]]
         constexpr size_t size() const
         {
-            if (xltype == xltypeMulti) return val.array.rows * val.array.columns;
-            if (xltype == xltypeNil || xltype == xltypeMissing || xltype == 0) return 0;
-
-            return 1;
-
+            if (xltype != xltypeMulti) std::unreachable();
+            return static_cast<size_t>(val.array.rows) * static_cast<size_t>(val.array.columns);
         }
 
+        [[nodiscard]]
         constexpr bool empty() const
         {
             return size() == 0;
@@ -483,137 +427,108 @@ namespace xll
 
         constexpr void reshape(size_t rows, size_t cols)
         {
-            if (rows * cols != size()) throw std::runtime_error("Array reshape failed");
+            if (rows > static_cast<size_t>(std::numeric_limits<RW>::max()))
+                throw std::out_of_range("Row count exceeds Excel limit");
+            if (cols > static_cast<size_t>(std::numeric_limits<COL>::max()))
+                throw std::out_of_range("Column count exceeds Excel limit");
+            if (rows != 0 && cols > std::numeric_limits<size_t>::max() / rows)
+                throw std::overflow_error("Array dimensions overflow");
+            if (rows * cols != size())
+                throw std::invalid_argument("reshape: new dimensions must preserve element count");
             val.array.rows    = static_cast<RW>(rows);
             val.array.columns = static_cast<COL>(cols);
         }
 
         constexpr TValue* begin()
         {
-            if (xltype == xltypeMulti) {
-                return static_cast<TValue*>(val.array.lparray);
-            }
-            else {
-                return reinterpret_cast<TValue*>(this);
-            }
+            ensure(xltype == xltypeMulti, "Array is not valid");
+            return static_cast<TValue*>(static_cast<XLOPER12*>(val.array.lparray));
         }
 
         constexpr TValue const* begin() const
         {
-            if (xltype == xltypeMulti) {
-                return static_cast<TValue const*>(val.array.lparray);
-            }
-            else {
-                return reinterpret_cast<TValue const*>(this);
-            }
+            ensure(xltype == xltypeMulti, "Array is not valid");
+            return static_cast<TValue const*>(static_cast<XLOPER12 const*>(val.array.lparray));
         }
 
         constexpr TValue* end()
         {
-            if (xltype == xltypeMulti) {
-                return static_cast<TValue*>(val.array.lparray + size());
-            }
-            else {
-                return reinterpret_cast<TValue*>(this) + 1;
-            }
+            ensure(xltype == xltypeMulti, "Array is not valid");
+            return static_cast<TValue*>(static_cast<XLOPER12*>(val.array.lparray)) + size();
         }
 
         constexpr TValue const* end() const
         {
-            if (xltype == xltypeMulti) {
-                return static_cast<TValue const*>(val.array.lparray + size());
-            }
-            else {
-                return reinterpret_cast<TValue const*>(this) + 1;
-            }
+            ensure(xltype == xltypeMulti, "Array is not valid");
+            return static_cast<TValue const*>(static_cast<XLOPER12 const*>(val.array.lparray)) + size();
         }
 
-        constexpr TValue& operator[](size_t index)
+        template<typename Self>
+        constexpr auto& operator[](this Self&& self, size_t index)
         {
-            if (xltype == xltypeMulti) {
-                if (index + 1 > val.array.rows * val.array.columns) throw std::out_of_range("Array index out of range");
-                auto s =
-                    std::span<TValue, std::dynamic_extent>(static_cast<TValue*>(val.array.lparray), val.array.rows * val.array.columns);
-                return s[index];
-            }
-            else {
-                if (index != 0) throw std::out_of_range("Array index out of range");
-                return *reinterpret_cast<TValue*>(this);
-            }
+            using QualifiedValue = std::conditional_t<
+                std::is_const_v<std::remove_reference_t<Self>>,
+                const TValue,
+                TValue
+            >;
+
+            ensure(self.xltype == xltypeMulti, "Array is not valid");
+            const size_t size = self.size();
+            if (index >= size) throw std::out_of_range("Array index out of range");
+            auto s = std::span<QualifiedValue>(static_cast<QualifiedValue*>(self.val.array.lparray), size);
+            return s[index];
         }
 
-        constexpr const TValue& operator[](size_t index) const
+        template<typename Self>
+        constexpr auto& operator[](this Self&& self, size_t row, size_t col)
         {
-            if (xltype == xltypeMulti) {
-                if (index + 1 > val.array.rows * val.array.columns) throw std::out_of_range("Array index out of range");
-                auto s =
-                    std::span<TValue, std::dynamic_extent>(static_cast<TValue*>(val.array.lparray), val.array.rows * val.array.columns);
-                return s[index];
-            }
-            else {
-                if (index != 0) throw std::out_of_range("Array index out of range");
-                return *reinterpret_cast<TValue const*>(this);
-            }
+            using QualifiedValue = std::conditional_t<
+                std::is_const_v<std::remove_reference_t<Self>>,
+                const TValue,
+                TValue
+            >;
+
+            ensure(self.xltype == xltypeMulti, "Array is not valid");
+            if (row >= static_cast<size_t>(self.val.array.rows) || col >= static_cast<size_t>(self.val.array.columns))
+                throw std::out_of_range("Array index out of range");
+            using ext_t = mds::extents<uint32_t, std::dynamic_extent, std::dynamic_extent>;
+            auto m = mds::mdspan<QualifiedValue, ext_t>(static_cast<QualifiedValue*>(self.val.array.lparray), self.val.array.rows, self.val.array.columns);
+            return m[row, col];
         }
 
-        constexpr TValue operator[](size_t row, size_t col) const
+
+        template<template<typename, typename...> class TContainer>
+            requires requires { TContainer<TValue>(std::declval<TValue*>(), std::declval<TValue*>()); }
+        constexpr operator TContainer<TValue>() const
         {
-            if (xltype == xltypeMulti) {
-                if ((row + 1) > val.array.rows || (col + 1) > val.array.columns) throw std::out_of_range("Array index out of range");
-                using ext_t = mds::extents<uint32_t, std::dynamic_extent, std::dynamic_extent>;
-                auto m      = mds::mdspan<TValue, ext_t>(static_cast<TValue*>(val.array.lparray), val.array.rows, val.array.columns);
-                return m[row, col];
-            }
-            else {
-                if (row != 0 || col != 0) throw std::out_of_range("Array index out of range");
-                return *static_cast<TValue const*>(this);
-            }
+            return TContainer<TValue>(begin(), end());
         }
 
-        constexpr operator std::vector<TValue>() const
-        {
-            std::vector<TValue> result {};
-            result.reserve(size());
-            for (auto const& v : *this) result.push_back(v);
-            return result;
-        }
+        // template<typename TElem>
+        //     requires std::same_as<TElem, typename TValue::value_type>
+        // constexpr operator std::vector<fxt::expected<TElem, xll::String>>() const
+        // {
+        //     std::vector<fxt::expected<TElem, xll::String>> result {};
+        //     result.reserve(size());
+        //     for (auto const& v : *this) result.push_back(v);
+        //     return result;
+        // }
 
-        template<typename TElem>
-            requires std::same_as<TElem, typename TValue::value_type>
-        constexpr operator std::vector<fxt::expected<TElem, xll::String>>() const
-        {
-            std::vector<fxt::expected<TElem, xll::String>> result {};
-            result.reserve(size());
-            for (auto const& v : *this) result.push_back(v);
-            return result;
-        }
-
-        template<template<typename> class TContainer, typename TElem>
+        template<template<typename, typename...> class TContainer, typename TElem>
             requires std::convertible_to<TValue, TElem>
         constexpr auto to() const
         {
             TContainer<TElem> result {};
-            result.reserve(size());
-            for (auto const& v : *this) result.push_back(v);
+            if constexpr (requires { result.reserve(size_t{}); })
+                result.reserve(size());
+            for (auto const& v : *this) result.push_back(static_cast<TElem>(v));
             return result;
         }
 
-        template<typename TElem>
-            requires std::convertible_to<TValue, TElem>
+        template<template<typename, typename...> class TContainer>
         constexpr auto to() const
         {
-            std::vector<TElem> result {};
-            result.reserve(size());
-            for (auto const& v : *this) result.push_back(v);
-            return result;
-        }
-
-        constexpr auto to() const
-        {
-            std::vector<TValue> result {};
-            result.reserve(size());
-            for (auto const& v : *this) result.push_back(v);
-            return result;
+            return to<TContainer, TValue>();
         }
 
     private:
@@ -630,24 +545,24 @@ namespace xll
     };
 
     // template<template<typename> class TContainer, typename T, typename E>
-    constexpr auto make_array(const auto& input)    //-> Array<Expected<Number>>
-    {
-        using T = typename std::remove_cvref_t<decltype(input)>::value_type::value_type;
-        using E = typename std::remove_cvref_t<decltype(input)>::value_type::error_type;
-
-        using value_t = std::conditional_t<
-            std::floating_point<T>,
-            xll::Number,
-            std::conditional_t<std::integral<T>, xll::Int, std::conditional_t<std::convertible_to<T, std::string>, xll::String, void>>>;
-
-        Array<Expected<value_t, xll::Error>> result(input.size(), 1);
-        for (unsigned i = 0; i < input.size(); ++i) {
-            if (input[i].has_value())
-                result[i].value() = *input[i];
-            else
-                result[i] = xll::ErrNull;
-        }
-        return result;
-    }
+    // constexpr auto make_array(const auto& input)    //-> Array<Expected<Number>>
+    // {
+    //     using T = typename std::remove_cvref_t<decltype(input)>::value_type::value_type;
+    //     using E = typename std::remove_cvref_t<decltype(input)>::value_type::error_type;
+    //
+    //     using value_t = std::conditional_t<
+    //         std::floating_point<T>,
+    //         xll::Number,
+    //         std::conditional_t<std::integral<T>, xll::Int, std::conditional_t<std::convertible_to<T, std::string>, xll::String, void>>>;
+    //
+    //     Array<Expected<value_t, xll::Error>> result(input.size(), 1);
+    //     for (unsigned i = 0; i < input.size(); ++i) {
+    //         if (input[i].has_value())
+    //             result[i].value() = *input[i];
+    //         else
+    //             result[i] = xll::ErrNull;
+    //     }
+    //     return result;
+    // }
 
 }    // namespace xll
