@@ -17,7 +17,6 @@
 // extern "C" xll::Number* XLLAPI MakeNum(xll::Number const* d, xll::Number const* arr);
 // extern "C" void XLLAPI xlAutoFree12(LPXLOPER12 px);
 
-#define NOMINMAX
 
 int main() {
 

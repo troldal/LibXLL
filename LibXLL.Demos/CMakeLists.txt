@@ -16,6 +16,7 @@ endif ()
 
 add_executable(exeDemo exeDemo.cpp)
 target_link_libraries(exeDemo PUBLIC LibXLL)
+target_compile_definitions(exeDemo PRIVATE NOMINMAX)
 
 add_executable(DemoUtilsEnsure Utils/DemoUtilsEnsure.cpp)
 target_link_libraries(DemoUtilsEnsure PUBLIC LibXLL)
@@ -28,6 +29,10 @@ target_compile_definitions(DemoTypesExpected PRIVATE NOMINMAX)
 add_executable(DemoExpectedSameType Types/DemoExpectedSameType.cpp)
 target_link_libraries(DemoExpectedSameType PUBLIC LibXLL)
 target_compile_definitions(DemoExpectedSameType PRIVATE NOMINMAX)
+
+add_executable(DemoArrayShape Types/DemoArrayShape.cpp)
+target_link_libraries(DemoArrayShape PUBLIC LibXLL)
+target_compile_definitions(DemoArrayShape PRIVATE NOMINMAX)
 
 add_library(xllDemoTypesExpected SHARED Types/xllDemoTypesExpected.cpp)
 target_link_libraries(xllDemoTypesExpected PUBLIC LibXLL)
