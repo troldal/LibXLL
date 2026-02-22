@@ -706,7 +706,7 @@ TEST_CASE("Array - container conversion operator", "[xll::Array][conversion]")
 {
     SECTION("Implicit conversion to std::vector<xll::Number>") {
         NumArr arr({ xll::Number(1.0), xll::Number(2.0), xll::Number(3.0) });
-        std::vector<xll::Number> v = arr;
+        std::vector<xll::Number> v = static_cast<std::vector<xll::Number>>(arr);
         REQUIRE(v.size() == 3);
         REQUIRE(static_cast<double>(v[0]) == 1.0);
         REQUIRE(static_cast<double>(v[2]) == 3.0);
@@ -714,7 +714,7 @@ TEST_CASE("Array - container conversion operator", "[xll::Array][conversion]")
 
     SECTION("Implicit conversion to std::deque<xll::Number>") {
         NumArr arr({ xll::Number(4.0), xll::Number(5.0) });
-        std::deque<xll::Number> d = arr;
+        std::deque<xll::Number> d = static_cast<std::deque<xll::Number>>(arr);
         REQUIRE(d.size() == 2);
         REQUIRE(static_cast<double>(d[1]) == 5.0);
     }
@@ -788,4 +788,384 @@ TEST_CASE("Array - String element type", "[xll::Array][String]")
         REQUIRE(std::string(arr[3]) == "?");
     }
 }
+
+// =============================================================================
+// Free reshape()
+// =============================================================================
+
+TEST_CASE("Free reshape()", "[xll::Array][reshape]")
+{
+    SECTION("Returns a copy with new dimensions") {
+        NumArr flat { 1.0, 2.0, 3.0, 4.0, 5.0, 6.0 };   // 1×6
+        auto matrix = xll::reshape(flat, 2, 3);
+
+        // Source is unchanged
+        REQUIRE(flat.rows() == 1);
+        REQUIRE(flat.cols() == 6);
+
+        // Result has new dimensions
+        REQUIRE(matrix.rows() == 2);
+        REQUIRE(matrix.cols() == 3);
+
+        // Elements are preserved in row-major order
+        for (size_t i = 0; i < 6; ++i)
+            REQUIRE(static_cast<double>(matrix[i]) == static_cast<double>(i + 1));
+    }
+
+    SECTION("Result buffer is independent of source") {
+        NumArr src { 1.0, 2.0, 3.0, 4.0 };   // 1×4
+        auto result = xll::reshape(src, 2, 2);
+        result[0] = xll::Number(99.0);
+        REQUIRE(static_cast<double>(src[0]) == 1.0);
+    }
+
+    SECTION("1×N to N×1") {
+        NumArr row { 1.0, 2.0, 3.0 };
+        auto col = xll::reshape(row, 3, 1);
+        REQUIRE(col.rows() == 3);
+        REQUIRE(col.cols() == 1);
+        REQUIRE(col.shape().template is<NumArr::Vertical>());
+    }
+
+    SECTION("N×1 to 1×N") {
+        NumArr col({ 1.0, 2.0, 3.0 }, NumArr::Vertical{});
+        auto row = xll::reshape(col, 1, 3);
+        REQUIRE(row.rows() == 1);
+        REQUIRE(row.cols() == 3);
+        REQUIRE(row.shape().template is<NumArr::Horizontal>());
+    }
+
+    SECTION("Same dimensions is a no-op copy") {
+        NumArr arr(2, 3, xll::Number(7.0));
+        auto copy = xll::reshape(arr, 2, 3);
+        REQUIRE(copy.rows() == 2);
+        REQUIRE(copy.cols() == 3);
+        REQUIRE(copy.val.array.lparray != arr.val.array.lparray);
+        for (size_t i = 0; i < 6; ++i)
+            REQUIRE(static_cast<double>(copy[i]) == 7.0);
+    }
+
+    SECTION("Exception: element count mismatch") {
+        NumArr arr(2, 3);
+        REQUIRE_THROWS_AS(xll::reshape(arr, 2, 4), std::invalid_argument);
+    }
+
+    SECTION("Works with String arrays") {
+        StrArr flat({ xll::String("A"), xll::String("B"),
+                      xll::String("C"), xll::String("D") });   // 1×4
+        auto matrix = xll::reshape(flat, 2, 2);
+        REQUIRE(matrix.rows() == 2);
+        REQUIRE(matrix.cols() == 2);
+        REQUIRE(std::string(matrix[0, 0]) == "A");
+        REQUIRE(std::string(matrix[0, 1]) == "B");
+        REQUIRE(std::string(matrix[1, 0]) == "C");
+        REQUIRE(std::string(matrix[1, 1]) == "D");
+    }
+}
+
+// =============================================================================
+// Free transpose()
+// =============================================================================
+
+TEST_CASE("Free transpose()", "[xll::Array][transpose]")
+{
+    SECTION("1×N becomes N×1") {
+        NumArr row { 1.0, 2.0, 3.0 };   // 1×3
+        auto col = xll::transpose(row);
+        REQUIRE(col.rows() == 3);
+        REQUIRE(col.cols() == 1);
+        REQUIRE(col.shape().template is<NumArr::Vertical>());
+        for (size_t i = 0; i < 3; ++i)
+            REQUIRE(static_cast<double>(col[i]) == static_cast<double>(i + 1));
+    }
+
+    SECTION("N×1 becomes 1×N") {
+        NumArr col({ 1.0, 2.0, 3.0 }, NumArr::Vertical{});
+        auto row = xll::transpose(col);
+        REQUIRE(row.rows() == 1);
+        REQUIRE(row.cols() == 3);
+        REQUIRE(row.shape().template is<NumArr::Horizontal>());
+        for (size_t i = 0; i < 3; ++i)
+            REQUIRE(static_cast<double>(row[i]) == static_cast<double>(i + 1));
+    }
+
+    SECTION("2×3 matrix transposed to 3×2") {
+        NumArr m({ 1.0, 2.0, 3.0,
+                   4.0, 5.0, 6.0 },
+                 NumArr::TwoDimensional(2, 3));
+        auto t = xll::transpose(m);
+
+        REQUIRE(t.rows() == 3);
+        REQUIRE(t.cols() == 2);
+
+        // Row 0 of t == col 0 of m
+        REQUIRE(static_cast<double>(t[0, 0]) == 1.0);
+        REQUIRE(static_cast<double>(t[0, 1]) == 4.0);
+        // Row 1 of t == col 1 of m
+        REQUIRE(static_cast<double>(t[1, 0]) == 2.0);
+        REQUIRE(static_cast<double>(t[1, 1]) == 5.0);
+        // Row 2 of t == col 2 of m
+        REQUIRE(static_cast<double>(t[2, 0]) == 3.0);
+        REQUIRE(static_cast<double>(t[2, 1]) == 6.0);
+    }
+
+    SECTION("Transpose is its own inverse") {
+        NumArr m({ 1.0, 2.0, 3.0,
+                   4.0, 5.0, 6.0 },
+                 NumArr::TwoDimensional(2, 3));
+        auto tt = xll::transpose(xll::transpose(m));
+
+        REQUIRE(tt.rows() == m.rows());
+        REQUIRE(tt.cols() == m.cols());
+        for (size_t i = 0; i < m.size(); ++i)
+            REQUIRE(static_cast<double>(tt[i]) == static_cast<double>(m[i]));
+    }
+
+    SECTION("Square matrix transpose") {
+        NumArr m({ 1.0, 2.0,
+                   3.0, 4.0 },
+                 NumArr::TwoDimensional(2, 2));
+        auto t = xll::transpose(m);
+
+        REQUIRE(t.rows() == 2);
+        REQUIRE(t.cols() == 2);
+        REQUIRE(static_cast<double>(t[0, 0]) == 1.0);
+        REQUIRE(static_cast<double>(t[0, 1]) == 3.0);
+        REQUIRE(static_cast<double>(t[1, 0]) == 2.0);
+        REQUIRE(static_cast<double>(t[1, 1]) == 4.0);
+    }
+
+    SECTION("Source is not modified") {
+        NumArr m({ 1.0, 2.0, 3.0,
+                   4.0, 5.0, 6.0 },
+                 NumArr::TwoDimensional(2, 3));
+        auto t = xll::transpose(m);
+        REQUIRE(m.rows() == 2);
+        REQUIRE(m.cols() == 3);
+        REQUIRE(static_cast<double>(m[0, 0]) == 1.0);
+    }
+
+    SECTION("Result buffer is independent of source") {
+        NumArr row { 1.0, 2.0, 3.0 };
+        auto col = xll::transpose(row);
+        col[0] = xll::Number(99.0);
+        REQUIRE(static_cast<double>(row[0]) == 1.0);
+    }
+
+    SECTION("Empty array transposes to empty array") {
+        NumArr empty;
+        auto t = xll::transpose(empty);
+        REQUIRE(t.empty());
+        REQUIRE(t.val.array.lparray == nullptr);
+    }
+
+    SECTION("Singular array transposes to singular array") {
+        NumArr s(1, 1, xll::Number(42.0));
+        auto t = xll::transpose(s);
+        REQUIRE(t.rows() == 1);
+        REQUIRE(t.cols() == 1);
+        REQUIRE(static_cast<double>(t[0]) == 42.0);
+    }
+
+    SECTION("Works with String arrays") {
+        StrArr m({ xll::String("A"), xll::String("B"),
+                   xll::String("C"), xll::String("D") },
+                 StrArr::TwoDimensional(2, 2));
+        auto t = xll::transpose(m);
+
+        REQUIRE(t.rows() == 2);
+        REQUIRE(t.cols() == 2);
+        REQUIRE(std::string(t[0, 0]) == "A");
+        REQUIRE(std::string(t[0, 1]) == "C");
+        REQUIRE(std::string(t[1, 0]) == "B");
+        REQUIRE(std::string(t[1, 1]) == "D");
+    }
+}
+
+// =============================================================================
+// Free get_rows()
+// =============================================================================
+
+TEST_CASE("Free get_rows()", "[xll::Array][get_rows]")
+{
+    // 3×3 source:  1 2 3
+    //              4 5 6
+    //              7 8 9
+    NumArr m({ 1.0, 2.0, 3.0,
+               4.0, 5.0, 6.0,
+               7.0, 8.0, 9.0 },
+             NumArr::TwoDimensional(3, 3));
+
+    SECTION("Single row selection") {
+        auto r = xll::get_rows(m, {1});
+        REQUIRE(r.rows() == 1);
+        REQUIRE(r.cols() == 3);
+        REQUIRE(static_cast<double>(r[0, 0]) == 4.0);
+        REQUIRE(static_cast<double>(r[0, 1]) == 5.0);
+        REQUIRE(static_cast<double>(r[0, 2]) == 6.0);
+    }
+
+    SECTION("Multiple rows in order") {
+        auto r = xll::get_rows(m, {0, 2});
+        REQUIRE(r.rows() == 2);
+        REQUIRE(r.cols() == 3);
+        REQUIRE(static_cast<double>(r[0, 0]) == 1.0);
+        REQUIRE(static_cast<double>(r[0, 2]) == 3.0);
+        REQUIRE(static_cast<double>(r[1, 0]) == 7.0);
+        REQUIRE(static_cast<double>(r[1, 2]) == 9.0);
+    }
+
+    SECTION("Rows in reverse order") {
+        auto r = xll::get_rows(m, {2, 1, 0});
+        REQUIRE(r.rows() == 3);
+        REQUIRE(static_cast<double>(r[0, 0]) == 7.0);
+        REQUIRE(static_cast<double>(r[1, 0]) == 4.0);
+        REQUIRE(static_cast<double>(r[2, 0]) == 1.0);
+    }
+
+    SECTION("Duplicate row indices produce duplicate rows") {
+        auto r = xll::get_rows(m, {0, 0});
+        REQUIRE(r.rows() == 2);
+        REQUIRE(static_cast<double>(r[0, 0]) == 1.0);
+        REQUIRE(static_cast<double>(r[1, 0]) == 1.0);
+    }
+
+    SECTION("All rows selected preserves the array") {
+        auto r = xll::get_rows(m, {0, 1, 2});
+        REQUIRE(r.rows() == 3);
+        REQUIRE(r.cols() == 3);
+        for (size_t i = 0; i < 9; ++i)
+            REQUIRE(static_cast<double>(r[i]) == static_cast<double>(m[i]));
+    }
+
+    SECTION("Source is not modified") {
+        auto r = xll::get_rows(m, {0});
+        r[0, 0] = xll::Number(99.0);
+        REQUIRE(static_cast<double>(m[0, 0]) == 1.0);
+    }
+
+    SECTION("Empty indices returns empty array") {
+        auto r = xll::get_rows(m, {});
+        REQUIRE(r.empty());
+    }
+
+    SECTION("Exception: row index out of range") {
+        REQUIRE_THROWS_AS(xll::get_rows(m, {3}), std::out_of_range);
+    }
+
+    SECTION("Works on a 1-row (Horizontal) array") {
+        NumArr row { 10.0, 20.0, 30.0 };
+        auto r = xll::get_rows(row, {0});
+        REQUIRE(r.rows() == 1);
+        REQUIRE(r.cols() == 3);
+        REQUIRE(static_cast<double>(r[0, 0]) == 10.0);
+    }
+
+    SECTION("Works with String arrays") {
+        StrArr sm({ xll::String("A"), xll::String("B"),
+                    xll::String("C"), xll::String("D") },
+                  StrArr::TwoDimensional(2, 2));
+        auto r = xll::get_rows(sm, {1});
+        REQUIRE(r.rows() == 1);
+        REQUIRE(r.cols() == 2);
+        REQUIRE(std::string(r[0, 0]) == "C");
+        REQUIRE(std::string(r[0, 1]) == "D");
+    }
+}
+
+// =============================================================================
+// Free get_cols()
+// =============================================================================
+
+TEST_CASE("Free get_cols()", "[xll::Array][get_cols]")
+{
+    // 3×3 source:  1 2 3
+    //              4 5 6
+    //              7 8 9
+    NumArr m({ 1.0, 2.0, 3.0,
+               4.0, 5.0, 6.0,
+               7.0, 8.0, 9.0 },
+             NumArr::TwoDimensional(3, 3));
+
+    SECTION("Single column selection") {
+        auto r = xll::get_cols(m, {1});
+        REQUIRE(r.rows() == 3);
+        REQUIRE(r.cols() == 1);
+        REQUIRE(static_cast<double>(r[0, 0]) == 2.0);
+        REQUIRE(static_cast<double>(r[1, 0]) == 5.0);
+        REQUIRE(static_cast<double>(r[2, 0]) == 8.0);
+    }
+
+    SECTION("Multiple columns in order") {
+        auto r = xll::get_cols(m, {0, 2});
+        REQUIRE(r.rows() == 3);
+        REQUIRE(r.cols() == 2);
+        REQUIRE(static_cast<double>(r[0, 0]) == 1.0);
+        REQUIRE(static_cast<double>(r[0, 1]) == 3.0);
+        REQUIRE(static_cast<double>(r[1, 0]) == 4.0);
+        REQUIRE(static_cast<double>(r[1, 1]) == 6.0);
+        REQUIRE(static_cast<double>(r[2, 0]) == 7.0);
+        REQUIRE(static_cast<double>(r[2, 1]) == 9.0);
+    }
+
+    SECTION("Columns in reverse order") {
+        auto r = xll::get_cols(m, {2, 1, 0});
+        REQUIRE(r.cols() == 3);
+        REQUIRE(static_cast<double>(r[0, 0]) == 3.0);
+        REQUIRE(static_cast<double>(r[0, 1]) == 2.0);
+        REQUIRE(static_cast<double>(r[0, 2]) == 1.0);
+    }
+
+    SECTION("Duplicate column indices produce duplicate columns") {
+        auto r = xll::get_cols(m, {0, 0});
+        REQUIRE(r.cols() == 2);
+        REQUIRE(static_cast<double>(r[0, 0]) == 1.0);
+        REQUIRE(static_cast<double>(r[0, 1]) == 1.0);
+    }
+
+    SECTION("All columns selected preserves the array") {
+        auto r = xll::get_cols(m, {0, 1, 2});
+        REQUIRE(r.rows() == 3);
+        REQUIRE(r.cols() == 3);
+        for (size_t i = 0; i < 9; ++i)
+            REQUIRE(static_cast<double>(r[i]) == static_cast<double>(m[i]));
+    }
+
+    SECTION("Source is not modified") {
+        auto r = xll::get_cols(m, {0});
+        r[0, 0] = xll::Number(99.0);
+        REQUIRE(static_cast<double>(m[0, 0]) == 1.0);
+    }
+
+    SECTION("Empty indices returns empty array") {
+        auto r = xll::get_cols(m, {});
+        REQUIRE(r.empty());
+    }
+
+    SECTION("Exception: column index out of range") {
+        REQUIRE_THROWS_AS(xll::get_cols(m, {3}), std::out_of_range);
+    }
+
+    SECTION("Works on a 1-column (Vertical) array") {
+        NumArr col({ 10.0, 20.0, 30.0 }, NumArr::Vertical{});
+        auto r = xll::get_cols(col, {0});
+        REQUIRE(r.rows() == 3);
+        REQUIRE(r.cols() == 1);
+        REQUIRE(static_cast<double>(r[0, 0]) == 10.0);
+        REQUIRE(static_cast<double>(r[2, 0]) == 30.0);
+    }
+
+    SECTION("Works with String arrays") {
+        StrArr sm({ xll::String("A"), xll::String("B"),
+                    xll::String("C"), xll::String("D") },
+                  StrArr::TwoDimensional(2, 2));
+        auto r = xll::get_cols(sm, {1});
+        REQUIRE(r.rows() == 2);
+        REQUIRE(r.cols() == 1);
+        REQUIRE(std::string(r[0, 0]) == "B");
+        REQUIRE(std::string(r[1, 0]) == "D");
+    }
+}
+
+
 

@@ -9,56 +9,203 @@
 #include "Variant.hpp"
 #include <expected>
 #include <span>
-#ifdef _MSC_VER
-#    include <mdspan>
-namespace mds = std;
-#else
-#    include <experimental/mdspan>
-namespace mds = std::experimental;
-#endif
 
 namespace xll
 {
 
-    // enum class ArrayShape { Empty, Singular, Horizontal, Vertical, TwoDimensional };
-
-
-
+/**
+ * @brief A type-safe, Excel-compatible two-dimensional array.
+ *
+ * `xll::Array<TValue>` represents the `xltypeMulti` variant of `XLOPER12` —
+ * Excel's native two-dimensional array type. It inherits directly from
+ * `XLOPER12` so that its address can be passed to and from the Excel C API
+ * without conversion or copying.
+ *
+ * **Memory layout**
+ *
+ * The class adds no data members beyond `XLOPER12`. Element storage is a
+ * heap-allocated array of `XLOPER12` objects, each of which is constructed
+ * in-place as a `TValue` via `std::construct_at`. The invariant
+ * `sizeof(TValue) == sizeof(XLOPER12)` is enforced by `TValue`'s own
+ * static assertions.
+ *
+ * **Invariants**
+ *
+ * - `xltype` is *always* `xltypeMulti` for the lifetime of the object.
+ * - `val.array.lparray` is `nullptr` if and only if `rows * cols == 0`.
+ * - All elements in `[lparray, lparray + rows * cols)` are live `TValue`
+ *   objects whose lifetime is managed by this class.
+ *
+ * **Shape**
+ *
+ * The logical shape of the array is described by the nested `Shape`
+ * type-enum (`fxt::type_enum<Empty, Singular, Horizontal, Vertical,
+ * TwoDimensional>`). Shape tags are also used as constructor arguments to
+ * select the desired layout when constructing from a range or initializer
+ * list:
+ *
+ * @code
+ * // 1-row array sized to fit the initializer list
+ * Array<Number> h { {1.0, 2.0, 3.0}, Array<Number>::Horizontal{} };
+ *
+ * // 1-column array with explicit size and fill padding
+ * Array<Number> v { {1.0, 2.0}, Array<Number>::Vertical(5), Number{-1.0} };
+ *
+ * // 2×3 matrix from a std::vector<double>
+ * std::vector<double> src { 1, 2, 3, 4, 5, 6 };
+ * Array<Number> m { src, Array<Number>::TwoDimensional{2, 3} };
+ * @endcode
+ *
+ * **Element type requirements**
+ *
+ * `TValue` must:
+ * - Inherit from `XLOPER12` without adding data members
+ *   (`sizeof(TValue) == sizeof(XLOPER12)`).
+ * - Be default-constructible, copy-constructible, and destructible.
+ *
+ * `xll::Number`, `xll::String`, `xll::Bool`, `xll::Int`, and
+ * `xll::Error` all satisfy these requirements.
+ *
+ * @tparam TValue The element type stored in the array. Must be an
+ *                `xll::impl::Base`-derived type with the same size and
+ *                alignment as `XLOPER12`.
+ *
+ * @see xll::Number
+ * @see xll::String
+ */
     template<typename TValue>
     class Array : public XLOPER12
     {
         struct ShapeBase{};
     public:
+        /// The element type of this array.
         using value_type = TValue;
-        struct Horizontal : ShapeBase {
-            std::optional<size_t> size;
-            constexpr Horizontal() = default;
-            constexpr explicit Horizontal(size_t n) : size(n) {}
-        };
-        struct Vertical : ShapeBase {
-            std::optional<size_t> size;
-            constexpr Vertical() = default;
-            constexpr explicit Vertical(size_t n) : size(n) {}
-        };
-        struct TwoDimensional : ShapeBase {
-            size_t rows;
-            size_t cols;
-            constexpr TwoDimensional(size_t rows, size_t cols) : rows(rows), cols(cols) {}
-        };
-        struct Empty : ShapeBase {};
-        struct Singular : ShapeBase {};
 
-        using Shape = fxt::type_enum<Empty, Singular, Horizontal, Vertical, TwoDimensional>;
-
-
-
+        // -----------------------------------------------------------------------
+        // Shape tags
+        // -----------------------------------------------------------------------
 
         /**
-         * @brief Default constructor for the Array class.
+         * @brief Shape tag for a single-row array.
          *
-         * This constructor initializes an Array object by setting its base class
-         * (XLOPER12) and configuring the `xltype` member to `xltypeMulti`,
-         * indicating that the Array is a multi-cell array by default.
+         * When used as a constructor argument, produces an array with `rows == 1`
+         * and `cols == N`.
+         *
+         * @code
+         * // Auto-fit: cols == values.size()
+         * Array<Number> h { {1.0, 2.0, 3.0}, Array<Number>::Horizontal{} };
+         *
+         * // Explicit size with fill padding
+         * Array<Number> h2 { {1.0}, Array<Number>::Horizontal(5), Number{0.0} };
+         * @endcode
+         */
+        struct Horizontal : ShapeBase {
+            /// Optional explicit column count. If absent, the size is inferred
+            /// from the source range.
+            std::optional<size_t> size;
+            /// Constructs a Horizontal tag with auto-fit size.
+            constexpr Horizontal() = default;
+            /// Constructs a Horizontal tag requesting exactly @p n columns.
+            constexpr explicit Horizontal(size_t n) : size(n) {}
+        };
+
+        /**
+         * @brief Shape tag for a single-column array.
+         *
+         * When used as a constructor argument, produces an array with `cols == 1`
+         * and `rows == N`.
+         *
+         * @code
+         * // Auto-fit: rows == values.size()
+         * Array<Number> v { {1.0, 2.0, 3.0}, Array<Number>::Vertical{} };
+         *
+         * // Explicit size with fill padding
+         * Array<Number> v2 { {1.0}, Array<Number>::Vertical(5), Number{-1.0} };
+         * @endcode
+         */
+        struct Vertical : ShapeBase {
+            /// Optional explicit row count. If absent, the size is inferred
+            /// from the source range.
+            std::optional<size_t> size;
+            /// Constructs a Vertical tag with auto-fit size.
+            constexpr Vertical() = default;
+            /// Constructs a Vertical tag requesting exactly @p n rows.
+            constexpr explicit Vertical(size_t n) : size(n) {}
+        };
+
+        /**
+         * @brief Shape tag for a matrix with an explicit row and column count.
+         *
+         * When used as a constructor argument, produces a `rows × cols` matrix.
+         * There is no default constructor — both dimensions must be supplied.
+         *
+         * @code
+         * // Exact fit: 2 rows × 3 cols from 6 values
+         * Array<Number> m { {1.0,2.0,3.0,4.0,5.0,6.0},
+         *                   Array<Number>::TwoDimensional{2, 3} };
+         *
+         * // Padded: 2 rows × 3 cols, 2 values supplied, rest filled with -1
+         * Array<Number> m2 { {1.0, 2.0},
+         *                    Array<Number>::TwoDimensional{2, 3},
+         *                    Number{-1.0} };
+         * @endcode
+         */
+        struct TwoDimensional : ShapeBase {
+            size_t rows; ///< Number of rows.
+            size_t cols; ///< Number of columns.
+            /// Constructs a TwoDimensional tag with the given dimensions.
+            constexpr TwoDimensional(size_t rows, size_t cols) : rows(rows), cols(cols) {}
+        };
+
+        /**
+         * @brief Shape tag returned by `shape()` when the array has no elements.
+         *
+         * An array is empty when `rows() * cols() == 0`, which is the state
+         * immediately after default construction or after assignment from
+         * `xll::Missing`.
+         */
+        struct Empty : ShapeBase {};
+
+        /**
+         * @brief Shape tag returned by `shape()` when the array has exactly one element.
+         *
+         * A 1×1 array is considered singular regardless of whether it was
+         * constructed as Horizontal, Vertical, or TwoDimensional.
+         */
+        struct Singular : ShapeBase {};
+
+        /**
+         * @brief Type-safe enumeration of all possible array shapes.
+         *
+         * `Shape` is a `fxt::type_enum` whose variants are `Empty`, `Singular`,
+         * `Horizontal`, `Vertical`, and `TwoDimensional`. It is returned by
+         * `shape()` and can be inspected with `.is<T>()` or dispatched with
+         * `.visit(visitor)`:
+         *
+         * @code
+         * arr.shape().visit(fxt::overload{
+         *     [](const Array<Number>::Horizontal& s) { ... },
+         *     [](const Array<Number>::Vertical&   s) { ... },
+         *     [](const auto&)                        { ... }  // catch-all
+         * });
+         * @endcode
+         */
+        using Shape = fxt::type_enum<Empty, Singular, Horizontal, Vertical, TwoDimensional>;
+
+        // -----------------------------------------------------------------------
+        // Constructors
+        // -----------------------------------------------------------------------
+
+        /**
+         * @brief Default constructor — constructs an empty array.
+         *
+         * Sets `xltype = xltypeMulti`, `lparray = nullptr`, `rows = 0`,
+         * `cols = 0`. This is the canonical empty state; `shape()` returns
+         * `Empty{}`.
+         *
+         * @post `xltype == xltypeMulti`
+         * @post `empty() == true`
+         * @post `val.array.lparray == nullptr`
          */
         constexpr Array() : XLOPER12()
         {
@@ -69,15 +216,21 @@ namespace xll
         }
 
         /**
-         * @brief Constructs a two-dimensional Array with the specified number of rows and columns.
+         * @brief Constructs a `rows × cols` array, each element initialised to @p v.
          *
-         * This constructor initializes the Array as a multi-cell array with the given dimensions.
-         * If the total number of elements (rows * cols) is zero, the Array is set to an empty state (`xltypeNil`).
-         * Otherwise, memory is allocated for the array elements, and the dimensions are set accordingly.
+         * @param rows Number of rows. Must not exceed the Excel row limit (`RW` max).
+         * @param cols Number of columns. Must not exceed the Excel column limit (`COL` max).
+         * @param v    Fill value used to initialise every element. Defaults to
+         *             a value-initialised `TValue`.
          *
-         * @param rows The number of rows in the array.
-         * @param cols The number of columns in the array.
-         * @throws std::bad_alloc if memory allocation fails.
+         * @post `this->rows() == rows` (if `rows * cols > 0`)
+         * @post `this->cols() == cols` (if `rows * cols > 0`)
+         * @post `empty() == (rows * cols == 0)`
+         *
+         * @throws std::overflow_error  if `rows * cols` overflows `size_t`.
+         * @throws std::out_of_range    if @p rows or @p cols exceeds the
+         *                              corresponding Excel limit.
+         * @throws std::bad_alloc       if heap allocation fails.
          */
         constexpr Array(size_t rows, size_t cols, TValue v = {}) : Array()
         {
@@ -95,6 +248,34 @@ namespace xll
             val.array.columns = static_cast<COL>(cols);
         }
 
+        /**
+         * @brief Constructs an array from a forward range of `TValue` elements
+         *        with an optional shape tag and fill value.
+         *
+         * The shape tag controls the resulting array geometry:
+         * - `Horizontal{}` — 1 row, N columns (N = range size or explicit size).
+         * - `Vertical{}`   — N rows, 1 column.
+         * - `TwoDimensional{r, c}` — r rows, c columns; total must be ≥ range size.
+         *
+         * If the explicit size (from the tag) is larger than the range, the
+         * remaining elements are filled with @p fill. If it is smaller, an
+         * exception is thrown.
+         *
+         * @tparam TRange     A `std::ranges::forward_range` whose `value_type`
+         *                    is exactly `TValue`.
+         * @tparam TShape     One of `Horizontal`, `Vertical`, or `TwoDimensional`.
+         *
+         * @param values      The source range. Must be a forward range (multi-pass).
+         * @param arrayShape  Shape tag. Defaults to `Horizontal{}`.
+         * @param fill        Value used to pad slots beyond the range size.
+         *                    Defaults to a value-initialised `TValue`.
+         *
+         * @throws std::out_of_range   if the explicit size is smaller than
+         *                             the range, or if a dimension exceeds
+         *                             the Excel limit.
+         * @throws std::overflow_error if `TwoDimensional` dimensions overflow.
+         * @throws std::bad_alloc      if heap allocation fails.
+         */
         template<std::ranges::forward_range TRange, typename TShape = Horizontal>
             requires (std::same_as<TShape, Horizontal> || std::same_as<TShape, Vertical> || std::same_as<TShape, TwoDimensional>)
                   && std::same_as<std::ranges::range_value_t<TRange>, TValue>
@@ -158,6 +339,27 @@ namespace xll
             });
         }
 
+        /**
+         * @brief Constructs an array from a `std::initializer_list<TValue>`
+         *        with an optional shape tag and fill value.
+         *
+         * Delegates to the range constructor via `std::ranges::subrange`.
+         * See the range constructor for full semantics.
+         *
+         * @tparam TShape  One of `Horizontal`, `Vertical`, or `TwoDimensional`.
+         *
+         * @param values  Brace-enclosed list of `TValue` elements.
+         * @param shape   Shape tag. Defaults to `Horizontal{}`.
+         * @param fill    Fill value for padding. Defaults to `TValue{}`.
+         *
+         * @throws std::out_of_range   if the explicit size is smaller than the list.
+         * @throws std::bad_alloc      if heap allocation fails.
+         *
+         * @code
+         * Array<Number> h { {Number(1), Number(2), Number(3)},
+         *                   Array<Number>::Horizontal{} };
+         * @endcode
+         */
         template<typename TShape = Horizontal>
             requires (std::same_as<TShape, Horizontal> || std::same_as<TShape, Vertical> || std::same_as<TShape, TwoDimensional>)
         constexpr Array(std::initializer_list<TValue> values, TShape shape = {}, TValue fill = {}) : Array()
@@ -165,6 +367,33 @@ namespace xll
             *this = Array(std::ranges::subrange(values.begin(), values.end()), shape, fill);
         }
 
+        /**
+         * @brief Constructs an array from a forward range of elements
+         *        convertible to `TValue`, with an optional shape tag and fill value.
+         *
+         * Each element `u` in the range is converted via `TValue(u)`. The
+         * resulting `TValue` range is then passed to the primary range
+         * constructor.
+         *
+         * This overload is only selected when `range_value_t<TRange>` differs
+         * from `TValue`, preventing ambiguity with the primary range constructor.
+         *
+         * @tparam TRange  A `std::ranges::forward_range` whose `value_type` is
+         *                 constructible to `TValue` but is not `TValue` itself.
+         * @tparam TShape  One of `Horizontal`, `Vertical`, or `TwoDimensional`.
+         *
+         * @param values      Source range.
+         * @param shape       Shape tag. Defaults to `Horizontal{}`.
+         * @param fill        Fill value for padding. Defaults to `TValue{}`.
+         *
+         * @throws std::out_of_range   if the explicit size is smaller than the range.
+         * @throws std::bad_alloc      if heap allocation fails.
+         *
+         * @code
+         * std::vector<double> src { 1.0, 2.0, 3.0 };
+         * Array<Number> h(src, Array<Number>::Horizontal{});
+         * @endcode
+         */
         template<std::ranges::forward_range TRange, typename TShape = Horizontal>
             requires (std::constructible_from<TValue, std::ranges::range_value_t<TRange>> || std::convertible_to<std::ranges::range_value_t<TRange>, TValue>) &&
                      (!std::same_as<TValue, std::ranges::range_value_t<TRange>>) &&
@@ -176,6 +405,35 @@ namespace xll
             *this          = Array(converted, shape, fill);
         }
 
+        /**
+         * @brief Constructs an array from a `std::initializer_list<U>` where
+         *        `U` is convertible to `TValue`, with an optional shape tag and fill value.
+         *
+         * Each `U` element is converted to `TValue` via `TValue(u)`. The
+         * converted range is then passed to the primary range constructor.
+         *
+         * This overload is only selected when `U` differs from `TValue`,
+         * preventing ambiguity with the `initializer_list<TValue>` overload.
+         *
+         * @tparam U       Element type of the initializer list. Must be
+         *                 constructible to `TValue` but not `TValue` itself.
+         * @tparam TShape  One of `Horizontal`, `Vertical`, or `TwoDimensional`.
+         *
+         * @param values  Brace-enclosed list of `U` elements.
+         * @param shape   Shape tag. Defaults to `Horizontal{}`.
+         * @param fill    Fill value for padding. Defaults to `TValue{}`.
+         *
+         * @throws std::out_of_range   if the explicit size is smaller than the list.
+         * @throws std::bad_alloc      if heap allocation fails.
+         *
+         * @code
+         * // Constructs a horizontal Array<Number> from doubles
+         * Array<Number> h { 1.0, 2.0, 3.0 };
+         *
+         * // Constructs a vertical Array<String> from string literals
+         * Array<String> v { {"foo", "bar"}, Array<String>::Vertical{} };
+         * @endcode
+         */
         template<typename U, typename TShape = Horizontal>
             requires (std::constructible_from<TValue, U> || std::convertible_to<U, TValue>)
                   && (!std::same_as<TValue, std::remove_cvref_t<U>>)
@@ -372,18 +630,26 @@ namespace xll
             return *this;
         }
 
+        // -----------------------------------------------------------------------
+        // Shape and dimension queries
+        // -----------------------------------------------------------------------
+
         /**
-         * @brief Determines the shape of the array.
+         * @brief Returns the geometric shape of the array.
          *
-         * This method analyzes the dimensions of the array and returns an ArrayShape enum value
-         * that indicates its geometrical configuration:
-         * - Empty: An array with no elements (rows * cols = 0)
-         * - Singular: A single-element array (rows * cols = 1)
-         * - Vertical: A column vector (rows > 1, cols = 1)
-         * - Horizontal: A row vector (rows = 1, cols > 1)
-         * - TwoDimensional: A matrix with multiple rows and columns
+         * Classifies the array into one of five shapes:
+         * | Condition                     | Result          |
+         * |-------------------------------|-----------------|
+         * | `rows * cols == 0`            | `Empty{}`       |
+         * | `rows * cols == 1`            | `Singular{}`    |
+         * | `rows > 1 && cols == 1`       | `Vertical{r}`   |
+         * | `rows == 1 && cols > 1`       | `Horizontal{c}` |
+         * | otherwise                     | `TwoDimensional{r, c}` |
          *
-         * @return ArrayShape The shape classification of the array.
+         * The returned `Shape` value can be inspected with `.is<T>()` or
+         * dispatched with `.visit(visitor)`.
+         *
+         * @return A `Shape` variant describing the current geometry.
          */
         [[nodiscard]]
         constexpr Shape shape() const
@@ -398,6 +664,12 @@ namespace xll
             return TwoDimensional{r, c};
         }
 
+        /**
+         * @brief Returns the number of rows.
+         *
+         * @pre `xltype == xltypeMulti` (checked via `ensure`).
+         * @return Row count as `size_t`.
+         */
         [[nodiscard]]
         constexpr size_t rows() const
         {
@@ -405,6 +677,12 @@ namespace xll
             return static_cast<size_t>(val.array.rows);
         }
 
+        /**
+         * @brief Returns the number of columns.
+         *
+         * @pre `xltype == xltypeMulti` (checked via `ensure`).
+         * @return Column count as `size_t`.
+         */
         [[nodiscard]]
         constexpr size_t cols() const
         {
@@ -412,6 +690,12 @@ namespace xll
             return static_cast<size_t>(val.array.columns);
         }
 
+        /**
+         * @brief Returns the total number of elements (`rows * cols`).
+         *
+         * @pre `xltype == xltypeMulti` (checked via `std::unreachable()`).
+         * @return Element count as `size_t`.
+         */
         [[nodiscard]]
         constexpr size_t size() const
         {
@@ -419,12 +703,40 @@ namespace xll
             return static_cast<size_t>(val.array.rows) * static_cast<size_t>(val.array.columns);
         }
 
+        /**
+         * @brief Returns `true` if the array contains no elements.
+         *
+         * Equivalent to `size() == 0`.
+         *
+         * @return `true` iff `rows() * cols() == 0`.
+         */
         [[nodiscard]]
         constexpr bool empty() const
         {
             return size() == 0;
         }
 
+        /**
+         * @brief Changes the row/column layout without reallocating or moving elements.
+         *
+         * The element buffer is reinterpreted with new dimensions. The total
+         * element count must remain identical (`rows * cols == size()`).
+         * Elements are stored in row-major order, so after a reshape the
+         * logical position of each element changes.
+         *
+         * @param rows New row count.
+         * @param cols New column count.
+         *
+         * @throws std::out_of_range    if @p rows or @p cols exceeds the
+         *                              corresponding Excel limit.
+         * @throws std::overflow_error  if `rows * cols` overflows `size_t`.
+         * @throws std::invalid_argument if `rows * cols != size()`.
+         *
+         * @code
+         * Array<Number> arr(1, 6);   // 1×6
+         * arr.reshape(2, 3);         // now 2×3, same elements
+         * @endcode
+         */
         constexpr void reshape(size_t rows, size_t cols)
         {
             if (rows > static_cast<size_t>(std::numeric_limits<RW>::max()))
@@ -439,30 +751,85 @@ namespace xll
             val.array.columns = static_cast<COL>(cols);
         }
 
+        // -----------------------------------------------------------------------
+        // Iterators
+        // -----------------------------------------------------------------------
+
+        /**
+         * @brief Returns a pointer to the first element (non-const).
+         *
+         * Together with `end()`, provides a contiguous iterator range suitable
+         * for range-based for loops and standard algorithms.
+         *
+         * @pre `xltype == xltypeMulti` (checked via `ensure`).
+         * @return `TValue*` pointing to `val.array.lparray[0]`, or `nullptr`
+         *         if the array is empty.
+         */
         constexpr TValue* begin()
         {
             ensure(xltype == xltypeMulti, "Array is not valid");
             return static_cast<TValue*>(static_cast<XLOPER12*>(val.array.lparray));
         }
 
+        /**
+         * @brief Returns a pointer to the first element (const overload).
+         * @pre `xltype == xltypeMulti` (checked via `ensure`).
+         * @return `const TValue*` pointing to `val.array.lparray[0]`.
+         */
         constexpr TValue const* begin() const
         {
             ensure(xltype == xltypeMulti, "Array is not valid");
             return static_cast<TValue const*>(static_cast<XLOPER12 const*>(val.array.lparray));
         }
 
+        /**
+         * @brief Returns a pointer one past the last element (non-const).
+         * @pre `xltype == xltypeMulti` (checked via `ensure`).
+         * @return `TValue*` pointing one past the last element.
+         */
         constexpr TValue* end()
         {
             ensure(xltype == xltypeMulti, "Array is not valid");
             return static_cast<TValue*>(static_cast<XLOPER12*>(val.array.lparray)) + size();
         }
 
+        /**
+         * @brief Returns a pointer one past the last element (const overload).
+         * @pre `xltype == xltypeMulti` (checked via `ensure`).
+         * @return `const TValue*` pointing one past the last element.
+         */
         constexpr TValue const* end() const
         {
             ensure(xltype == xltypeMulti, "Array is not valid");
             return static_cast<TValue const*>(static_cast<XLOPER12 const*>(val.array.lparray)) + size();
         }
 
+        // -----------------------------------------------------------------------
+        // Element access
+        // -----------------------------------------------------------------------
+
+        /**
+         * @brief Accesses an element by flat (row-major) index.
+         *
+         * Uses deducing-this to provide a single implementation for both the
+         * const and non-const cases.
+         *
+         * @tparam Self  Deduced type of `*this`. Determines const-ness of the
+         *               returned reference.
+         *
+         * @param index  Zero-based flat index in `[0, size())`.
+         * @return       Reference to the element at @p index. The reference
+         *               is `const` when `*this` is const.
+         *
+         * @pre  `xltype == xltypeMulti` (checked via `ensure`).
+         * @throws std::out_of_range if `index >= size()`.
+         *
+         * @code
+         * Array<Number> arr(1, 3);
+         * arr[1] = Number(42.0);           // write
+         * double d = arr[1];               // read
+         * @endcode
+         */
         template<typename Self>
         constexpr auto& operator[](this Self&& self, size_t index)
         {
@@ -479,6 +846,29 @@ namespace xll
             return s[index];
         }
 
+        /**
+         * @brief Accesses an element by (row, column) index.
+         *
+         * Uses `std::mdspan` for row-major two-dimensional indexing. Uses
+         * deducing-this for a single const/non-const implementation.
+         *
+         * @tparam Self  Deduced type of `*this`. Determines const-ness of the
+         *               returned reference.
+         *
+         * @param row    Zero-based row index in `[0, rows())`.
+         * @param col    Zero-based column index in `[0, cols())`.
+         * @return       Reference to the element at `(row, col)`. The reference
+         *               is `const` when `*this` is const.
+         *
+         * @pre  `xltype == xltypeMulti` (checked via `ensure`).
+         * @throws std::out_of_range if @p row or @p col is out of range.
+         *
+         * @code
+         * Array<Number> m(2, 3);
+         * m[1, 2] = Number(99.0);          // write
+         * double d = m[0, 1];              // read
+         * @endcode
+         */
         template<typename Self>
         constexpr auto& operator[](this Self&& self, size_t row, size_t col)
         {
@@ -491,12 +881,33 @@ namespace xll
             ensure(self.xltype == xltypeMulti, "Array is not valid");
             if (row >= static_cast<size_t>(self.val.array.rows) || col >= static_cast<size_t>(self.val.array.columns))
                 throw std::out_of_range("Array index out of range");
-            using ext_t = mds::extents<uint32_t, std::dynamic_extent, std::dynamic_extent>;
-            auto m = mds::mdspan<QualifiedValue, ext_t>(static_cast<QualifiedValue*>(self.val.array.lparray), self.val.array.rows, self.val.array.columns);
-            return m[row, col];
+
+            auto* ptr = static_cast<QualifiedValue*>(self.val.array.lparray);
+            return ptr[row * static_cast<size_t>(self.val.array.columns) + col];
         }
 
+        // -----------------------------------------------------------------------
+        // Conversions
+        // -----------------------------------------------------------------------
 
+        /**
+         * @brief Implicit conversion to any sequence container constructible
+         *        from a pair of `TValue*` iterators.
+         *
+         * Constructs a `TContainer<TValue>` using `TContainer<TValue>(begin(), end())`.
+         * Works for `std::vector`, `std::deque`, `std::list`, and similar containers.
+         *
+         * @tparam TContainer A class template that accepts `TValue` as its first
+         *                    argument and supports iterator-range construction.
+         *
+         * @return A newly constructed container holding copies of all elements.
+         *
+         * @code
+         * Array<Number> arr { 1.0, 2.0, 3.0 };
+         * std::vector<Number> v = arr;   // implicit conversion
+         * std::deque<Number>  d = arr;   // implicit conversion
+         * @endcode
+         */
         template<template<typename, typename...> class TContainer>
             requires requires { TContainer<TValue>(std::declval<TValue*>(), std::declval<TValue*>()); }
         constexpr operator TContainer<TValue>() const
@@ -504,16 +915,23 @@ namespace xll
             return TContainer<TValue>(begin(), end());
         }
 
-        // template<typename TElem>
-        //     requires std::same_as<TElem, typename TValue::value_type>
-        // constexpr operator std::vector<fxt::expected<TElem, xll::String>>() const
-        // {
-        //     std::vector<fxt::expected<TElem, xll::String>> result {};
-        //     result.reserve(size());
-        //     for (auto const& v : *this) result.push_back(v);
-        //     return result;
-        // }
-
+        /**
+         * @brief Converts the array to a container, converting each element to @p TElem.
+         *
+         * Each element is cast via `static_cast<TElem>(v)`. Calls `reserve()`
+         * on containers that support it.
+         *
+         * @tparam TContainer A class template (e.g. `std::vector`, `std::deque`)
+         *                    that supports `push_back`.
+         * @tparam TElem      Target element type. Must be convertible from `TValue`.
+         *
+         * @return A `TContainer<TElem>` holding the converted elements.
+         *
+         * @code
+         * Array<Number> arr { 1.0, 2.0, 3.0 };
+         * auto v = arr.to<std::vector, double>();   // std::vector<double>
+         * @endcode
+         */
         template<template<typename, typename...> class TContainer, typename TElem>
             requires std::convertible_to<TValue, TElem>
         constexpr auto to() const
@@ -525,6 +943,23 @@ namespace xll
             return result;
         }
 
+        /**
+         * @brief Converts the array to a container of `TValue` elements
+         *        (no element conversion).
+         *
+         * Equivalent to `to<TContainer, TValue>()`. Provided for convenience
+         * when no element type conversion is needed.
+         *
+         * @tparam TContainer A class template that supports `push_back`.
+         *
+         * @return A `TContainer<TValue>` holding copies of all elements.
+         *
+         * @code
+         * Array<Number> arr { 1.0, 2.0, 3.0 };
+         * auto v = arr.to<std::vector>();   // std::vector<Number>
+         * auto d = arr.to<std::deque>();    // std::deque<Number>
+         * @endcode
+         */
         template<template<typename, typename...> class TContainer>
         constexpr auto to() const
         {
@@ -533,6 +968,20 @@ namespace xll
 
     private:
 
+        /**
+         * @brief Allocates and initialises a raw `XLOPER12` array of @p size elements.
+         *
+         * Uses `std::make_unique_for_overwrite` to allocate uninitialized storage,
+         * then constructs each element in-place as a `TValue` copy of @p fill via
+         * `std::construct_at`. Returns `nullptr` for size 0.
+         *
+         * @param size  Number of elements to allocate.
+         * @param fill  Value to copy-construct into every slot. Defaults to `TValue{}`.
+         * @return      A `unique_ptr<XLOPER12[]>` owning the buffer,
+         *              or `nullptr` if `size == 0`.
+         *
+         * @throws std::bad_alloc if allocation fails.
+         */
         constexpr static std::unique_ptr<XLOPER12[]> make_array(size_t size, TValue fill = {})
         {
             if (size == 0) return nullptr;
@@ -544,25 +993,180 @@ namespace xll
         }
     };
 
-    // template<template<typename> class TContainer, typename T, typename E>
-    // constexpr auto make_array(const auto& input)    //-> Array<Expected<Number>>
-    // {
-    //     using T = typename std::remove_cvref_t<decltype(input)>::value_type::value_type;
-    //     using E = typename std::remove_cvref_t<decltype(input)>::value_type::error_type;
-    //
-    //     using value_t = std::conditional_t<
-    //         std::floating_point<T>,
-    //         xll::Number,
-    //         std::conditional_t<std::integral<T>, xll::Int, std::conditional_t<std::convertible_to<T, std::string>, xll::String, void>>>;
-    //
-    //     Array<Expected<value_t, xll::Error>> result(input.size(), 1);
-    //     for (unsigned i = 0; i < input.size(); ++i) {
-    //         if (input[i].has_value())
-    //             result[i].value() = *input[i];
-    //         else
-    //             result[i] = xll::ErrNull;
-    //     }
-    //     return result;
-    // }
+    /**
+     * @brief Returns a copy of @p arr with new row and column dimensions.
+     *
+     * Creates a copy of @p arr and calls `reshape()` on it. The total element
+     * count must be preserved (`rows * cols == arr.size()`); the element values
+     * and their row-major order are unchanged.
+     *
+     * @tparam TValue  The element type of the array.
+     *
+     * @param arr   The source array to copy and reshape.
+     * @param rows  New row count.
+     * @param cols  New column count.
+     * @return      A new `Array<TValue>` with the same elements and the
+     *              requested dimensions.
+     *
+     * @throws std::out_of_range     if @p rows or @p cols exceeds the
+     *                               corresponding Excel limit.
+     * @throws std::overflow_error   if `rows * cols` overflows `size_t`.
+     * @throws std::invalid_argument if `rows * cols != arr.size()`.
+     * @throws std::bad_alloc        if the copy allocation fails.
+     *
+     * @code
+     * Array<Number> flat { 1.0, 2.0, 3.0, 4.0, 5.0, 6.0 };  // 1×6
+     * auto matrix = reshape(flat, 2, 3);                       // 2×3 copy
+     * @endcode
+     */
+    template<typename TValue>
+    [[nodiscard]] constexpr Array<TValue> reshape(const Array<TValue>& arr, size_t rows, size_t cols)
+    {
+        Array<TValue> result(arr);
+        result.reshape(rows, cols);
+        return result;
+    }
+
+    /**
+     * @brief Returns a transposed copy of @p arr.
+     *
+     * Creates a new `Array<TValue>` with rows and columns swapped. Element
+     * `arr[r, c]` maps to `result[c, r]` in the returned array. The source
+     * array is not modified.
+     *
+     * @tparam TValue  The element type of the array.
+     *
+     * @param arr  The source array to transpose.
+     * @return     A new `Array<TValue>` with dimensions `cols × rows` and
+     *             elements reordered accordingly. Returns an empty array if
+     *             @p arr is empty.
+     *
+     * @throws std::bad_alloc if the allocation for the result fails.
+     *
+     * @code
+     * Array<Number> h { 1.0, 2.0, 3.0 };       // 1×3
+     * auto v = transpose(h);                     // 3×1
+     *
+     * Array<Number> m(2, 3, Number(0.0));
+     * m[0, 0] = 1.0; m[0, 1] = 2.0; m[0, 2] = 3.0;
+     * m[1, 0] = 4.0; m[1, 1] = 5.0; m[1, 2] = 6.0;
+     * auto t = transpose(m);                     // 3×2
+     * // t[0,0]==1, t[1,0]==2, t[2,0]==3
+     * // t[0,1]==4, t[1,1]==5, t[2,1]==6
+     * @endcode
+     */
+    template<typename TValue>
+    [[nodiscard]] constexpr Array<TValue> transpose(const Array<TValue>& arr)
+    {
+        const size_t r = arr.rows();
+        const size_t c = arr.cols();
+        if (arr.empty()) return Array<TValue>{};
+        Array<TValue> result(c, r);
+        for (size_t row = 0; row < r; ++row)
+            for (size_t col = 0; col < c; ++col)
+                result[col, row] = arr[row, col];
+        return result;
+    }
+
+    /**
+     * @brief Returns a new array containing the specified rows of @p arr.
+     *
+     * Each index in @p indices selects a row from @p arr. The selected rows
+     * are copied into a new array in the order they appear in @p indices,
+     * producing a result with `indices.size() × arr.cols()` elements.
+     * Duplicate indices are allowed and produce duplicate rows in the result.
+     *
+     * @tparam TValue   The element type of the array.
+     *
+     * @param arr      The source array.
+     * @param indices  Row indices to select, in the desired output order.
+     *                 Each index must be in `[0, arr.rows())`.
+     * @return         A new `Array<TValue>` with `indices.size()` rows and
+     *                 `arr.cols()` columns. Returns an empty array if
+     *                 @p indices is empty.
+     *
+     * @throws std::out_of_range if any index in @p indices is ≥ `arr.rows()`.
+     * @throws std::bad_alloc    if allocation fails.
+     *
+     * @code
+     * Array<Number> m({ 1, 2, 3,
+     *                   4, 5, 6,
+     *                   7, 8, 9 }, Array<Number>::TwoDimensional{3, 3});
+     * auto sub = get_rows(m, {0, 2});   // rows 0 and 2 → 2×3
+     * // sub[0,0]==1, sub[0,1]==2, sub[0,2]==3
+     * // sub[1,0]==7, sub[1,1]==8, sub[1,2]==9
+     * @endcode
+     */
+    template<typename TValue>
+    [[nodiscard]] constexpr Array<TValue> get_rows(const Array<TValue>& arr,
+                                                   std::initializer_list<size_t> indices)
+    {
+        if (indices.size() == 0) return Array<TValue>{};
+        for (size_t idx : indices)
+            if (idx >= arr.rows())
+                throw std::out_of_range("get_rows: row index out of range");
+
+        const size_t c = arr.cols();
+        Array<TValue> result(indices.size(), c);
+        size_t dst_row = 0;
+        for (size_t src_row : indices) {
+            for (size_t col = 0; col < c; ++col)
+                result[dst_row, col] = arr[src_row, col];
+            ++dst_row;
+        }
+        return result;
+    }
+
+    /**
+     * @brief Returns a new array containing the specified columns of @p arr.
+     *
+     * Each index in @p indices selects a column from @p arr. The selected
+     * columns are copied into a new array in the order they appear in
+     * @p indices, producing a result with `arr.rows() × indices.size()`
+     * elements. Duplicate indices are allowed and produce duplicate columns
+     * in the result.
+     *
+     * @tparam TValue   The element type of the array.
+     *
+     * @param arr      The source array.
+     * @param indices  Column indices to select, in the desired output order.
+     *                 Each index must be in `[0, arr.cols())`.
+     * @return         A new `Array<TValue>` with `arr.rows()` rows and
+     *                 `indices.size()` columns. Returns an empty array if
+     *                 @p indices is empty.
+     *
+     * @throws std::out_of_range if any index in @p indices is ≥ `arr.cols()`.
+     * @throws std::bad_alloc    if allocation fails.
+     *
+     * @code
+     * Array<Number> m({ 1, 2, 3,
+     *                   4, 5, 6,
+     *                   7, 8, 9 }, Array<Number>::TwoDimensional{3, 3});
+     * auto sub = get_cols(m, {0, 2});   // cols 0 and 2 → 3×2
+     * // sub[0,0]==1, sub[0,1]==3
+     * // sub[1,0]==4, sub[1,1]==6
+     * // sub[2,0]==7, sub[2,1]==9
+     * @endcode
+     */
+    template<typename TValue>
+    [[nodiscard]] constexpr Array<TValue> get_cols(const Array<TValue>& arr,
+                                                   std::initializer_list<size_t> indices)
+    {
+        if (indices.size() == 0) return Array<TValue>{};
+        for (size_t idx : indices)
+            if (idx >= arr.cols())
+                throw std::out_of_range("get_cols: column index out of range");
+
+        const size_t r = arr.rows();
+        Array<TValue> result(r, indices.size());
+        size_t dst_col = 0;
+        for (size_t src_col : indices) {
+            for (size_t row = 0; row < r; ++row)
+                result[row, dst_col] = arr[row, src_col];
+            ++dst_col;
+        }
+        return result;
+    }
 
 }    // namespace xll
+
