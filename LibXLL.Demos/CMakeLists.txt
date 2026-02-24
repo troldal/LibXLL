@@ -34,6 +34,10 @@ add_executable(DemoArrayShape Types/DemoArrayShape.cpp)
 target_link_libraries(DemoArrayShape PUBLIC LibXLL)
 target_compile_definitions(DemoArrayShape PRIVATE NOMINMAX)
 
+add_executable(DemoAny Types/DemoAny.cpp)
+target_link_libraries(DemoAny PUBLIC LibXLL)
+target_compile_definitions(DemoAny PRIVATE NOMINMAX)
+
 add_library(xllDemoTypesExpected SHARED Types/xllDemoTypesExpected.cpp)
 target_link_libraries(xllDemoTypesExpected PUBLIC LibXLL)
 set_target_properties(xllDemoTypesExpected PROPERTIES OUTPUT_NAME "expected_demo" SUFFIX ".xll")
