@@ -1403,12 +1403,11 @@ TEST_CASE("Expected - iterator arithmetic", "[xll::Expected][iterator]")
     SECTION("1 + begin == end") {
         REQUIRE(1 + it == exp.end());
     }
-    SECTION("end - 1 == begin (not typically useful but must not crash)") {
-        // Iterator arithmetic: end - 1 should yield begin
+    SECTION("end - 1 == begin") {
+        // With plain pointer arithmetic, end() - 1 gives back begin()
         auto back = exp.end() - 1;
-        // The iterator uses nullptr for end; subtracting from nullptr is defined
-        // by our operator as setting ptr to nullptr too — just verify no crash
-        (void)back;
+        REQUIRE(back == exp.begin());
+        REQUIRE(*back == 7.0);
     }
     SECTION("operator[] on begin") {
         REQUIRE(it[0] == 7.0);

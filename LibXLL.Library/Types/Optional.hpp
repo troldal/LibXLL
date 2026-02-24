@@ -698,7 +698,11 @@ namespace xll
          *
          * Satisfies std::contiguous_iterator (pointer-based), so the resulting range
          * automatically satisfies std::ranges::contiguous_range.
-         * The end sentinel is represented by a null pointer.
+         *
+         * The design avoids null-pointer arithmetic entirely.  end() always points to
+         * this+1 (one-past the Optional object itself).  When engaged, begin() == this
+         * and begin() != end().  When disengaged, begin() == this+1 == end(), giving an
+         * empty range — all without ever forming a null pointer.
          */
         class iterator
         {
@@ -716,34 +720,22 @@ namespace xll
             constexpr reference operator*()  const noexcept { return *ptr_; }
             constexpr pointer   operator->() const noexcept { return  ptr_; }
 
-            constexpr iterator& operator++()    noexcept { ptr_ = nullptr; return *this; }
+            constexpr iterator& operator++()    noexcept { ++ptr_; return *this; }
             constexpr iterator  operator++(int) noexcept { iterator t(*this); ++(*this); return t; }
-            constexpr iterator& operator--()    noexcept { return *this; }
-            constexpr iterator  operator--(int) noexcept { return *this; }
+            constexpr iterator& operator--()    noexcept { --ptr_; return *this; }
+            constexpr iterator  operator--(int) noexcept { iterator t(*this); --(*this); return t; }
 
-            constexpr iterator& operator+=(difference_type n) noexcept { if (n != 0) ptr_ = nullptr; return *this; }
-            constexpr iterator& operator-=(difference_type n) noexcept { if (n != 0) ptr_ = nullptr; return *this; }
-            constexpr iterator  operator+(difference_type n) const noexcept { iterator t(*this); t += n; return t; }
-            constexpr iterator  operator-(difference_type n) const noexcept { iterator t(*this); t -= n; return t; }
+            constexpr iterator& operator+=(difference_type n) noexcept { ptr_ += n; return *this; }
+            constexpr iterator& operator-=(difference_type n) noexcept { ptr_ -= n; return *this; }
+            constexpr iterator  operator+(difference_type n) const noexcept { return iterator(ptr_ + n); }
+            constexpr iterator  operator-(difference_type n) const noexcept { return iterator(ptr_ - n); }
             friend constexpr iterator operator+(difference_type n, iterator it) noexcept { return it + n; }
-            constexpr difference_type operator-(const iterator& rhs) const noexcept
-            {
-                if (ptr_ == rhs.ptr_) return 0;
-                return ptr_ == nullptr ? 1 : -1;
-            }
-            constexpr reference operator[](difference_type n) const noexcept { return *(*this + n); }
+            constexpr difference_type operator-(const iterator& rhs) const noexcept { return ptr_ - rhs.ptr_; }
+            constexpr reference operator[](difference_type n) const noexcept { return ptr_[n]; }
 
-            constexpr bool operator==(const iterator& rhs) const noexcept
-            {
-                if (ptr_ == nullptr && rhs.ptr_ == nullptr) return true;
-                return ptr_ == rhs.ptr_;
-            }
-            constexpr bool operator!=(const iterator& rhs) const noexcept { return !(*this == rhs); }
-            constexpr auto operator<=>(const iterator& rhs) const noexcept
-            {
-                auto as_int = [](TValue* p) -> int { return p == nullptr ? 1 : 0; };
-                return as_int(ptr_) <=> as_int(rhs.ptr_);
-            }
+            constexpr bool operator==(const iterator& rhs) const noexcept { return ptr_ == rhs.ptr_; }
+            constexpr bool operator!=(const iterator& rhs) const noexcept { return ptr_ != rhs.ptr_; }
+            constexpr auto operator<=>(const iterator& rhs) const noexcept { return ptr_ <=> rhs.ptr_; }
 
             constexpr pointer base() const noexcept { return ptr_; }
 
@@ -771,34 +763,22 @@ namespace xll
             constexpr reference      operator*()  const noexcept { return *ptr_; }
             constexpr pointer        operator->() const noexcept { return  ptr_; }
 
-            constexpr const_iterator& operator++()    noexcept { ptr_ = nullptr; return *this; }
+            constexpr const_iterator& operator++()    noexcept { ++ptr_; return *this; }
             constexpr const_iterator  operator++(int) noexcept { const_iterator t(*this); ++(*this); return t; }
-            constexpr const_iterator& operator--()    noexcept { return *this; }
-            constexpr const_iterator  operator--(int) noexcept { return *this; }
+            constexpr const_iterator& operator--()    noexcept { --ptr_; return *this; }
+            constexpr const_iterator  operator--(int) noexcept { const_iterator t(*this); --(*this); return t; }
 
-            constexpr const_iterator& operator+=(difference_type n) noexcept { if (n != 0) ptr_ = nullptr; return *this; }
-            constexpr const_iterator& operator-=(difference_type n) noexcept { if (n != 0) ptr_ = nullptr; return *this; }
-            constexpr const_iterator  operator+(difference_type n) const noexcept { const_iterator t(*this); t += n; return t; }
-            constexpr const_iterator  operator-(difference_type n) const noexcept { const_iterator t(*this); t -= n; return t; }
+            constexpr const_iterator& operator+=(difference_type n) noexcept { ptr_ += n; return *this; }
+            constexpr const_iterator& operator-=(difference_type n) noexcept { ptr_ -= n; return *this; }
+            constexpr const_iterator  operator+(difference_type n) const noexcept { return const_iterator(ptr_ + n); }
+            constexpr const_iterator  operator-(difference_type n) const noexcept { return const_iterator(ptr_ - n); }
             friend constexpr const_iterator operator+(difference_type n, const_iterator it) noexcept { return it + n; }
-            constexpr difference_type operator-(const const_iterator& rhs) const noexcept
-            {
-                if (ptr_ == rhs.ptr_) return 0;
-                return ptr_ == nullptr ? 1 : -1;
-            }
-            constexpr reference operator[](difference_type n) const noexcept { return *(*this + n); }
+            constexpr difference_type operator-(const const_iterator& rhs) const noexcept { return ptr_ - rhs.ptr_; }
+            constexpr reference operator[](difference_type n) const noexcept { return ptr_[n]; }
 
-            constexpr bool operator==(const const_iterator& rhs) const noexcept
-            {
-                if (ptr_ == nullptr && rhs.ptr_ == nullptr) return true;
-                return ptr_ == rhs.ptr_;
-            }
-            constexpr bool operator!=(const const_iterator& rhs) const noexcept { return !(*this == rhs); }
-            constexpr auto operator<=>(const const_iterator& rhs) const noexcept
-            {
-                auto as_int = [](const TValue* p) -> int { return p == nullptr ? 1 : 0; };
-                return as_int(ptr_) <=> as_int(rhs.ptr_);
-            }
+            constexpr bool operator==(const const_iterator& rhs) const noexcept { return ptr_ == rhs.ptr_; }
+            constexpr bool operator!=(const const_iterator& rhs) const noexcept { return ptr_ != rhs.ptr_; }
+            constexpr auto operator<=>(const const_iterator& rhs) const noexcept { return ptr_ <=> rhs.ptr_; }
 
             constexpr pointer base() const noexcept { return ptr_; }
 
@@ -809,36 +789,45 @@ namespace xll
         /**
          * @brief Returns an iterator to the beginning of the range.
          *
-         * If has_value() is true, returns an iterator to the contained TValue.
-         * Otherwise returns an end iterator (equivalent to end()).
+         * When engaged:    begin() points to the contained TValue (== this).
+         * When disengaged: begin() == end() (empty range, no element visited).
+         * No null pointer is ever formed.
          */
         [[nodiscard]]
         constexpr iterator begin() noexcept
         {
-            if (has_value())
-                return iterator(std::launder(reinterpret_cast<TValue*>(this)));
-            return iterator(nullptr);
+            auto* base = std::launder(reinterpret_cast<TValue*>(this));
+            return iterator(has_value() ? base : base + 1);
         }
 
         [[nodiscard]]
         constexpr const_iterator begin() const noexcept
         {
-            if (has_value())
-                return const_iterator(std::launder(reinterpret_cast<const TValue*>(this)));
-            return const_iterator(nullptr);
+            auto* base = std::launder(reinterpret_cast<const TValue*>(this));
+            return const_iterator(has_value() ? base : base + 1);
         }
 
         [[nodiscard]]
         constexpr const_iterator cbegin() const noexcept { return begin(); }
 
         /**
-         * @brief Returns an end iterator (always the nullptr-based sentinel).
+         * @brief Returns an end iterator.
+         *
+         * Always points to this+1 (one-past the Optional object).
+         * When engaged:    end() == begin() + 1  (range of one element).
+         * When disengaged: end() == begin()       (empty range).
          */
         [[nodiscard]]
-        constexpr iterator end() noexcept { return iterator(nullptr); }
+        constexpr iterator end() noexcept
+        {
+            return iterator(std::launder(reinterpret_cast<TValue*>(this)) + 1);
+        }
 
         [[nodiscard]]
-        constexpr const_iterator end() const noexcept { return const_iterator(nullptr); }
+        constexpr const_iterator end() const noexcept
+        {
+            return const_iterator(std::launder(reinterpret_cast<const TValue*>(this)) + 1);
+        }
 
         [[nodiscard]]
         constexpr const_iterator cend() const noexcept { return end(); }
@@ -856,7 +845,9 @@ namespace xll
         constexpr bool empty() const noexcept { return !has_value(); }
 
         /**
-         * @brief Returns a pointer to the contained value, or nullptr if empty.
+         * @brief Returns a pointer to the contained value, or nullptr if disengaged.
+         *
+         * Note: nullptr is only returned here (not from the iterators).
          */
         [[nodiscard]]
         constexpr TValue* data() noexcept

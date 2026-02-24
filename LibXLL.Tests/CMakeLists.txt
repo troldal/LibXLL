@@ -16,6 +16,7 @@ add_executable(LibXLL.Tests.default
         Variant.cpp
         Array.cpp
         Optional.cpp
+        Any.cpp
 )
 target_link_libraries(LibXLL.Tests.default PRIVATE Catch2ForOpenXLL LibXLL)
 
