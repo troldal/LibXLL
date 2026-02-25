@@ -24,22 +24,22 @@
  * | `xll::ExpectedPolicy`   | `xll::Expected<TTarget, xll::Error>`     |
  * | `xll::OptionalPolicy`   | `xll::Optional<TTarget>`                 |
  *
- * `ExpectedPolicy` is the default.  When the stored xltype does not match
+ * `OptionalPolicy` is the default.  When the stored xltype does not match
  * `TTarget`, `cast` returns:
- * - `xll::Unexpected(xll::ErrValue)` for `ExpectedPolicy`
  * - `xll::None`                       for `OptionalPolicy`
+ * - `xll::Unexpected(xll::ErrValue)` for `ExpectedPolicy`
  *
  * Example:
  * @code
- * // Default (Expected) policy
+ * // Default (Optional) policy
  * xll::Any<> any = xll::Number(3.14);
- * auto r1 = xll::cast<xll::Number>(any);   // Expected<Number, Error> = 3.14
- * auto r2 = xll::cast<xll::String>(any);   // Expected<String, Error> = Unexpected(ErrValue)
+ * auto r1 = xll::cast<xll::Number>(any);   // Optional<Number> = 3.14
+ * auto r2 = xll::cast<xll::String>(any);   // Optional<String> = None
  *
- * // Optional policy
- * xll::Any<xll::OptionalPolicy> any2 = xll::String("hello");
- * auto r3 = xll::cast<xll::String>(any2);  // Optional<String> = "hello"
- * auto r4 = xll::cast<xll::Number>(any2);  // Optional<Number> = None
+ * // Expected policy
+ * xll::Any<xll::ExpectedPolicy> any2 = xll::String("hello");
+ * auto r3 = xll::cast<xll::String>(any2);  // Expected<String, Error> = "hello"
+ * auto r4 = xll::cast<xll::Number>(any2);  // Expected<Number, Error> = Unexpected(ErrValue)
  * @endcode
  *
  * @section type_punning Type punning and memory safety
@@ -84,6 +84,27 @@
 namespace xll
 {
     // =========================================================================
+    // Internal helpers
+    // =========================================================================
+
+    namespace impl
+    {
+        /// Primary: not a typed array.
+        template<typename T>
+        struct is_typed_array_impl : std::false_type {};
+
+        /// Partial specialisation: Array<T> — detected as a typed array.
+        /// We forward-declare the specialisation here; Any is defined below.
+        template<typename TValue>
+        struct is_typed_array_impl<Array<TValue>> : std::true_type {};
+    }    // namespace impl
+
+    /// `true` when `T` is `Array<U>` for any `U`.
+    /// Used by `holds()` to select the element-type-checking path.
+    template<typename T>
+    inline constexpr bool is_typed_array = impl::is_typed_array_impl<T>::value;
+
+    // =========================================================================
     // Policy tags
     // =========================================================================
 
@@ -115,11 +136,11 @@ namespace xll
      * binary compatibility with the Excel C API.
      *
      * @tparam TPolicy  Controls the return type of `xll::cast`.
-     *                  Use `xll::ExpectedPolicy` (default) to get
-     *                  `Expected<TTarget, Error>`, or `xll::OptionalPolicy`
-     *                  to get `Optional<TTarget>`.
+     *                  Use `xll::OptionalPolicy` (default) to get
+     *                  `Optional<TTarget>`, or `xll::ExpectedPolicy`
+     *                  to get `Expected<TTarget, Error>`.
      */
-    template<typename TPolicy = ExpectedPolicy>
+    template<typename TPolicy = OptionalPolicy>
         requires std::same_as<TPolicy, ExpectedPolicy> || std::same_as<TPolicy, OptionalPolicy>
     class Any final : public XLOPER12
     {
@@ -171,16 +192,23 @@ namespace xll
         }
 
         // ------------------------------------------------------------------
-        // Construct from raw XLOPER12 (shallow copy — use with care)
+        // Construct from raw XLOPER12 (type-aware deep copy)
         // ------------------------------------------------------------------
 
         /**
-         * @brief Constructs an Any from a raw `XLOPER12` (shallow copy).
+         * @brief Constructs an Any from a raw `XLOPER12` by performing a type-aware deep copy.
          *
-         * Copies the xltype and val union verbatim.  No deep copy is performed,
-         * so the caller must ensure the source lifetime exceeds this object's.
+         * The `XLOPER12` is reinterpreted as an `Any` (safe because `Any` inherits
+         * from `XLOPER12` with no added members) and then `copy_from` is invoked,
+         * which deep-copies heap-owning payloads (e.g. String buffers, Array element
+         * arrays) in the same way as the copy constructor.
+         *
+         * Unknown or unsupported xltype values are treated as `xll::Nil`.
          */
-        constexpr explicit Any(const XLOPER12& raw) noexcept : XLOPER12(raw) {}
+        constexpr explicit Any(const XLOPER12& raw) : XLOPER12()
+        {
+            copy_from(*std::launder(reinterpret_cast<const Any*>(&raw)));
+        }
 
         // ------------------------------------------------------------------
         // Copy / move
@@ -292,6 +320,14 @@ namespace xll
         /**
          * @brief Returns `true` when the stored type matches `TTarget::excel_type`.
          *
+         * For plain xll types (Number, String, Bool, etc.) this checks only the
+         * xltype tag.
+         *
+         * For a fully specialised `xll::Array<T>` where `T` is not `Any`, this
+         * additionally verifies that **every element** in the stored array has the
+         * xltype matching `T::excel_type`.  If the Any does not hold an array, or
+         * any element has a different type, the function returns `false`.
+         *
          * @tparam TTarget  The xll type to check against (must satisfy `is_xll_type`).
          */
         template<typename TTarget>
@@ -299,7 +335,40 @@ namespace xll
         [[nodiscard]]
         constexpr bool holds() const noexcept
         {
-            return type() == static_cast<int>(TTarget::excel_type);
+            if constexpr (is_typed_array<TTarget>) {
+                // Array<T> where T is not Any: check xltype AND all element types.
+                if (type() != xltypeMulti) return false;
+                const auto* elems = static_cast<const typename TTarget::value_type*>(val.array.lparray);
+                const size_t n    = static_cast<size_t>(val.array.rows) * static_cast<size_t>(val.array.columns);
+                const int    want = static_cast<int>(TTarget::value_type::excel_type);
+                for (size_t i = 0; i < n; ++i)
+                    if ((reinterpret_cast<const XLOPER12*>(elems + i)->xltype & ~(xlbitDLLFree | xlbitXLFree)) != want)
+                        return false;
+                return true;
+            }
+            else {
+                return type() == static_cast<int>(TTarget::excel_type);
+            }
+        }
+
+        /**
+         * @brief Returns `true` when the stored value is an array of any element type.
+         *
+         * This overload accepts the unspecialised `xll::Array` template as a template
+         * template argument and is equivalent to `holds<xll::Array<xll::Any<>>>()`:
+         * it only checks that the stored xltype is `xltypeMulti`, without inspecting
+         * element types.
+         *
+         * Usage: `any.holds<xll::Array>()`
+         *
+         * @tparam TArrayTemplate  Must be `xll::Array` (deduced).
+         */
+        template<template<typename> class TArrayTemplate>
+            requires std::same_as<TArrayTemplate<Any>, Array<Any>>
+        [[nodiscard]]
+        constexpr bool holds() const noexcept
+        {
+            return type() == xltypeMulti;
         }
 
         /**
@@ -332,6 +401,9 @@ namespace xll
             else if (t == xltypeErr)
                 std::construct_at(reinterpret_cast<xll::Error*>(this),
                     *std::launder(reinterpret_cast<const xll::Error*>(&src)));
+            else if (t == xltypeMulti)
+                std::construct_at(reinterpret_cast<xll::Array<Any>*>(this),
+                    *std::launder(reinterpret_cast<const xll::Array<Any>*>(&src)));
             else if (t == xltypeMissing)
                 std::construct_at(reinterpret_cast<xll::Missing*>(this));
             else    // xltypeNil or unknown — treat as Nil
@@ -357,6 +429,9 @@ namespace xll
             else if (t == xltypeErr)
                 std::construct_at(reinterpret_cast<xll::Error*>(this),
                     std::move(*std::launder(reinterpret_cast<xll::Error*>(&src))));
+            else if (t == xltypeMulti)
+                std::construct_at(reinterpret_cast<xll::Array<Any>*>(this),
+                    std::move(*std::launder(reinterpret_cast<xll::Array<Any>*>(&src))));
             else if (t == xltypeMissing)
                 std::construct_at(reinterpret_cast<xll::Missing*>(this));
             else
@@ -377,6 +452,8 @@ namespace xll
                 std::destroy_at(std::launder(reinterpret_cast<xll::Bool*>(this)));
             else if (t == xltypeErr)
                 std::destroy_at(std::launder(reinterpret_cast<xll::Error*>(this)));
+            else if (t == xltypeMulti)
+                std::destroy_at(std::launder(reinterpret_cast<xll::Array<Any>*>(this)));
             else if (t == xltypeMissing)
                 std::destroy_at(std::launder(reinterpret_cast<xll::Missing*>(this)));
             else    // xltypeNil or unknown
@@ -395,10 +472,10 @@ namespace xll
     constexpr void swap(Any<TPolicy>& lhs, Any<TPolicy>& rhs) noexcept { lhs.swap(rhs); }
 
     // Verify that Any adds no data members beyond XLOPER12.
-    static_assert(sizeof(Any<ExpectedPolicy>) == sizeof(XLOPER12),
-        "Any<ExpectedPolicy> must not add data members");
     static_assert(sizeof(Any<OptionalPolicy>) == sizeof(XLOPER12),
         "Any<OptionalPolicy> must not add data members");
+    static_assert(sizeof(Any<ExpectedPolicy>) == sizeof(XLOPER12),
+        "Any<ExpectedPolicy> must not add data members");
 
     // =========================================================================
     // xll::cast — type-safe retrieval
@@ -507,11 +584,12 @@ namespace xll
     // Convenience type aliases
     // =========================================================================
 
-    /// `xll::Any` with `ExpectedPolicy` (default).
+    /// `xll::Any` with `OptionalPolicy` (default).
+    using AnyOptional = Any<OptionalPolicy>;
+
+    /// `xll::Any` with `ExpectedPolicy`.
     using AnyExpected = Any<ExpectedPolicy>;
 
-    /// `xll::Any` with `OptionalPolicy`.
-    using AnyOptional = Any<OptionalPolicy>;
 
 }    // namespace xll
 

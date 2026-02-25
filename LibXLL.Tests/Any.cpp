@@ -25,7 +25,7 @@ TEST_CASE("Any - is_base_of XLOPER12", "[xll::Any][layout]")
 
 TEST_CASE("Any - policy_type aliases", "[xll::Any][layout]")
 {
-    STATIC_REQUIRE(std::same_as<xll::Any<>::policy_type,            xll::ExpectedPolicy>);
+    STATIC_REQUIRE(std::same_as<xll::Any<>::policy_type,            xll::OptionalPolicy>);
     STATIC_REQUIRE(std::same_as<xll::AnyExpected::policy_type,      xll::ExpectedPolicy>);
     STATIC_REQUIRE(std::same_as<xll::AnyOptional::policy_type,      xll::OptionalPolicy>);
 }
@@ -352,7 +352,7 @@ TEST_CASE("Any - holds<T> and type() queries", "[xll::Any][holds]")
 
 TEST_CASE("cast<Number> - ExpectedPolicy, correct type", "[xll::cast][ExpectedPolicy]")
 {
-    xll::Any<> any{xll::Number(3.14)};
+    xll::AnyExpected any{xll::Number(3.14)};
     auto result = xll::cast<xll::Number>(any);
 
     STATIC_REQUIRE(std::same_as<decltype(result), xll::Expected<xll::Number, xll::Error>>);
@@ -362,7 +362,7 @@ TEST_CASE("cast<Number> - ExpectedPolicy, correct type", "[xll::cast][ExpectedPo
 
 TEST_CASE("cast<Number> - ExpectedPolicy, wrong type yields ErrValue", "[xll::cast][ExpectedPolicy]")
 {
-    xll::Any<> any{xll::String("not a number")};
+    xll::AnyExpected any{xll::String("not a number")};
     auto result = xll::cast<xll::Number>(any);
 
     STATIC_REQUIRE(std::same_as<decltype(result), xll::Expected<xll::Number, xll::Error>>);
@@ -372,7 +372,7 @@ TEST_CASE("cast<Number> - ExpectedPolicy, wrong type yields ErrValue", "[xll::ca
 
 TEST_CASE("cast<String> - ExpectedPolicy, correct type", "[xll::cast][ExpectedPolicy]")
 {
-    xll::Any<> any{xll::String("hello")};
+    xll::AnyExpected any{xll::String("hello")};
     auto result = xll::cast<xll::String>(any);
 
     REQUIRE(result.has_value());
@@ -381,7 +381,7 @@ TEST_CASE("cast<String> - ExpectedPolicy, correct type", "[xll::cast][ExpectedPo
 
 TEST_CASE("cast<String> - ExpectedPolicy, wrong type yields ErrValue", "[xll::cast][ExpectedPolicy]")
 {
-    xll::Any<> any{xll::Number(1.0)};
+    xll::AnyExpected any{xll::Number(1.0)};
     auto result = xll::cast<xll::String>(any);
 
     REQUIRE_FALSE(result.has_value());
@@ -390,7 +390,7 @@ TEST_CASE("cast<String> - ExpectedPolicy, wrong type yields ErrValue", "[xll::ca
 
 TEST_CASE("cast<Int> - ExpectedPolicy, correct type", "[xll::cast][ExpectedPolicy]")
 {
-    xll::Any<> any{xll::Int(99)};
+    xll::AnyExpected any{xll::Int(99)};
     auto result = xll::cast<xll::Int>(any);
 
     REQUIRE(result.has_value());
@@ -399,7 +399,7 @@ TEST_CASE("cast<Int> - ExpectedPolicy, correct type", "[xll::cast][ExpectedPolic
 
 TEST_CASE("cast<Int> - ExpectedPolicy, wrong type", "[xll::cast][ExpectedPolicy]")
 {
-    xll::Any<> any{xll::Bool(false)};
+    xll::AnyExpected any{xll::Bool(false)};
     auto result = xll::cast<xll::Int>(any);
     REQUIRE_FALSE(result.has_value());
     REQUIRE(result.error() == xll::ErrValue);
@@ -407,7 +407,7 @@ TEST_CASE("cast<Int> - ExpectedPolicy, wrong type", "[xll::cast][ExpectedPolicy]
 
 TEST_CASE("cast<Bool> - ExpectedPolicy, correct type", "[xll::cast][ExpectedPolicy]")
 {
-    xll::Any<> any{xll::Bool(true)};
+    xll::AnyExpected any{xll::Bool(true)};
     auto result = xll::cast<xll::Bool>(any);
 
     REQUIRE(result.has_value());
@@ -416,7 +416,7 @@ TEST_CASE("cast<Bool> - ExpectedPolicy, correct type", "[xll::cast][ExpectedPoli
 
 TEST_CASE("cast<Bool> - ExpectedPolicy, wrong type", "[xll::cast][ExpectedPolicy]")
 {
-    xll::Any<> any{xll::Number(0.0)};
+    xll::AnyExpected any{xll::Number(0.0)};
     auto result = xll::cast<xll::Bool>(any);
     REQUIRE_FALSE(result.has_value());
     REQUIRE(result.error() == xll::ErrValue);
@@ -424,7 +424,7 @@ TEST_CASE("cast<Bool> - ExpectedPolicy, wrong type", "[xll::cast][ExpectedPolicy
 
 TEST_CASE("cast<Error> - ExpectedPolicy, correct type", "[xll::cast][ExpectedPolicy]")
 {
-    xll::Any<> any{xll::ErrDiv0};
+    xll::AnyExpected any{xll::ErrDiv0};
     auto result = xll::cast<xll::Error>(any);
 
     REQUIRE(result.has_value());
@@ -433,7 +433,7 @@ TEST_CASE("cast<Error> - ExpectedPolicy, correct type", "[xll::cast][ExpectedPol
 
 TEST_CASE("cast<Error> - ExpectedPolicy, wrong type", "[xll::cast][ExpectedPolicy]")
 {
-    xll::Any<> any{xll::Number(1.0)};
+    xll::AnyExpected any{xll::Number(1.0)};
     auto result = xll::cast<xll::Error>(any);
     REQUIRE_FALSE(result.has_value());
     REQUIRE(result.error() == xll::ErrValue);
@@ -441,14 +441,14 @@ TEST_CASE("cast<Error> - ExpectedPolicy, wrong type", "[xll::cast][ExpectedPolic
 
 TEST_CASE("cast<Nil> - ExpectedPolicy, correct type", "[xll::cast][ExpectedPolicy]")
 {
-    xll::Any<> any{xll::Nil{}};
+    xll::AnyExpected any{xll::Nil{}};
     auto result = xll::cast<xll::Nil>(any);
     REQUIRE(result.has_value());
 }
 
 TEST_CASE("cast<Nil> - ExpectedPolicy, wrong type", "[xll::cast][ExpectedPolicy]")
 {
-    xll::Any<> any{xll::Number(1.0)};
+    xll::AnyExpected any{xll::Number(1.0)};
     auto result = xll::cast<xll::Nil>(any);
     REQUIRE_FALSE(result.has_value());
     REQUIRE(result.error() == xll::ErrValue);
@@ -456,14 +456,14 @@ TEST_CASE("cast<Nil> - ExpectedPolicy, wrong type", "[xll::cast][ExpectedPolicy]
 
 TEST_CASE("cast<Missing> - ExpectedPolicy, correct type", "[xll::cast][ExpectedPolicy]")
 {
-    xll::Any<> any{xll::Missing{}};
+    xll::AnyExpected any{xll::Missing{}};
     auto result = xll::cast<xll::Missing>(any);
     REQUIRE(result.has_value());
 }
 
-TEST_CASE("cast<Missing> - ExpectedPolicy, default Any (Nil) yields ErrValue", "[xll::cast][ExpectedPolicy]")
+TEST_CASE("cast<Missing> - ExpectedPolicy, default AnyExpected (Nil) yields ErrValue", "[xll::cast][ExpectedPolicy]")
 {
-    xll::Any<> any;  // holds Nil
+    xll::AnyExpected any;  // holds Nil
     auto result = xll::cast<xll::Missing>(any);
     REQUIRE_FALSE(result.has_value());
     REQUIRE(result.error() == xll::ErrValue);
@@ -562,7 +562,7 @@ TEST_CASE("cast<Number> - OptionalPolicy, all other types yield None", "[xll::ca
 
 TEST_CASE("cast - ExpectedPolicy: monadic and_then", "[xll::cast][monadic]")
 {
-    xll::Any<> any{xll::Number(10.0)};
+    xll::AnyExpected any{xll::Number(10.0)};
 
     auto result = xll::cast<xll::Number>(any)
         .and_then([](xll::Number& n) -> xll::Expected<xll::Number, xll::Error> {
@@ -575,7 +575,7 @@ TEST_CASE("cast - ExpectedPolicy: monadic and_then", "[xll::cast][monadic]")
 
 TEST_CASE("cast - ExpectedPolicy: monadic transform", "[xll::cast][monadic]")
 {
-    xll::Any<> any{xll::Number(5.0)};
+    xll::AnyExpected any{xll::Number(5.0)};
 
     auto result = xll::cast<xll::Number>(any)
         .transform([](xll::Number n) { return xll::Number(n.val.num + 1.0); });
@@ -586,7 +586,7 @@ TEST_CASE("cast - ExpectedPolicy: monadic transform", "[xll::cast][monadic]")
 
 TEST_CASE("cast - ExpectedPolicy: error propagates through chain", "[xll::cast][monadic]")
 {
-    xll::Any<> any{xll::String("not a number")};
+    xll::AnyExpected any{xll::String("not a number")};
 
     int calls = 0;
     auto result = xll::cast<xll::Number>(any)
@@ -599,7 +599,7 @@ TEST_CASE("cast - ExpectedPolicy: error propagates through chain", "[xll::cast][
 
 TEST_CASE("cast - ExpectedPolicy: or_else recovers from type mismatch", "[xll::cast][monadic]")
 {
-    xll::Any<> any{xll::String("fallback")};
+    xll::AnyExpected any{xll::String("fallback")};
 
     auto result = xll::cast<xll::Number>(any)
         .or_else([](xll::Error) -> xll::Expected<xll::Number, xll::Error> {
@@ -651,6 +651,7 @@ TEST_CASE("cast - OptionalPolicy: or_else provides fallback", "[xll::cast][monad
 TEST_CASE("cast - result is a copy, not an alias", "[xll::cast][value_semantics]")
 {
     xll::Any<> any{xll::Number(1.0)};
+    // Any<> uses OptionalPolicy — cast returns Optional<Number>
     auto r = xll::cast<xll::Number>(any);
     r.value() = xll::Number(999.0);  // mutate the copy
 
@@ -674,6 +675,7 @@ TEST_CASE("cast - String result is a deep copy", "[xll::cast][value_semantics]")
 
 TEST_CASE("Any - multiple casts succeed independently", "[xll::cast]")
 {
+    // Any<> uses OptionalPolicy — cast returns Optional<T>
     xll::Any<> any{xll::Number(2.0)};
 
     auto r1 = xll::cast<xll::Number>(any);
@@ -690,6 +692,23 @@ TEST_CASE("Any - multiple casts succeed independently", "[xll::cast]")
 // =============================================================================
 // Type aliases
 // =============================================================================
+
+TEST_CASE("Any<> default - cast returns Optional (OptionalPolicy is default)", "[xll::Any][aliases]")
+{
+    xll::Any<> a{xll::Number(1.0)};
+    auto r = xll::cast<xll::Number>(a);
+    STATIC_REQUIRE(std::same_as<decltype(r), xll::Optional<xll::Number>>);
+    REQUIRE(r.has_value());
+}
+
+TEST_CASE("Any<> default - failed cast returns None (not ErrValue)", "[xll::Any][aliases]")
+{
+    xll::Any<> a{xll::Number(1.0)};
+    auto r = xll::cast<xll::String>(a);
+    STATIC_REQUIRE(std::same_as<decltype(r), xll::Optional<xll::String>>);
+    REQUIRE_FALSE(r.has_value());
+    REQUIRE(r == xll::None);
+}
 
 TEST_CASE("AnyExpected type alias", "[xll::Any][aliases]")
 {

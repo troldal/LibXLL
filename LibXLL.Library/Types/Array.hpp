@@ -97,6 +97,9 @@ namespace xll
         /// Const iterator type.
         using const_iterator  = const TValue*;
 
+        /// The XLOPER12 type tag for all Array specialisations.
+        static constexpr int excel_type = xltypeMulti;
+
         // -----------------------------------------------------------------------
         // Shape tags
         // -----------------------------------------------------------------------
