@@ -12,6 +12,12 @@
 
 namespace xll
 {
+    // Forward declarations so that Any<> can be used as the default TValue.
+    struct OptionalPolicy;
+    struct ExpectedPolicy;
+    template<typename TPolicy>
+        requires std::same_as<TPolicy, ExpectedPolicy> || std::same_as<TPolicy, OptionalPolicy>
+    class Any;
 
 /**
  * @brief A type-safe, Excel-compatible two-dimensional array.
@@ -73,7 +79,7 @@ namespace xll
  * @see xll::Number
  * @see xll::String
  */
-    template<typename TValue>
+    template<typename TValue = Any<OptionalPolicy>>
     class Array : public XLOPER12
     {
         struct ShapeBase{};
@@ -1067,6 +1073,32 @@ namespace xll
             return buffer;
         }
     };
+
+    // =========================================================================
+    // Deduction guides
+    // =========================================================================
+
+    /// Deduce `Array<TValue>` from a brace-list of `TValue` elements.
+    /// Allows: `xll::Array arr { xll::Number(1), xll::Number(2) };`
+    template<typename TValue>
+    Array(std::initializer_list<TValue>) -> Array<TValue>;
+
+    /// Deduce `Array<TValue>` from a brace-list of `TValue` + a shape tag.
+    template<typename TValue, typename TShape>
+    Array(std::initializer_list<TValue>, TShape) -> Array<TValue>;
+
+    /// Deduce `Array<TValue>` from a brace-list of `TValue` + a shape tag + fill.
+    template<typename TValue, typename TShape>
+    Array(std::initializer_list<TValue>, TShape, TValue) -> Array<TValue>;
+
+    /// Deduce `Array<range_value_t<TRange>>` from any forward range.
+    /// Allows: `xll::Array arr(vec, xll::Array<xll::Number>::Horizontal{});`
+    template<std::ranges::forward_range TRange, typename TShape>
+    Array(TRange&&, TShape) -> Array<std::ranges::range_value_t<TRange>>;
+
+    /// Deduce `Array<range_value_t<TRange>>` from a forward range + shape + fill.
+    template<std::ranges::forward_range TRange, typename TShape>
+    Array(TRange&&, TShape, std::ranges::range_value_t<TRange>) -> Array<std::ranges::range_value_t<TRange>>;
 
     /**
      * @brief Returns a copy of @p arr with new row and column dimensions.

@@ -550,15 +550,15 @@ void demo_array()
     subsection("9c. Heterogeneous Array<Any<>> stored in Any<>");
     {
         // Build an array whose elements are themselves Any objects of mixed types.
-        xll::Array<xll::Any<>> hetero {
+        xll::Array<> hetero {
             {
-                xll::Any { xll::Number(3.14)        },
-                xll::Any { xll::String("hello")     },
-                xll::Any { xll::Bool(true)          },
-                xll::Any { xll::Int(42)             },
-                xll::Any { xll::ErrDiv0             },
+                xll::Number(3.14),
+                xll::String("hello"),
+                xll::Bool(true),
+                xll::Int(42),
+                xll::ErrDiv0,
             },
-            xll::Array<xll::Any<>>::Horizontal{}
+            xll::Array<>::Horizontal{}
         };
 
         xll::Any<> any { hetero };
