@@ -11,6 +11,7 @@
 #include <Types/Nil.hpp>
 #include <Types/Number.hpp>
 #include <Types/String.hpp>
+#include <Types/Tuple.hpp>
 
 #include <iostream>
 #include <string>
@@ -63,15 +64,15 @@ void demo_construction()
         xll::Any any;
         std::cout << "  any.type()      = " << xltype_name(any.type()) << "\n";
         std::cout << "  any.empty()     = " << std::boolalpha << any.empty() << "\n";
-        std::cout << "  holds<Nil>()    = " << any.holds<xll::Nil>() << "\n";
+        std::cout << "  holds<Nil>()    = " << xll::holds<xll::Nil>(any) << "\n";
     }
 
     subsection("Construct from xll::Number");
     {
         xll::Any any { xll::Number(3.14) };
         std::cout << "  any.type()      = " << xltype_name(any.type()) << "\n";
-        std::cout << "  holds<Number>() = " << any.holds<xll::Number>() << "\n";
-        std::cout << "  holds<String>() = " << any.holds<xll::String>() << "\n";
+        std::cout << "  holds<Number>() = " << xll::holds<xll::Number>(any) << "\n";
+        std::cout << "  holds<String>() = " << xll::holds<xll::String>(any) << "\n";
         std::cout << "  empty()         = " << any.empty() << "\n";
     }
 
@@ -80,7 +81,7 @@ void demo_construction()
         xll::String s { "hello, Excel" };
         xll::Any any { s };
         std::cout << "  any.type()       = " << xltype_name(any.type()) << "\n";
-        std::cout << "  holds<String>()  = " << any.holds<xll::String>() << "\n";
+        std::cout << "  holds<String>()  = " << xll::holds<xll::String>(any) << "\n";
         // Buffers must be different allocations — Any made a deep copy
         std::cout << "  Deep copy?       = " << (any.val.str != s.val.str ? "yes" : "no") << "\n";
     }
@@ -163,15 +164,6 @@ void demo_cast()
                       << (result.has_value() ? std::string(result.value().to_string()) : "FAILED")
                       << "\n";
         }
-    }
-
-    subsection("Using AnyOptional convenience alias");
-    {
-        xll::AnyOptional any { xll::String("alias demo") };
-        auto result = xll::cast<xll::String>(any);
-
-        if (result.has_value())
-            std::cout << "  Value = " << std::string(result.value()) << "\n";
     }
 }
 
@@ -321,7 +313,7 @@ std::string format_cell(const xll::Any& cell)
     if (auto e = xll::cast<xll::Error>(cell); e.has_value())
         return "Error: " + std::string(e.value().to_string());
 
-    if (cell.holds<xll::Missing>())
+    if (xll::holds<xll::Missing>(cell))
         return "(missing argument)";
 
     return "(empty/nil)";
@@ -346,22 +338,6 @@ void demo_heterogeneous_dispatch()
 }
 
 // ---------------------------------------------------------------------------
-// Section 8: AnyOptional convenience alias
-// ---------------------------------------------------------------------------
-
-void demo_aliases()
-{
-    separator("8. AnyOptional convenience alias");
-
-    subsection("AnyOptional is an alias for Any — cast returns Optional<T>");
-    {
-        xll::AnyOptional a { xll::Number(6.28) };
-        auto r = xll::cast<xll::Number>(a);
-        std::cout << "  Value = " << static_cast<double>(r.value()) << "\n";
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Section 9: xll::Any holding an xll::Array
 // ---------------------------------------------------------------------------
 
@@ -382,12 +358,12 @@ void demo_array()
         xll::Any any { src };
 
         std::cout << "  any.type()                        = " << xltype_name(any.type()) << "\n";
-        std::cout << "  any.holds<xll::Array>()           = "
-                  << any.holds<xll::Array>() << "\n";
-        std::cout << "  any.holds<xll::Array<Number>>()   = "
-                  << any.holds<xll::Array<xll::Number>>() << "\n";
-        std::cout << "  any.holds<xll::Array<xll::String>>() = "
-                  << any.holds<xll::Array<xll::String>>() << "\n";
+        std::cout << "  xll::holds<xll::Array>(any)                   = "
+                  << xll::holds<xll::Array>(any) << "\n";
+        std::cout << "  xll::holds<xll::Array<xll::Number>>(any)      = "
+                  << xll::holds<xll::Array<xll::Number>>(any) << "\n";
+        std::cout << "  xll::holds<xll::Array<xll::String>>(any)      = "
+                  << xll::holds<xll::Array<xll::String>>(any) << "\n";
 
         // Cast back.  Any<> uses OptionalPolicy, so result is Optional<Array<Number>>.
         auto result = xll::cast<xll::Array<xll::Number>>(any);
@@ -501,6 +477,93 @@ void demo_array()
 }
 
 // ---------------------------------------------------------------------------
+// Section 10: xll::Tuple
+// ---------------------------------------------------------------------------
+
+void demo_tuple()
+{
+    separator("10. xll::Tuple");
+
+    subsection("Construction and size via type alias");
+    {
+        using MyTuple = xll::Tuple<xll::Number, xll::String, xll::Bool, xll::Int>;
+        MyTuple t { xll::Number(1.0), xll::String("hello"), xll::Bool(true), xll::Int(42) };
+        // size() is not exposed — arity is a compile-time property
+        std::cout << "  constructed Tuple<Number,String,Bool,Int> with 4 elements\n";
+    }
+
+    subsection("get<I>(tuple) — by index, correct types");
+    {
+        using MyTuple = xll::Tuple<xll::Number, xll::String, xll::Bool>;
+        MyTuple t { xll::Number(3.14), xll::String("world"), xll::Bool(false) };
+
+        auto n = xll::get<0>(t);   // Optional<Number>
+        auto s = xll::get<1>(t);   // Optional<String>
+        auto b = xll::get<2>(t);   // Optional<Bool>
+
+        std::cout << "  [0] Number = " << (n.has_value() ? std::to_string(static_cast<double>(n.value())) : "None") << "\n";
+        std::cout << "  [1] String = " << (s.has_value() ? std::string(s.value()) : "None") << "\n";
+        std::cout << "  [2] Bool   = " << (b.has_value() ? (static_cast<bool>(b.value()) ? "true" : "false") : "None") << "\n";
+    }
+
+    subsection("get<I>(tuple) — wrong runtime type returns None");
+    {
+        using MyTuple = xll::Tuple<xll::Number, xll::String>;
+        // Pass a String where a Number is declared — runtime type mismatch
+        MyTuple t { xll::String("oops"), xll::String("ok") };
+
+        auto n = xll::get<0>(t);   // declared Number, but holds String → None
+        std::cout << "  get<0> (declared Number, holds String) has_value = "
+                  << n.has_value() << "  (expected false)\n";
+    }
+
+    subsection("get<T>(tuple) — by type");
+    {
+        using MyTuple = xll::Tuple<xll::String, xll::Number, xll::Bool>;
+        MyTuple t { xll::String("hello"), xll::Number(2.71), xll::Bool(true) };
+
+        auto s = xll::get<xll::String>(t);   // Optional<String>
+        auto n = xll::get<xll::Number>(t);   // Optional<Number>
+        auto b = xll::get<xll::Bool>  (t);   // Optional<Bool>
+
+        std::cout << "  String = " << (s.has_value() ? std::string(s.value()) : "None") << "\n";
+        std::cout << "  Number = " << (n.has_value() ? std::to_string(static_cast<double>(n.value())) : "None") << "\n";
+        std::cout << "  Bool   = " << (b.has_value() ? (static_cast<bool>(b.value()) ? "true" : "false") : "None") << "\n";
+    }
+
+    subsection("get<T> with duplicate type fails to compile — demonstrated by comment");
+    {
+        // This would be a compile error:
+        // using Bad = xll::Tuple<xll::Number, xll::Number>;
+        // xll::get<xll::Number>(bad_t);  // error: Number appears twice
+        std::cout << "  (duplicate-type get is a compile error — enforced via requires)\n";
+    }
+
+    subsection("Default-constructed Tuple — elements are Nil → None");
+    {
+        using MyTuple = xll::Tuple<xll::Number, xll::String>;
+        MyTuple t;   // elements default to xll::Nil
+
+        auto n = xll::get<0>(t);
+        auto s = xll::get<1>(t);
+        std::cout << "  get<0> has_value = " << n.has_value() << "  (expected false)\n";
+        std::cout << "  get<1> has_value = " << s.has_value() << "  (expected false)\n";
+    }
+
+    subsection("Monadic chaining on get result");
+    {
+        using MyTuple = xll::Tuple<xll::Number, xll::String>;
+        MyTuple t { xll::Number(4.0), xll::String("ignored") };
+
+        auto result = xll::get<0>(t)
+            .transform([](xll::Number n) { return xll::Number(n.val.num * n.val.num); })
+            .or_else([]() -> xll::Optional<xll::Number> { return xll::Number(0.0); });
+
+        std::cout << "  4^2 = " << static_cast<double>(result.value()) << "  (expected 16)\n";
+    }
+}
+
+// ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
 
@@ -514,8 +577,8 @@ int main()
     demo_value_semantics();
     demo_swap();
     demo_heterogeneous_dispatch();
-    demo_aliases();
     demo_array();
+    demo_tuple();
 
     std::cout << "\n";
     std::cout << "========================================================\n";

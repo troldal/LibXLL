@@ -17,6 +17,7 @@ add_executable(LibXLL.Tests.default
         Array.cpp
         Optional.cpp
         Any.cpp
+        Tuple.cpp
 )
 target_link_libraries(LibXLL.Tests.default PRIVATE Catch2ForOpenXLL LibXLL)
 
@@ -34,6 +35,8 @@ if (NOT WIN32)
                 Variant.cpp
                 Array.cpp
                 Optional.cpp
+                Any.cpp
+                Tuple.cpp
         )
         target_link_libraries(LibXLL.Tests.${sanitizer} PRIVATE Catch2ForOpenXLL LibXLL)
         if (sanitizer STREQUAL "address")

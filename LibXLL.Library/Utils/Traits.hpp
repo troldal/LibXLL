@@ -9,6 +9,11 @@
 namespace xll
 {
     class Number;
+    class Any;
+
+    template<typename TValue>
+    requires is_xll_type<TValue>
+    class Optional;
 }
 namespace xll::traits
 {
@@ -66,6 +71,18 @@ namespace xll::traits
 
     template<typename T>
     struct arg_traits<Expected<T, xll::Error>>
+    {
+        static constexpr std::string_view excel_type = "Q";
+    };
+
+    template<typename T>
+    struct arg_traits<Optional<T>>
+    {
+        static constexpr std::string_view excel_type = "Q";
+    };
+
+    template<>
+    struct arg_traits<Any>
     {
         static constexpr std::string_view excel_type = "Q";
     };

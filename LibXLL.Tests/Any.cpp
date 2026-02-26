@@ -11,13 +11,13 @@
 TEST_CASE("Any - sizeof equals XLOPER12", "[xll::Any][layout]")
 {
     STATIC_REQUIRE(sizeof(xll::Any)         == sizeof(XLOPER12));
-    STATIC_REQUIRE(sizeof(xll::AnyOptional) == sizeof(XLOPER12));
+    // STATIC_REQUIRE(sizeof(xll::AnyOptional) == sizeof(XLOPER12));
 }
 
 TEST_CASE("Any - is_base_of XLOPER12", "[xll::Any][layout]")
 {
     STATIC_REQUIRE(std::is_base_of_v<XLOPER12, xll::Any>);
-    STATIC_REQUIRE(std::is_base_of_v<XLOPER12, xll::AnyOptional>);
+    // STATIC_REQUIRE(std::is_base_of_v<XLOPER12, xll::AnyOptional>);
 }
 
 
@@ -30,7 +30,7 @@ TEST_CASE("Any - default construction holds Nil", "[xll::Any][construction]")
     xll::Any any;
     REQUIRE(any.type()  == xltypeNil);
     REQUIRE(any.empty());
-    REQUIRE(any.holds<xll::Nil>());
+    REQUIRE(xll::holds<xll::Nil>(any));
 }
 
 
@@ -43,8 +43,8 @@ TEST_CASE("Any - construct from Number (copy)", "[xll::Any][construction]")
     xll::Number n{3.14};
     xll::Any any{n};
     REQUIRE(any.type() == xltypeNum);
-    REQUIRE(any.holds<xll::Number>());
-    REQUIRE_FALSE(any.holds<xll::String>());
+    REQUIRE(xll::holds<xll::Number>(any));
+    REQUIRE_FALSE(xll::holds<xll::String>(any));
     REQUIRE_FALSE(any.empty());
 }
 
@@ -52,28 +52,28 @@ TEST_CASE("Any - construct from Number (move)", "[xll::Any][construction]")
 {
     xll::Any any{xll::Number(2.71828)};
     REQUIRE(any.type() == xltypeNum);
-    REQUIRE(any.holds<xll::Number>());
+    REQUIRE(xll::holds<xll::Number>(any));
 }
 
 TEST_CASE("Any - construct from Int", "[xll::Any][construction]")
 {
     xll::Any any{xll::Int(42)};
     REQUIRE(any.type() == xltypeInt);
-    REQUIRE(any.holds<xll::Int>());
+    REQUIRE(xll::holds<xll::Int>(any));
 }
 
 TEST_CASE("Any - construct from Bool", "[xll::Any][construction]")
 {
     xll::Any any{xll::Bool(true)};
     REQUIRE(any.type() == xltypeBool);
-    REQUIRE(any.holds<xll::Bool>());
+    REQUIRE(xll::holds<xll::Bool>(any));
 }
 
 TEST_CASE("Any - construct from Error", "[xll::Any][construction]")
 {
     xll::Any any{xll::ErrDiv0};
     REQUIRE(any.type() == xltypeErr);
-    REQUIRE(any.holds<xll::Error>());
+    REQUIRE(xll::holds<xll::Error>(any));
 }
 
 TEST_CASE("Any - construct from String performs deep copy", "[xll::Any][construction]")
@@ -81,7 +81,7 @@ TEST_CASE("Any - construct from String performs deep copy", "[xll::Any][construc
     xll::String s{"hello"};
     xll::Any any{s};
     REQUIRE(any.type() == xltypeStr);
-    REQUIRE(any.holds<xll::String>());
+    REQUIRE(xll::holds<xll::String>(any));
     // Deep copy: the string buffer pointers must differ
     REQUIRE(any.val.str != s.val.str);
 }
@@ -90,7 +90,7 @@ TEST_CASE("Any - construct from String (move)", "[xll::Any][construction]")
 {
     xll::Any any{xll::String("world")};
     REQUIRE(any.type() == xltypeStr);
-    REQUIRE(any.holds<xll::String>());
+    REQUIRE(xll::holds<xll::String>(any));
 }
 
 TEST_CASE("Any - construct from Nil", "[xll::Any][construction]")
@@ -104,7 +104,7 @@ TEST_CASE("Any - construct from Missing", "[xll::Any][construction]")
 {
     xll::Any any{xll::Missing{}};
     REQUIRE(any.type() == xltypeMissing);
-    REQUIRE(any.holds<xll::Missing>());
+    REQUIRE(xll::holds<xll::Missing>(any));
 }
 
 TEST_CASE("Any - construct from raw XLOPER12 (shallow copy)", "[xll::Any][construction]")
@@ -115,7 +115,7 @@ TEST_CASE("Any - construct from raw XLOPER12 (shallow copy)", "[xll::Any][constr
 
     xll::Any any{raw};
     REQUIRE(any.type() == xltypeNum);
-    REQUIRE(any.holds<xll::Number>());
+    REQUIRE(xll::holds<xll::Number>(any));
 }
 
 // =============================================================================
@@ -127,7 +127,7 @@ TEST_CASE("Any - copy constructor (Number)", "[xll::Any][copy]")
     xll::Any a{xll::Number(1.0)};
     xll::Any b{a};
     REQUIRE(b.type() == xltypeNum);
-    REQUIRE(b.holds<xll::Number>());
+    REQUIRE(xll::holds<xll::Number>(b));
 }
 
 TEST_CASE("Any - copy constructor (String) is deep", "[xll::Any][copy]")
@@ -149,42 +149,42 @@ TEST_CASE("Any - copy constructor (Error)", "[xll::Any][copy]")
 {
     xll::Any a{xll::ErrNA};
     xll::Any b{a};
-    REQUIRE(b.holds<xll::Error>());
+    REQUIRE(xll::holds<xll::Error>(b));
 }
 
 TEST_CASE("Any - copy constructor (Bool)", "[xll::Any][copy]")
 {
     xll::Any a{xll::Bool(false)};
     xll::Any b{a};
-    REQUIRE(b.holds<xll::Bool>());
+    REQUIRE(xll::holds<xll::Bool>(b));
 }
 
 TEST_CASE("Any - copy constructor (Int)", "[xll::Any][copy]")
 {
     xll::Any a{xll::Int(7)};
     xll::Any b{a};
-    REQUIRE(b.holds<xll::Int>());
+    REQUIRE(xll::holds<xll::Int>(b));
 }
 
 TEST_CASE("Any - copy constructor (Missing)", "[xll::Any][copy]")
 {
     xll::Any a{xll::Missing{}};
     xll::Any b{a};
-    REQUIRE(b.holds<xll::Missing>());
+    REQUIRE(xll::holds<xll::Missing>(b));
 }
 
 TEST_CASE("Any - move constructor (Number)", "[xll::Any][move]")
 {
     xll::Any a{xll::Number(9.81)};
     xll::Any b{std::move(a)};
-    REQUIRE(b.holds<xll::Number>());
+    REQUIRE(xll::holds<xll::Number>(b));
 }
 
 TEST_CASE("Any - move constructor (String)", "[xll::Any][move]")
 {
     xll::Any a{xll::String("move me")};
     xll::Any b{std::move(a)};
-    REQUIRE(b.holds<xll::String>());
+    REQUIRE(xll::holds<xll::String>(b));
 }
 
 // =============================================================================
@@ -196,7 +196,7 @@ TEST_CASE("Any - copy assignment (Number)", "[xll::Any][assignment]")
     xll::Any a{xll::Number(5.0)};
     xll::Any b;
     b = a;
-    REQUIRE(b.holds<xll::Number>());
+    REQUIRE(xll::holds<xll::Number>(b));
 }
 
 TEST_CASE("Any - copy assignment (String) is deep", "[xll::Any][assignment]")
@@ -204,7 +204,7 @@ TEST_CASE("Any - copy assignment (String) is deep", "[xll::Any][assignment]")
     xll::Any a{xll::String("assign")};
     xll::Any b;
     b = a;
-    REQUIRE(b.holds<xll::String>());
+    REQUIRE(xll::holds<xll::String>(b));
     REQUIRE(a.val.str != b.val.str);
 }
 
@@ -213,15 +213,15 @@ TEST_CASE("Any - copy assignment replaces existing value", "[xll::Any][assignmen
     xll::Any a{xll::String("new")};
     xll::Any b{xll::Number(1.0)};
     b = a;
-    REQUIRE(b.holds<xll::String>());
-    REQUIRE_FALSE(b.holds<xll::Number>());
+    REQUIRE(xll::holds<xll::String>(b));
+    REQUIRE_FALSE(xll::holds<xll::Number>(b));
 }
 
 TEST_CASE("Any - self copy assignment", "[xll::Any][assignment]")
 {
     xll::Any a{xll::Number(7.0)};
     a = a;  // NOLINT
-    REQUIRE(a.holds<xll::Number>());
+    REQUIRE(xll::holds<xll::Number>(a));
 }
 
 TEST_CASE("Any - move assignment", "[xll::Any][assignment]")
@@ -229,31 +229,31 @@ TEST_CASE("Any - move assignment", "[xll::Any][assignment]")
     xll::Any a{xll::Number(3.0)};
     xll::Any b;
     b = std::move(a);
-    REQUIRE(b.holds<xll::Number>());
+    REQUIRE(xll::holds<xll::Number>(b));
 }
 
 TEST_CASE("Any - assign from xll type (copy)", "[xll::Any][assignment]")
 {
     xll::Any any;
     any = xll::Number(42.0);
-    REQUIRE(any.holds<xll::Number>());
+    REQUIRE(xll::holds<xll::Number>(any));
 }
 
 TEST_CASE("Any - assign from xll type (move)", "[xll::Any][assignment]")
 {
     xll::Any any;
     any = xll::String("moved");
-    REQUIRE(any.holds<xll::String>());
+    REQUIRE(xll::holds<xll::String>(any));
 }
 
 TEST_CASE("Any - re-assign changes type", "[xll::Any][assignment]")
 {
     xll::Any any{xll::Number(1.0)};
-    REQUIRE(any.holds<xll::Number>());
+    REQUIRE(xll::holds<xll::Number>(any));
 
     any = xll::String("now a string");
-    REQUIRE(any.holds<xll::String>());
-    REQUIRE_FALSE(any.holds<xll::Number>());
+    REQUIRE(xll::holds<xll::String>(any));
+    REQUIRE_FALSE(xll::holds<xll::Number>(any));
 }
 
 // =============================================================================
@@ -265,8 +265,8 @@ TEST_CASE("Any - member swap", "[xll::Any][swap]")
     xll::Any a{xll::Number(1.0)};
     xll::Any b{xll::String("str")};
     a.swap(b);
-    REQUIRE(a.holds<xll::String>());
-    REQUIRE(b.holds<xll::Number>());
+    REQUIRE(xll::holds<xll::String>(a));
+    REQUIRE(xll::holds<xll::Number>(b));
 }
 
 TEST_CASE("Any - non-member swap (ADL)", "[xll::Any][swap]")
@@ -275,8 +275,8 @@ TEST_CASE("Any - non-member swap (ADL)", "[xll::Any][swap]")
     xll::Any b{xll::Int(10)};
     using std::swap;
     swap(a, b);
-    REQUIRE(a.holds<xll::Int>());
-    REQUIRE(b.holds<xll::Bool>());
+    REQUIRE(xll::holds<xll::Int>(a));
+    REQUIRE(xll::holds<xll::Bool>(b));
 }
 
 // =============================================================================
@@ -287,46 +287,46 @@ TEST_CASE("Any - holds<T> and type() queries", "[xll::Any][holds]")
 {
     SECTION("Number") {
         xll::Any a{xll::Number(1.0)};
-        REQUIRE( a.holds<xll::Number>());
+        REQUIRE( xll::holds<xll::Number>(a));
         REQUIRE( a.type() == xltypeNum);
-        REQUIRE_FALSE(a.holds<xll::Int>());
-        REQUIRE_FALSE(a.holds<xll::String>());
-        REQUIRE_FALSE(a.holds<xll::Bool>());
-        REQUIRE_FALSE(a.holds<xll::Error>());
-        REQUIRE_FALSE(a.holds<xll::Nil>());
-        REQUIRE_FALSE(a.holds<xll::Missing>());
+        REQUIRE_FALSE(xll::holds<xll::Int>(a));
+        REQUIRE_FALSE(xll::holds<xll::String>(a));
+        REQUIRE_FALSE(xll::holds<xll::Bool>(a));
+        REQUIRE_FALSE(xll::holds<xll::Error>(a));
+        REQUIRE_FALSE(xll::holds<xll::Nil>(a));
+        REQUIRE_FALSE(xll::holds<xll::Missing>(a));
     }
     SECTION("String") {
         xll::Any a{xll::String("x")};
-        REQUIRE( a.holds<xll::String>());
+        REQUIRE( xll::holds<xll::String>(a));
         REQUIRE( a.type() == xltypeStr);
-        REQUIRE_FALSE(a.holds<xll::Number>());
+        REQUIRE_FALSE(xll::holds<xll::Number>(a));
     }
     SECTION("Int") {
         xll::Any a{xll::Int(0)};
-        REQUIRE( a.holds<xll::Int>());
+        REQUIRE( xll::holds<xll::Int>(a));
         REQUIRE( a.type() == xltypeInt);
-        REQUIRE_FALSE(a.holds<xll::Number>());
+        REQUIRE_FALSE(xll::holds<xll::Number>(a));
     }
     SECTION("Bool") {
         xll::Any a{xll::Bool(false)};
-        REQUIRE( a.holds<xll::Bool>());
+        REQUIRE( xll::holds<xll::Bool>(a));
         REQUIRE( a.type() == xltypeBool);
     }
     SECTION("Error") {
         xll::Any a{xll::ErrNull};
-        REQUIRE( a.holds<xll::Error>());
+        REQUIRE( xll::holds<xll::Error>(a));
         REQUIRE( a.type() == xltypeErr);
     }
     SECTION("Nil (default)") {
         xll::Any a;
-        REQUIRE( a.holds<xll::Nil>());
+        REQUIRE( xll::holds<xll::Nil>(a));
         REQUIRE( a.empty());
         REQUIRE( a.type() == xltypeNil);
     }
     SECTION("Missing") {
         xll::Any a{xll::Missing{}};
-        REQUIRE( a.holds<xll::Missing>());
+        REQUIRE( xll::holds<xll::Missing>(a));
         REQUIRE( a.type() == xltypeMissing);
     }
 }
@@ -557,14 +557,6 @@ TEST_CASE("failed cast returns None", "[xll::Any][aliases]")
     STATIC_REQUIRE(std::same_as<decltype(r), xll::Optional<xll::String>>);
     REQUIRE_FALSE(r.has_value());
     REQUIRE(r == xll::None);
-}
-
-TEST_CASE("AnyOptional is an alias for Any", "[xll::Any][aliases]")
-{
-    xll::AnyOptional a{xll::Int(5)};
-    auto r = xll::cast<xll::Int>(a);
-    STATIC_REQUIRE(std::same_as<decltype(r), xll::Optional<xll::Int>>);
-    REQUIRE(r.has_value());
 }
 
 // =============================================================================

@@ -317,65 +317,6 @@ namespace xll
             return static_cast<int>(xltype & ~(xlbitDLLFree | xlbitXLFree));
         }
 
-        /**
-         * @brief Returns `true` when the stored type matches `TTarget::excel_type`.
-         *
-         * For plain xll types (Number, String, Bool, etc.) this checks only the
-         * xltype tag.
-         *
-         * For a fully specialised `xll::Array<T>` where `T` is not `Any`, this
-         * verifies that **every element** in the stored array has an xltype that
-         * is *convertible to* `T` — i.e. the element's xltype is the primary type
-         * or any of the `OtherTypes` accepted by `T`'s `Base` class.  For example,
-         * `holds<Array<Number>>()` returns `true` if all elements are `xltypeNum`,
-         * `xltypeInt`, or `xltypeBool`, because `xll::Number` accepts all three.
-         *
-         * If the Any does not hold an array, or any element is not convertible to
-         * `T`, the function returns `false`.
-         *
-         * @tparam TTarget  The xll type to check against (must satisfy `is_xll_type`).
-         */
-        template<typename TTarget>
-            requires is_xll_type<TTarget>
-        [[nodiscard]]
-        constexpr bool holds() const noexcept
-        {
-            if constexpr (is_typed_array<TTarget>) {
-                // Array<T>: check xltype AND that every element is convertible to T.
-                if (type() != xltypeMulti) return false;
-                const auto* elems = static_cast<const XLOPER12*>(val.array.lparray);
-                const size_t n    = static_cast<size_t>(val.array.rows) * static_cast<size_t>(val.array.columns);
-                for (size_t i = 0; i < n; ++i) {
-                    const int elem_type = elems[i].xltype & ~(xlbitDLLFree | xlbitXLFree);
-                    if (!impl::xltype_convertible_to<typename TTarget::value_type>(elem_type))
-                        return false;
-                }
-                return true;
-            }
-            else {
-                return type() == static_cast<int>(TTarget::excel_type);
-            }
-        }
-
-        /**
-         * @brief Returns `true` when the stored value is an array of any element type.
-         *
-         * This overload accepts the unspecialised `xll::Array` template as a template
-         * template argument and is equivalent to `holds<xll::Array<xll::Any>>()`:
-         * it only checks that the stored xltype is `xltypeMulti`, without inspecting
-         * element types.
-         *
-         * Usage: `any.holds<xll::Array>()`
-         *
-         * @tparam TArrayTemplate  Must be `xll::Array` (deduced).
-         */
-        template<template<typename> class TArrayTemplate>
-            requires std::same_as<TArrayTemplate<Any>, Array<Any>>
-        [[nodiscard]]
-        constexpr bool holds() const noexcept
-        {
-            return type() == xltypeMulti;
-        }
 
         /**
          * @brief Returns `true` when the Any currently holds `xll::Nil`.
@@ -481,6 +422,75 @@ namespace xll
         "Any must not add data members");
 
     // =========================================================================
+    // xll::holds — type queries as free functions
+    // =========================================================================
+
+    /**
+     * @brief Returns `true` when `any` holds a value of type `TTarget`.
+     *
+     * For plain xll types (Number, String, Bool, etc.) this checks only the
+     * xltype tag.
+     *
+     * For a fully specialised `xll::Array<T>` where `T` is not `Any`, this
+     * verifies that **every element** in the stored array has an xltype that
+     * is *convertible to* `T` — i.e. the element's xltype is the primary type
+     * or any of the `OtherTypes` accepted by `T`'s `Base` class.  For example,
+     * `holds<Array<Number>>(any)` returns `true` if all elements are
+     * `xltypeNum`, `xltypeInt`, or `xltypeBool`, because `xll::Number` accepts
+     * all three.
+     *
+     * @tparam TTarget  The xll type to check against (must satisfy `is_xll_type`).
+     * @param  any      The `Any` object to inspect.
+     *
+     * @code
+     * xll::Any any = xll::Number(3.14);
+     * xll::holds<xll::Number>(any);   // true
+     * xll::holds<xll::String>(any);   // false
+     * @endcode
+     */
+    template<typename TTarget>
+        requires is_xll_type<TTarget>
+    [[nodiscard]]
+    constexpr bool holds(const Any& any) noexcept
+    {
+        if constexpr (is_typed_array<TTarget>) {
+            // Array<T>: check xltype AND that every element is convertible to T.
+            if (any.type() != xltypeMulti) return false;
+            const auto* elems = static_cast<const XLOPER12*>(any.val.array.lparray);
+            const size_t n    = static_cast<size_t>(any.val.array.rows) *
+                                static_cast<size_t>(any.val.array.columns);
+            for (size_t i = 0; i < n; ++i) {
+                const int elem_type = elems[i].xltype & ~(xlbitDLLFree | xlbitXLFree);
+                if (!impl::xltype_convertible_to<typename TTarget::value_type>(elem_type))
+                    return false;
+            }
+            return true;
+        }
+        else {
+            return any.type() == static_cast<int>(TTarget::excel_type);
+        }
+    }
+
+    /**
+     * @brief Returns `true` when `any` holds an array of any element type.
+     *
+     * This overload accepts the unspecialised `xll::Array` template as a
+     * template template argument.  It only checks that the stored xltype is
+     * `xltypeMulti`, without inspecting element types.
+     *
+     * @code
+     * xll::holds<xll::Array>(any);   // true iff any holds an array
+     * @endcode
+     */
+    template<template<typename> class TArrayTemplate>
+        requires std::same_as<TArrayTemplate<Any>, Array<Any>>
+    [[nodiscard]]
+    constexpr bool holds(const Any& any) noexcept
+    {
+        return any.type() == xltypeMulti;
+    }
+
+    // =========================================================================
     // xll::cast — type-safe retrieval
     // =========================================================================
 
@@ -529,15 +539,6 @@ namespace xll
     {
         return cast<TTarget>(static_cast<const Any&>(any));
     }
-
-    // =========================================================================
-    // Convenience type alias
-    // =========================================================================
-
-    /// `xll::AnyOptional` is an alias for `xll::Any` (kept for source compatibility).
-    using AnyOptional = Any;
-
-
 }    // namespace xll
 
 
