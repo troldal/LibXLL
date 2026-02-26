@@ -51,7 +51,7 @@ static const char* xltype_name(int t)
 
 // ---------------------------------------------------------------------------
 // Section 1: Construction and type queries
-// (bare xll::Any<> uses the default OptionalPolicy)
+// (bare xll::Any uses the default OptionalPolicy)
 // ---------------------------------------------------------------------------
 
 void demo_construction()
@@ -60,7 +60,7 @@ void demo_construction()
 
     subsection("Default construction — holds Nil");
     {
-        xll::Any<> any;
+        xll::Any any;
         std::cout << "  any.type()      = " << xltype_name(any.type()) << "\n";
         std::cout << "  any.empty()     = " << std::boolalpha << any.empty() << "\n";
         std::cout << "  holds<Nil>()    = " << any.holds<xll::Nil>() << "\n";
@@ -68,7 +68,7 @@ void demo_construction()
 
     subsection("Construct from xll::Number");
     {
-        xll::Any<> any { xll::Number(3.14) };
+        xll::Any any { xll::Number(3.14) };
         std::cout << "  any.type()      = " << xltype_name(any.type()) << "\n";
         std::cout << "  holds<Number>() = " << any.holds<xll::Number>() << "\n";
         std::cout << "  holds<String>() = " << any.holds<xll::String>() << "\n";
@@ -78,7 +78,7 @@ void demo_construction()
     subsection("Construct from xll::String (deep copy)");
     {
         xll::String s { "hello, Excel" };
-        xll::Any<> any { s };
+        xll::Any any { s };
         std::cout << "  any.type()       = " << xltype_name(any.type()) << "\n";
         std::cout << "  holds<String>()  = " << any.holds<xll::String>() << "\n";
         // Buffers must be different allocations — Any made a deep copy
@@ -87,13 +87,13 @@ void demo_construction()
 
     subsection("Construct from every supported xll type");
     {
-        xll::Any<> num     { xll::Number(1.0)    };
-        xll::Any<> str     { xll::String("hi")   };
-        xll::Any<> i       { xll::Int(42)         };
-        xll::Any<> b       { xll::Bool(true)      };
-        xll::Any<> err     { xll::ErrDiv0         };
-        xll::Any<> missing { xll::Missing{}       };
-        xll::Any<> nil     { xll::Nil{}           };
+        xll::Any num     { xll::Number(1.0)    };
+        xll::Any str     { xll::String("hi")   };
+        xll::Any i       { xll::Int(42)         };
+        xll::Any b       { xll::Bool(true)      };
+        xll::Any err     { xll::ErrDiv0         };
+        xll::Any missing { xll::Missing{}       };
+        xll::Any nil     { xll::Nil{}           };
 
         std::cout << "  Number  -> " << xltype_name(num.type())     << "\n";
         std::cout << "  String  -> " << xltype_name(str.type())     << "\n";
@@ -106,16 +106,16 @@ void demo_construction()
 }
 
 // ---------------------------------------------------------------------------
-// Section 2: xll::cast with OptionalPolicy (default)
+// Section 2: xll::cast — always returns Optional<TTarget>
 // ---------------------------------------------------------------------------
 
-void demo_cast_optional()
+void demo_cast()
 {
-    separator("2. xll::cast  — OptionalPolicy (default)");
+    separator("2. xll::cast  — returns Optional<TTarget>");
 
     subsection("Successful cast: Number -> Optional<Number>");
     {
-        xll::Any<> any { xll::Number(2.71828) };
+        xll::Any any { xll::Number(2.71828) };
         auto result = xll::cast<xll::Number>(any);   // returns Optional<Number>
 
         if (result.has_value())
@@ -124,7 +124,7 @@ void demo_cast_optional()
 
     subsection("Failed cast: Number -> Optional<String>  (yields None)");
     {
-        xll::Any<> any { xll::Number(42.0) };
+        xll::Any any { xll::Number(42.0) };
         auto result = xll::cast<xll::String>(any);
 
         std::cout << "  has_value() = " << result.has_value() << "\n";
@@ -133,7 +133,7 @@ void demo_cast_optional()
 
     subsection("Successful cast: String -> Optional<String>");
     {
-        xll::Any<> any { xll::String("world") };
+        xll::Any any { xll::String("world") };
         auto result = xll::cast<xll::String>(any);
 
         if (result.has_value())
@@ -142,7 +142,7 @@ void demo_cast_optional()
 
     subsection("Successful cast: Bool -> Optional<Bool>");
     {
-        xll::Any<> any { xll::Bool(true) };
+        xll::Any any { xll::Bool(true) };
         auto result = xll::cast<xll::Bool>(any);
 
         if (result.has_value())
@@ -156,7 +156,7 @@ void demo_cast_optional()
             xll::ErrRef,  xll::ErrName, xll::ErrNum, xll::ErrNA
         };
         for (auto& e : errors) {
-            xll::Any<> any { e };
+            xll::Any any { e };
             auto result = xll::cast<xll::Error>(any);
             std::cout << "  " << std::string(e.to_string())
                       << "  ->  "
@@ -176,79 +176,17 @@ void demo_cast_optional()
 }
 
 // ---------------------------------------------------------------------------
-// Section 3: xll::cast with ExpectedPolicy
-// ---------------------------------------------------------------------------
-
-void demo_cast_expected()
-{
-    separator("3. xll::cast  — ExpectedPolicy");
-
-    subsection("Successful cast: Number -> Expected<Number, Error>");
-    {
-        xll::AnyExpected any { xll::Number(2.71828) };
-        auto result = xll::cast<xll::Number>(any);
-
-        if (result.has_value())
-            std::cout << "  Value = " << static_cast<double>(result.value()) << "\n";
-    }
-
-    subsection("Failed cast: Number -> Expected<String, Error>  (yields ErrValue)");
-    {
-        xll::AnyExpected any { xll::Number(42.0) };
-        auto result = xll::cast<xll::String>(any);
-
-        if (!result.has_value())
-            std::cout << "  Error = " << std::string(result.error().to_string()) << "\n";
-    }
-
-    subsection("Successful cast: String -> Expected<String, Error>");
-    {
-        xll::AnyExpected any { xll::String("world") };
-        auto result = xll::cast<xll::String>(any);
-
-        if (result.has_value())
-            std::cout << "  Value = " << std::string(result.value()) << "\n";
-    }
-
-    subsection("Successful cast: Bool -> Expected<Bool, Error>");
-    {
-        xll::AnyExpected any { xll::Bool(true) };
-        auto result = xll::cast<xll::Bool>(any);
-
-        if (result.has_value())
-            std::cout << "  Value = " << static_cast<bool>(result.value()) << "\n";
-    }
-
-    subsection("Successful cast: Error -> Expected<Error, Error> (preserves error code)");
-    {
-        const xll::Error errors[] = {
-            xll::ErrNull, xll::ErrDiv0, xll::ErrValue,
-            xll::ErrRef,  xll::ErrName, xll::ErrNum, xll::ErrNA
-        };
-        for (auto& e : errors) {
-            xll::AnyExpected any { e };
-            auto result = xll::cast<xll::Error>(any);
-            std::cout << "  " << std::string(e.to_string())
-                      << "  ->  "
-                      << (result.has_value() ? std::string(result.value().to_string()) : "FAILED")
-                      << "\n";
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Section 4: Monadic chaining after cast
+// Section 3: Monadic chaining after cast
 // ---------------------------------------------------------------------------
 
 void demo_monadic_chaining()
 {
-    separator("4. Monadic chaining after cast");
+    separator("3. Monadic chaining after cast");
 
-    subsection("ExpectedPolicy: transform on successful cast");
+    subsection("transform chain: square then negate");
     {
-        xll::AnyExpected any { xll::Number(4.0) };
+        xll::Any any { xll::Number(4.0) };
 
-        // cast to Number, then square it, then negate it
         auto result = xll::cast<xll::Number>(any)
             .transform([](xll::Number n) { return xll::Number(n.val.num * n.val.num); })
             .transform([](xll::Number n) { return xll::Number(-n.val.num); });
@@ -256,48 +194,9 @@ void demo_monadic_chaining()
         std::cout << "  -(4^2) = " << static_cast<double>(result.value()) << "\n";
     }
 
-    subsection("ExpectedPolicy: and_then — chain that can fail");
+    subsection("or_else — provide fallback for wrong type");
     {
-        auto safe_sqrt = [](xll::Number n) -> xll::Expected<xll::Number, xll::Error> {
-            if (n.val.num < 0.0) return xll::Unexpected(xll::ErrNum);
-            return xll::Number(std::sqrt(n.val.num));
-        };
-
-        xll::AnyExpected good { xll::Number(16.0) };
-        auto r1 = xll::cast<xll::Number>(good).and_then(safe_sqrt);
-        std::cout << "  sqrt(16) = " << static_cast<double>(r1.value()) << "\n";
-
-        xll::AnyExpected bad { xll::Number(-1.0) };
-        auto r2 = xll::cast<xll::Number>(bad).and_then(safe_sqrt);
-        std::cout << "  sqrt(-1) = " << std::string(r2.error().to_string()) << "\n";
-    }
-
-    subsection("ExpectedPolicy: or_else — recover from wrong type");
-    {
-        xll::AnyExpected any { xll::String("not a number") };
-
-        auto result = xll::cast<xll::Number>(any)
-            .or_else([](xll::Error) -> xll::Expected<xll::Number, xll::Error> {
-                return xll::Number(0.0);   // fallback default
-            });
-
-        std::cout << "  Fallback value = " << static_cast<double>(result.value()) << "\n";
-    }
-
-    subsection("OptionalPolicy: transform chain");
-    {
-        xll::AnyOptional any { xll::Number(3.0) };
-
-        auto result = xll::cast<xll::Number>(any)
-            .transform([](xll::Number n) { return xll::Number(n.val.num * 2.0); })
-            .transform([](xll::Number n) { return xll::Number(n.val.num + 1.0); });
-
-        std::cout << "  3*2+1 = " << static_cast<double>(result.value()) << "\n";
-    }
-
-    subsection("OptionalPolicy: or_else — provide fallback for wrong type");
-    {
-        xll::AnyOptional any { xll::String("nope") };
+        xll::Any any { xll::String("nope") };
 
         auto result = xll::cast<xll::Number>(any)
             .or_else([]() -> xll::Optional<xll::Number> {
@@ -305,6 +204,18 @@ void demo_monadic_chaining()
             });
 
         std::cout << "  Fallback value = " << static_cast<double>(result.value()) << "\n";
+    }
+
+    subsection("None propagates through transform — callable not invoked");
+    {
+        xll::Any any { xll::String("not a number") };
+        int calls = 0;
+
+        auto result = xll::cast<xll::Number>(any)
+            .transform([&](xll::Number n) { ++calls; return n; });
+
+        std::cout << "  has_value() = " << result.has_value() << "\n";
+        std::cout << "  calls       = " << calls             << "  (should be 0)\n";
     }
 }
 
@@ -318,8 +229,8 @@ void demo_value_semantics()
 
     subsection("Copy constructor — String buffer is deep-copied");
     {
-        xll::Any<> original { xll::String("deep copy test") };
-        xll::Any<> copy     { original };
+        xll::Any original { xll::String("deep copy test") };
+        xll::Any copy     { original };
 
         std::cout << "  original type = " << xltype_name(original.type()) << "\n";
         std::cout << "  copy type     = " << xltype_name(copy.type())     << "\n";
@@ -328,18 +239,18 @@ void demo_value_semantics()
 
     subsection("Move constructor — transfers ownership");
     {
-        xll::Any<> source { xll::Number(1.618) };
-        xll::Any<> dest   { std::move(source) };
+        xll::Any source { xll::Number(1.618) };
+        xll::Any dest   { std::move(source) };
 
         std::cout << "  dest type     = " << xltype_name(dest.type()) << "\n";
-        // Any<> defaults to OptionalPolicy — cast returns Optional<Number>
+        // Any cast returns Optional<Number>
         auto r = xll::cast<xll::Number>(dest);
         std::cout << "  dest value    = " << static_cast<double>(r.value()) << "\n";
     }
 
     subsection("Assignment — changing the stored type");
     {
-        xll::Any<> any { xll::Number(1.0) };
+        xll::Any any { xll::Number(1.0) };
         std::cout << "  Before: " << xltype_name(any.type()) << "\n";
 
         any = xll::String("reassigned");
@@ -353,7 +264,7 @@ void demo_value_semantics()
 
     subsection("cast result is a copy — mutating it does not affect Any");
     {
-        xll::Any<> any { xll::Number(1.0) };
+        xll::Any any { xll::Number(1.0) };
 
         // Returns Optional<Number>
         auto r = xll::cast<xll::Number>(any);
@@ -372,8 +283,8 @@ void demo_swap()
 {
     separator("6. swap");
 
-    xll::Any<> a { xll::Number(1.0) };
-    xll::Any<> b { xll::String("swap me") };
+    xll::Any a { xll::Number(1.0) };
+    xll::Any b { xll::String("swap me") };
 
     std::cout << "  Before swap:\n";
     std::cout << "    a = " << xltype_name(a.type()) << "\n";
@@ -392,8 +303,8 @@ void demo_swap()
 
 // Simulates a function that receives an arbitrary Excel value and produces a
 // formatted string, just as an XLL function might process a cell argument.
-// Any<> uses OptionalPolicy, so xll::cast returns Optional<T>.
-std::string format_cell(const xll::Any<>& cell)
+// xll::cast returns Optional<T>.
+std::string format_cell(const xll::Any& cell)
 {
     if (auto n = xll::cast<xll::Number>(cell); n.has_value())
         return "Number: " + std::to_string(n.value().val.num);
@@ -420,14 +331,14 @@ void demo_heterogeneous_dispatch()
 {
     separator("7. Heterogeneous dispatch — simulated XLL cell processing");
 
-    const std::vector<xll::Any<>> cells = {
-        xll::Any<>{ xll::Number(3.14)              },
-        xll::Any<>{ xll::String("Hello, World!")   },
-        xll::Any<>{ xll::Int(42)                   },
-        xll::Any<>{ xll::Bool(false)               },
-        xll::Any<>{ xll::ErrNA                     },
-        xll::Any<>{ xll::Missing{}                 },
-        xll::Any<>{ xll::Nil{}                     },
+    const std::vector<xll::Any> cells = {
+        xll::Any{ xll::Number(3.14)              },
+        xll::Any{ xll::String("Hello, World!")   },
+        xll::Any{ xll::Int(42)                   },
+        xll::Any{ xll::Bool(false)               },
+        xll::Any{ xll::ErrNA                     },
+        xll::Any{ xll::Missing{}                 },
+        xll::Any{ xll::Nil{}                     },
     };
 
     for (std::size_t i = 0; i < cells.size(); ++i)
@@ -435,41 +346,18 @@ void demo_heterogeneous_dispatch()
 }
 
 // ---------------------------------------------------------------------------
-// Section 8: Using AnyExpected / AnyOptional convenience aliases
+// Section 8: AnyOptional convenience alias
 // ---------------------------------------------------------------------------
 
 void demo_aliases()
 {
-    separator("8. AnyExpected and AnyOptional convenience aliases");
+    separator("8. AnyOptional convenience alias");
 
-    subsection("AnyOptional (same as Any<> — OptionalPolicy is the default)");
+    subsection("AnyOptional is an alias for Any — cast returns Optional<T>");
     {
         xll::AnyOptional a { xll::Number(6.28) };
         auto r = xll::cast<xll::Number>(a);
-        // r is Optional<Number>
         std::cout << "  Value = " << static_cast<double>(r.value()) << "\n";
-    }
-
-    subsection("AnyExpected (same as Any<ExpectedPolicy>)");
-    {
-        xll::AnyExpected a { xll::String("expected demo") };
-        auto r = xll::cast<xll::String>(a);
-        // r is Expected<String, Error>
-        if (r.has_value())
-            std::cout << "  Value = " << std::string(r.value()) << "\n";
-    }
-
-    subsection("Switching policy — same stored value, different cast return type");
-    {
-        // Store the same value in both policy variants
-        xll::AnyExpected exp_any { xll::Int(7) };
-        xll::AnyOptional opt_any { xll::Int(7) };
-
-        auto r_exp = xll::cast<xll::Int>(exp_any);  // Expected<Int, Error>
-        auto r_opt = xll::cast<xll::Int>(opt_any);  // Optional<Int>
-
-        std::cout << "  Expected result: " << static_cast<int>(r_exp.value()) << "\n";
-        std::cout << "  Optional result: " << static_cast<int>(r_opt.value()) << "\n";
     }
 }
 
@@ -491,7 +379,7 @@ void demo_array()
                                       xll::Array<xll::Number>::Horizontal{} };
 
         // Any<> can accept any xll type — Array<Number> satisfies is_xll_type.
-        xll::Any<> any { src };
+        xll::Any any { src };
 
         std::cout << "  any.type()                        = " << xltype_name(any.type()) << "\n";
         std::cout << "  any.holds<xll::Array>()           = "
@@ -524,7 +412,7 @@ void demo_array()
             xll::Array<xll::Number>::TwoDimensional{2, 3}
         };
 
-        xll::Any<> any { mat };   // deep copy of the element buffer
+        xll::Any any { mat };   // deep copy of the element buffer
 
         // Verify the element buffers are different allocations.
         std::cout << "  Same buffer? = "
@@ -545,12 +433,12 @@ void demo_array()
     }
 
     // ------------------------------------------------------------------
-    // 9c. Store a heterogeneous Array<Any<>> inside an Any<>
+    // 9c. Store a heterogeneous Array<Any> inside an Any<>
     // ------------------------------------------------------------------
-    subsection("9c. Heterogeneous Array<Any<>> stored in Any<>");
+    subsection("9c. Heterogeneous Array<Any> stored in Any<>");
     {
         // Build an array whose elements are themselves Any objects of mixed types.
-        xll::Array<> hetero {
+        xll::Array<xll::Any> hetero {
             {
                 xll::Number(3.14),
                 xll::String("hello"),
@@ -558,14 +446,14 @@ void demo_array()
                 xll::Int(42),
                 xll::ErrDiv0,
             },
-            xll::Array<>::Horizontal{}
+            xll::Array<xll::Any>::Horizontal{}
         };
 
-        xll::Any<> any { hetero };
+        xll::Any any { hetero };
 
         std::cout << "  any.type() = " << xltype_name(any.type()) << "\n";
 
-        auto result = xll::cast<xll::Array<xll::Any<>>>(any);
+        auto result = xll::cast<xll::Array<xll::Any>>(any);
         if (result.has_value()) {
             const auto& arr = result.value();
             std::cout << "  size = " << arr.size() << "\n";
@@ -580,7 +468,7 @@ void demo_array()
     // ------------------------------------------------------------------
     subsection("9d. Failed cast: Array<Number> stored in Any<> -> Optional<Number>");
     {
-        xll::Any<> any { xll::Array<xll::Number>{ {7.0, 8.0, 9.0} } };
+        xll::Any any { xll::Array<xll::Number>{ {7.0, 8.0, 9.0} } };
 
         auto result = xll::cast<xll::Number>(any);
         std::cout << "  has_value() = " << result.has_value() << "\n";
@@ -595,7 +483,7 @@ void demo_array()
         xll::Array<xll::Number> src { {10.0, 20.0, 30.0} };
         const auto* old_ptr = src.val.array.lparray;
 
-        xll::Any<> any { std::move(src) };
+        xll::Any any { std::move(src) };
 
         // After the move the buffer pointer inside Any should be the same
         // allocation that src used to own.
@@ -621,8 +509,7 @@ int main()
     std::cout << "xll::Any — Feature Demo\n";
 
     demo_construction();
-    demo_cast_optional();
-    demo_cast_expected();
+    demo_cast();
     demo_monadic_chaining();
     demo_value_semantics();
     demo_swap();

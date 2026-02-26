@@ -15,31 +15,16 @@
  * `xll::Optional<TTarget>` or `xll::Expected<TTarget, xll::Error>` — is
  * governed by a policy template parameter on `xll::Any`.
  *
- * @section policies Cast-result policies
+ * @section cast Cast result
  *
- * Two policies are provided:
- *
- * | Policy tag              | `cast` return type                       |
- * |-------------------------|------------------------------------------|
- * | `xll::ExpectedPolicy`   | `xll::Expected<TTarget, xll::Error>`     |
- * | `xll::OptionalPolicy`   | `xll::Optional<TTarget>`                 |
- *
- * `OptionalPolicy` is the default.  When the stored xltype does not match
- * `TTarget`, `cast` returns:
- * - `xll::None`                       for `OptionalPolicy`
- * - `xll::Unexpected(xll::ErrValue)` for `ExpectedPolicy`
+ * `xll::cast<TTarget>(any)` always returns `xll::Optional<TTarget>`.
+ * On type mismatch the returned Optional is in the disengaged state (`xll::None`).
  *
  * Example:
  * @code
- * // Default (Optional) policy
- * xll::Any<> any = xll::Number(3.14);
+ * xll::Any any = xll::Number(3.14);
  * auto r1 = xll::cast<xll::Number>(any);   // Optional<Number> = 3.14
  * auto r2 = xll::cast<xll::String>(any);   // Optional<String> = None
- *
- * // Expected policy
- * xll::Any<xll::ExpectedPolicy> any2 = xll::String("hello");
- * auto r3 = xll::cast<xll::String>(any2);  // Expected<String, Error> = "hello"
- * auto r4 = xll::cast<xll::Number>(any2);  // Expected<Number, Error> = Unexpected(ErrValue)
  * @endcode
  *
  * @section type_punning Type punning and memory safety
@@ -97,6 +82,48 @@ namespace xll
         /// We forward-declare the specialisation here; Any is defined below.
         template<typename TValue>
         struct is_typed_array_impl<Array<TValue>> : std::true_type {};
+
+        // ------------------------------------------------------------------
+        // accepted_xltypes — extracts all xltypes accepted by a Base<> type
+        // ------------------------------------------------------------------
+
+        /// Primary template: no match — empty list of accepted types.
+        template<typename T>
+        struct accepted_xltypes_impl
+        {
+            static constexpr bool contains(int) noexcept { return false; }
+        };
+
+        /// Partial specialisation matching Base<TDerived, XLType, OtherTypes...>.
+        /// Captures the primary XLType and all OtherTypes in a single pack.
+        template<typename TDerived, size_t XLType, size_t... OtherTypes>
+        struct accepted_xltypes_impl<xll::impl::Base<TDerived, XLType, OtherTypes...>>
+        {
+            static constexpr bool contains(int xltype) noexcept
+            {
+                return ((xltype == static_cast<int>(XLType)) || ... ||
+                        (xltype == static_cast<int>(OtherTypes)));
+            }
+        };
+
+        /// Helper that recovers the concrete Base<TDerived, XLType, OtherTypes...>
+        /// that T inherits from, without requiring access to any private member of T.
+        /// The function is never called; only its return type is used via decltype.
+        template<typename TDerived, size_t XLType, size_t... OtherTypes>
+        auto deduce_base(const xll::impl::Base<TDerived, XLType, OtherTypes...>*) ->
+            xll::impl::Base<TDerived, XLType, OtherTypes...>;
+
+        /// The concrete Base<...> type that T inherits from.
+        template<typename T>
+        using base_of_t = decltype(deduce_base(static_cast<const T*>(nullptr)));
+
+        /// Convenience: returns true if `xltype` is among the types accepted by T's Base.
+        template<typename T>
+        constexpr bool xltype_convertible_to(int xltype) noexcept
+        {
+            return accepted_xltypes_impl<base_of_t<T>>::contains(xltype);
+        }
+
     }    // namespace impl
 
     /// `true` when `T` is `Array<U>` for any `U`.
@@ -105,49 +132,22 @@ namespace xll
     inline constexpr bool is_typed_array = impl::is_typed_array_impl<T>::value;
 
     // =========================================================================
-    // Policy tags
-    // =========================================================================
-
-    /**
-     * @brief Policy tag: `xll::cast` returns `xll::Expected<TTarget, xll::Error>`.
-     *
-     * On type mismatch the returned Expected is in the error state and contains
-     * `xll::ErrValue` (#VALUE!).  This is the default policy.
-     */
-    struct ExpectedPolicy {};
-
-    /**
-     * @brief Policy tag: `xll::cast` returns `xll::Optional<TTarget>`.
-     *
-     * On type mismatch the returned Optional is in the disengaged state
-     * (`xll::None`).
-     */
-    struct OptionalPolicy {};
-
-    // =========================================================================
     // xll::Any
     // =========================================================================
 
     /**
-     * @brief Type-erased Excel value container with configurable cast-result policy.
+     * @brief Type-erased Excel value container.
      *
-     * `Any<TPolicy>` can hold any value that fits in an `XLOPER12` union.
+     * `Any` can hold any value that fits in an `XLOPER12` union.
      * It inherits directly from `XLOPER12` and adds no data members, preserving
      * binary compatibility with the Excel C API.
      *
-     * @tparam TPolicy  Controls the return type of `xll::cast`.
-     *                  Use `xll::OptionalPolicy` (default) to get
-     *                  `Optional<TTarget>`, or `xll::ExpectedPolicy`
-     *                  to get `Expected<TTarget, Error>`.
+     * `xll::cast<TTarget>(any)` retrieves the stored value as `xll::Optional<TTarget>`.
+     * On type mismatch the returned Optional is in the disengaged state (`xll::None`).
      */
-    template<typename TPolicy = OptionalPolicy>
-        requires std::same_as<TPolicy, ExpectedPolicy> || std::same_as<TPolicy, OptionalPolicy>
     class Any final : public XLOPER12
     {
-
     public:
-        using policy_type = TPolicy;
-
         // ------------------------------------------------------------------
         // Default constructor — stores xll::Nil (xltypeNil)
         // ------------------------------------------------------------------
@@ -324,9 +324,14 @@ namespace xll
          * xltype tag.
          *
          * For a fully specialised `xll::Array<T>` where `T` is not `Any`, this
-         * additionally verifies that **every element** in the stored array has the
-         * xltype matching `T::excel_type`.  If the Any does not hold an array, or
-         * any element has a different type, the function returns `false`.
+         * verifies that **every element** in the stored array has an xltype that
+         * is *convertible to* `T` — i.e. the element's xltype is the primary type
+         * or any of the `OtherTypes` accepted by `T`'s `Base` class.  For example,
+         * `holds<Array<Number>>()` returns `true` if all elements are `xltypeNum`,
+         * `xltypeInt`, or `xltypeBool`, because `xll::Number` accepts all three.
+         *
+         * If the Any does not hold an array, or any element is not convertible to
+         * `T`, the function returns `false`.
          *
          * @tparam TTarget  The xll type to check against (must satisfy `is_xll_type`).
          */
@@ -336,14 +341,15 @@ namespace xll
         constexpr bool holds() const noexcept
         {
             if constexpr (is_typed_array<TTarget>) {
-                // Array<T> where T is not Any: check xltype AND all element types.
+                // Array<T>: check xltype AND that every element is convertible to T.
                 if (type() != xltypeMulti) return false;
-                const auto* elems = static_cast<const typename TTarget::value_type*>(val.array.lparray);
+                const auto* elems = static_cast<const XLOPER12*>(val.array.lparray);
                 const size_t n    = static_cast<size_t>(val.array.rows) * static_cast<size_t>(val.array.columns);
-                const int    want = static_cast<int>(TTarget::value_type::excel_type);
-                for (size_t i = 0; i < n; ++i)
-                    if ((reinterpret_cast<const XLOPER12*>(elems + i)->xltype & ~(xlbitDLLFree | xlbitXLFree)) != want)
+                for (size_t i = 0; i < n; ++i) {
+                    const int elem_type = elems[i].xltype & ~(xlbitDLLFree | xlbitXLFree);
+                    if (!impl::xltype_convertible_to<typename TTarget::value_type>(elem_type))
                         return false;
+                }
                 return true;
             }
             else {
@@ -355,7 +361,7 @@ namespace xll
          * @brief Returns `true` when the stored value is an array of any element type.
          *
          * This overload accepts the unspecialised `xll::Array` template as a template
-         * template argument and is equivalent to `holds<xll::Array<xll::Any<>>>()`:
+         * template argument and is equivalent to `holds<xll::Array<xll::Any>>()`:
          * it only checks that the stored xltype is `xltypeMulti`, without inspecting
          * element types.
          *
@@ -468,102 +474,46 @@ namespace xll
     /**
      * @brief ADL-friendly non-member swap for xll::Any.
      */
-    template<typename TPolicy>
-    constexpr void swap(Any<TPolicy>& lhs, Any<TPolicy>& rhs) noexcept { lhs.swap(rhs); }
+    constexpr void swap(Any& lhs, Any& rhs) noexcept { lhs.swap(rhs); }
 
     // Verify that Any adds no data members beyond XLOPER12.
-    static_assert(sizeof(Any<OptionalPolicy>) == sizeof(XLOPER12),
-        "Any<OptionalPolicy> must not add data members");
-    static_assert(sizeof(Any<ExpectedPolicy>) == sizeof(XLOPER12),
-        "Any<ExpectedPolicy> must not add data members");
+    static_assert(sizeof(Any) == sizeof(XLOPER12),
+        "Any must not add data members");
 
     // =========================================================================
     // xll::cast — type-safe retrieval
     // =========================================================================
 
-    namespace impl
-    {
-        // Traits that map a policy tag to the return type of cast<TTarget>.
-        template<typename TPolicy, typename TTarget>
-        struct cast_result;
-
-        template<typename TTarget>
-        struct cast_result<ExpectedPolicy, TTarget> {
-            using type = Expected<TTarget, xll::Error>;
-        };
-
-        template<typename TTarget>
-        struct cast_result<OptionalPolicy, TTarget> {
-            using type = Optional<TTarget>;
-        };
-
-        template<typename TPolicy, typename TTarget>
-        using cast_result_t = typename cast_result<TPolicy, TTarget>::type;
-
-        // ------------------------------------------------------------------
-        // do_cast — core implementation, non-Array types
-        // ------------------------------------------------------------------
-        template<typename TTarget, typename TPolicy>
-            requires is_xll_type<TTarget>
-        cast_result_t<TPolicy, TTarget> do_cast(const Any<TPolicy>& any)
-        {
-            using Result = cast_result_t<TPolicy, TTarget>;
-
-            const int stored = any.type();
-            const int wanted = static_cast<int>(TTarget::excel_type);
-
-            if (stored == wanted) {
-                // Type matches — copy-construct TTarget from the stored XLOPER12.
-                return Result(*std::launder(reinterpret_cast<const TTarget*>(&any)));
-            }
-
-            // Type mismatch — return empty / error depending on policy.
-            if constexpr (std::same_as<TPolicy, ExpectedPolicy>)
-                return Unexpected(xll::ErrValue);
-            else
-                return xll::None;
-        }
-
-    }    // namespace impl
-
     /**
      * @brief Retrieves the value stored in an `xll::Any` as `TTarget`.
      *
      * Checks whether the stored XLOPER12 type matches `TTarget::excel_type`.
-     * On success, returns a copy of the value.  On failure, returns an error
-     * or empty result according to the policy:
-     *
-     * - `ExpectedPolicy` → `Expected<TTarget, Error>` with `Unexpected(ErrValue)`
-     * - `OptionalPolicy` → `Optional<TTarget>` with the disengaged state (`None`)
+     * On success, returns a copy of the value wrapped in `Optional<TTarget>`.
+     * On type mismatch, returns the disengaged state (`xll::None`).
      *
      * @tparam TTarget  The xll type to cast to (must satisfy `is_xll_type`).
-     * @tparam TPolicy  Deduced from the `Any` argument.
      * @param  any      The `Any` object to cast from.
-     * @return          The cast result according to the policy.
+     * @return          `Optional<TTarget>` — engaged on success, `None` on mismatch.
      *
      * @code
-     * xll::Any<> any = xll::Number(3.14);
+     * xll::Any any = xll::Number(3.14);
      *
-     * // Success
-     * auto n = xll::cast<xll::Number>(any);
-     * // n is Expected<Number, Error> containing 3.14
-     *
-     * // Failure
-     * auto s = xll::cast<xll::String>(any);
-     * // s is Expected<String, Error> containing Unexpected(ErrValue)
-     *
-     * // Optional policy
-     * xll::Any<xll::OptionalPolicy> opt_any = xll::String("hi");
-     * auto r = xll::cast<xll::String>(opt_any);
-     * // r is Optional<String> containing "hi"
+     * auto n = xll::cast<xll::Number>(any);   // Optional<Number> = 3.14
+     * auto s = xll::cast<xll::String>(any);   // Optional<String> = None
      * @endcode
      */
-    template<typename TTarget, typename TPolicy>
+    template<typename TTarget>
         requires is_xll_type<TTarget>
     [[nodiscard]]
-    auto cast(const Any<TPolicy>& any) -> impl::cast_result_t<TPolicy, TTarget>
+    Optional<TTarget> cast(const Any& any)
     {
-        return impl::do_cast<TTarget, TPolicy>(any);
+        const int stored = any.type();
+        const int wanted = static_cast<int>(TTarget::excel_type);
+
+        if (stored == wanted)
+            return Optional<TTarget>(*std::launder(reinterpret_cast<const TTarget*>(&any)));
+
+        return xll::None;
     }
 
     /**
@@ -572,26 +522,27 @@ namespace xll
      * Identical to the const overload; provided so that non-const `Any` objects
      * can be passed without an explicit `const_cast`.
      */
-    template<typename TTarget, typename TPolicy>
+    template<typename TTarget>
         requires is_xll_type<TTarget>
     [[nodiscard]]
-    auto cast(Any<TPolicy>& any) -> impl::cast_result_t<TPolicy, TTarget>
+    Optional<TTarget> cast(Any& any)
     {
-        return impl::do_cast<TTarget, TPolicy>(any);
+        return cast<TTarget>(static_cast<const Any&>(any));
     }
 
     // =========================================================================
-    // Convenience type aliases
+    // Convenience type alias
     // =========================================================================
 
-    /// `xll::Any` with `OptionalPolicy` (default).
-    using AnyOptional = Any<OptionalPolicy>;
-
-    /// `xll::Any` with `ExpectedPolicy`.
-    using AnyExpected = Any<ExpectedPolicy>;
+    /// `xll::AnyOptional` is an alias for `xll::Any` (kept for source compatibility).
+    using AnyOptional = Any;
 
 
 }    // namespace xll
+
+
+
+
 
 
 

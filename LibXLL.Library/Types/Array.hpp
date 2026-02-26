@@ -12,12 +12,6 @@
 
 namespace xll
 {
-    // Forward declarations so that Any<> can be used as the default TValue.
-    struct OptionalPolicy;
-    struct ExpectedPolicy;
-    template<typename TPolicy>
-        requires std::same_as<TPolicy, ExpectedPolicy> || std::same_as<TPolicy, OptionalPolicy>
-    class Any;
 
 /**
  * @brief A type-safe, Excel-compatible two-dimensional array.
@@ -79,7 +73,7 @@ namespace xll
  * @see xll::Number
  * @see xll::String
  */
-    template<typename TValue = Any<OptionalPolicy>>
+    template<typename TValue>
     class Array : public XLOPER12
     {
         struct ShapeBase{};
