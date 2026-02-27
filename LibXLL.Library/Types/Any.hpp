@@ -115,14 +115,41 @@ namespace xll
 
         /// The concrete Base<...> type that T inherits from.
         template<typename T>
-        using base_of_t = decltype(deduce_base(static_cast<const T*>(nullptr)));
+        using base_of_t = decltype(impl::deduce_base(static_cast<const T*>(nullptr)));
 
-        /// Convenience: returns true if `xltype` is among the types accepted by T's Base.
+        /// Detect whether T has a Base<> parent by checking if deduce_base matches.
         template<typename T>
+        concept has_base_type = requires(const T* p) { impl::deduce_base(p); };
+
+        /// Detect whether T is a Variant<...> by checking for the Variant-specific
+        /// excel_type bitmask pattern (it uses xltypeMissing as a sentinel bit).
+        template<typename T>
+        concept is_variant_type = is_xll_type<T> && !has_base_type<T>;
+
+        /// Overload for plain Base<>-derived types (Number, String, Bool, etc.).
+        template<typename T>
+            requires has_base_type<T>
         constexpr bool xltype_convertible_to(int xltype) noexcept
         {
             return accepted_xltypes_impl<base_of_t<T>>::contains(xltype);
         }
+
+        /// Overload for Variant<T,Ts...> types.
+        /// excel_type is the OR of all constituent xltypes plus xltypeMissing as a
+        /// sentinel.  Strip the sentinel and test membership via bitmask.
+        template<typename T>
+            requires is_variant_type<T>
+        constexpr bool xltype_convertible_to(int xltype) noexcept
+        {
+            constexpr size_t mask = T::excel_type & ~static_cast<size_t>(xltypeMissing);
+            return (static_cast<size_t>(xltype) & mask) != 0;
+        }
+
+        /// Bit mask for Excel ownership flags that must be stripped from xltype
+        /// before any type comparison.
+        static constexpr unsigned int xltype_ownership_bits =
+            static_cast<unsigned int>(xlbitDLLFree) |
+            static_cast<unsigned int>(xlbitXLFree);
 
     }    // namespace impl
 
@@ -184,9 +211,8 @@ namespace xll
         }
 
         template<typename TValue>
-            requires is_xll_type<std::remove_cvref_t<TValue>> &&
-                     (!std::same_as<std::remove_cvref_t<TValue>, Any>)
-        constexpr Any(TValue&& value) noexcept : XLOPER12()    // NOLINT(google-explicit-constructor)
+            requires is_xll_type<std::remove_cvref_t<TValue>> && (!std::same_as<std::remove_cvref_t<TValue>, Any>)
+        constexpr Any(TValue&& value) noexcept(std::is_nothrow_move_constructible_v<std::remove_cvref_t<TValue>>) : XLOPER12()    // NOLINT(google-explicit-constructor)
         {
             std::construct_at(reinterpret_cast<std::remove_cvref_t<TValue>*>(this), std::forward<TValue>(value));
         }
@@ -254,11 +280,17 @@ namespace xll
 
         /**
          * @brief Move assignment.
+         *
+         * Destroys the current value, then transfers ownership from `other`.
+         * After the call, `other` holds `xll::Nil`.
+         * Self-assignment is safe.
          */
         constexpr Any& operator=(Any&& other) noexcept
         {
-            Any temp(std::move(other));
-            swap(temp);
+            if (this != &other) {
+                destroy_current();
+                move_from(std::move(other));
+            }
             return *this;
         }
 
@@ -314,7 +346,7 @@ namespace xll
         [[nodiscard]]
         constexpr int type() const noexcept
         {
-            return static_cast<int>(xltype & ~(xlbitDLLFree | xlbitXLFree));
+            return static_cast<int>(static_cast<unsigned int>(xltype) & ~impl::xltype_ownership_bits);
         }
 
 
@@ -330,6 +362,8 @@ namespace xll
         // ------------------------------------------------------------------
 
         /// Type-aware deep copy from another Any.
+        /// @pre *this must have no active object lifetime (i.e. called only from
+        ///      a constructor on uninitialised storage).
         constexpr void copy_from(const Any& src)
         {
             const int t = src.type();
@@ -358,6 +392,10 @@ namespace xll
         }
 
         /// Type-aware move from another Any.
+        /// @pre *this must have no active object lifetime (i.e. called only from
+        ///      a constructor on uninitialised storage).
+        /// @post src holds xll::Nil — its heap payload has been transferred to
+        ///       *this, and src is reset so that its destructor is a no-op.
         constexpr void move_from(Any&& src) noexcept
         {
             const int t = src.type();
@@ -383,6 +421,11 @@ namespace xll
                 std::construct_at(reinterpret_cast<xll::Missing*>(this));
             else
                 std::construct_at(reinterpret_cast<xll::Nil*>(this));
+
+            // Reset source to Nil so its destructor does not attempt to free
+            // the heap allocation that has just been transferred to *this.
+            std::destroy_at(std::launder(reinterpret_cast<xll::Nil*>(&src)));
+            std::construct_at(reinterpret_cast<xll::Nil*>(&src));
         }
 
         /// Destroy the currently active object.
@@ -454,17 +497,24 @@ namespace xll
     constexpr bool holds(const Any& any) noexcept
     {
         if constexpr (is_typed_array<TTarget>) {
-            // Array<T>: check xltype AND that every element is convertible to T.
+            // Array<Any>: only check that xltype is xltypeMulti — Any accepts every element type.
             if (any.type() != xltypeMulti) return false;
-            const auto* elems = static_cast<const XLOPER12*>(any.val.array.lparray);
-            const size_t n    = static_cast<size_t>(any.val.array.rows) *
-                                static_cast<size_t>(any.val.array.columns);
-            for (size_t i = 0; i < n; ++i) {
-                const int elem_type = elems[i].xltype & ~(xlbitDLLFree | xlbitXLFree);
-                if (!impl::xltype_convertible_to<typename TTarget::value_type>(elem_type))
-                    return false;
+            if constexpr (std::same_as<typename TTarget::value_type, Any>) {
+                return true;
             }
-            return true;
+            else {
+                // Array<T>: additionally verify every element is convertible to T.
+                const auto* elems = static_cast<const XLOPER12*>(any.val.array.lparray);
+                const size_t n    = static_cast<size_t>(any.val.array.rows) *
+                                    static_cast<size_t>(any.val.array.columns);
+                for (size_t i = 0; i < n; ++i) {
+                    const int elem_type = static_cast<int>(
+                        elems[i].xltype & ~impl::xltype_ownership_bits);
+                    if (!impl::xltype_convertible_to<typename TTarget::value_type>(elem_type))
+                        return false;
+                }
+                return true;
+            }
         }
         else {
             return any.type() == static_cast<int>(TTarget::excel_type);
@@ -497,8 +547,12 @@ namespace xll
     /**
      * @brief Retrieves the value stored in an `xll::Any` as `TTarget`.
      *
-     * Checks whether the stored XLOPER12 type matches `TTarget::excel_type`.
-     * On success, returns a copy of the value wrapped in `Optional<TTarget>`.
+     * The type check is delegated to `xll::holds<TTarget>(any)`:
+     * - For plain xll types the check is a simple xltype equality comparison.
+     * - For `xll::Array<T>` (where `T` is not `Any`) every element is also
+     *   inspected, returning `None` unless all elements are convertible to `T`.
+     *
+     * On success, returns a deep copy of the value wrapped in `Optional<TTarget>`.
      * On type mismatch, returns the disengaged state (`xll::None`).
      *
      * @tparam TTarget  The xll type to cast to (must satisfy `is_xll_type`).
@@ -507,9 +561,12 @@ namespace xll
      *
      * @code
      * xll::Any any = xll::Number(3.14);
-     *
      * auto n = xll::cast<xll::Number>(any);   // Optional<Number> = 3.14
      * auto s = xll::cast<xll::String>(any);   // Optional<String> = None
+     *
+     * xll::Any arr = xll::Array<xll::Number>({ 1.0, 2.0, 3.0 });
+     * auto a = xll::cast<xll::Array<xll::Number>>(arr);  // Optional<Array<Number>> engaged
+     * auto b = xll::cast<xll::Array<xll::String>>(arr);  // Optional<Array<String>> = None
      * @endcode
      */
     template<typename TTarget>
@@ -517,13 +574,9 @@ namespace xll
     [[nodiscard]]
     Optional<TTarget> cast(const Any& any)
     {
-        const int stored = any.type();
-        const int wanted = static_cast<int>(TTarget::excel_type);
-
-        if (stored == wanted)
-            return Optional<TTarget>(*std::launder(reinterpret_cast<const TTarget*>(&any)));
-
-        return xll::None;
+        return holds<TTarget>(any)
+            ? Optional<TTarget>(*std::launder(reinterpret_cast<const TTarget*>(&any)))
+            : xll::None;
     }
 
     /**

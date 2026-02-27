@@ -12,6 +12,7 @@
 #include <Types/Number.hpp>
 #include <Types/String.hpp>
 #include <Types/Tuple.hpp>
+#include <Types/Variant.hpp>
 
 #include <iostream>
 #include <string>
@@ -449,6 +450,35 @@ void demo_array()
         auto result = xll::cast<xll::Number>(any);
         std::cout << "  has_value() = " << result.has_value() << "\n";
         std::cout << "  == None?    = " << (result == xll::None) << "\n";
+    }
+
+    // ------------------------------------------------------------------
+    // 9f. holds<Array<Variant<...>>> on an Any that holds Array<String>
+    // ------------------------------------------------------------------
+    subsection("9f. holds<Array<Variant<Nil,String,Number>>> on Array<String>");
+    {
+        // Build a homogeneous array of strings and wrap it in Any.
+        xll::Array<xll::String> strArr {
+            { xll::String("alpha"), xll::String("beta"), xll::String("gamma") },
+            xll::Array<xll::String>::Horizontal{}
+        };
+        xll::Any any { strArr };
+
+        // xll::String has xltypeStr.  xll::Variant<Nil,String,Number> accepts
+        // xltypeNil | xltypeStr | xltypeNum, so every element (xltypeStr)
+        // is convertible to the Variant type → holds() must return true.
+        using StrOrNum = xll::Variant<xll::Nil, xll::String, xll::Number>;
+
+        const bool h_str     = xll::holds<xll::Array<xll::String>>(any);
+        const bool h_variant = xll::holds<xll::Array<StrOrNum>>(any);
+        const bool h_num     = xll::holds<xll::Array<xll::Number>>(any);
+
+        std::cout << "  holds<Array<String>>(any)                    = " << h_str     << "\n";
+        std::cout << "  holds<Array<Variant<Nil,String,Number>>>(any) = " << h_variant << "\n";
+        std::cout << "  holds<Array<Number>>(any)                    = " << h_num     << "\n";
+
+        // Expected: true, true, false
+        std::cout << "  (expected: 1, 1, 0)\n";
     }
 
     // ------------------------------------------------------------------

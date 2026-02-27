@@ -578,8 +578,86 @@ TEST_CASE("Any - construct from raw XLOPER12 numeric", "[xll::Any][construction]
 }
 
 // =============================================================================
-// Error-specific cast values
+// holds() with Array element types and Variant
 // =============================================================================
+
+TEST_CASE("Any - holds Array of String - String array matches",
+          "[xll::Any][holds][xll::Array][xll::Variant]")
+{
+    xll::Array<xll::String> strArr {
+        { xll::String("alpha"), xll::String("beta"), xll::String("gamma") },
+        xll::Array<xll::String>::Horizontal{}
+    };
+    xll::Any any { strArr };
+
+    REQUIRE(xll::holds<xll::Array<xll::String>>(any));
+}
+
+TEST_CASE("Any - holds Array of Variant(Nil,String,Number) - String array matches",
+          "[xll::Any][holds][xll::Array][xll::Variant]")
+{
+    // Every element is xltypeStr. Variant<Nil,String,Number> accepts xltypeNil,
+    // xltypeStr, and xltypeNum — so xltypeStr is convertible → true.
+    xll::Array<xll::String> strArr {
+        { xll::String("alpha"), xll::String("beta"), xll::String("gamma") },
+        xll::Array<xll::String>::Horizontal{}
+    };
+    xll::Any any { strArr };
+
+    using StrOrNum = xll::Variant<xll::Nil, xll::String, xll::Number>;
+    REQUIRE(xll::holds<xll::Array<StrOrNum>>(any));
+}
+
+TEST_CASE("Any - holds Array of Number - String array does not match",
+          "[xll::Any][holds][xll::Array][xll::Variant]")
+{
+    xll::Array<xll::String> strArr {
+        { xll::String("alpha"), xll::String("beta") },
+        xll::Array<xll::String>::Horizontal{}
+    };
+    xll::Any any { strArr };
+
+    REQUIRE_FALSE(xll::holds<xll::Array<xll::Number>>(any));
+}
+
+TEST_CASE("Any - holds Array of Variant(Nil,String,Number) - Number array matches",
+          "[xll::Any][holds][xll::Array][xll::Variant]")
+{
+    // Every element is xltypeNum — also accepted by the Variant → true.
+    xll::Array<xll::Number> numArr { { 1.0, 2.0, 3.0 } };
+    xll::Any any { numArr };
+
+    using StrOrNum = xll::Variant<xll::Nil, xll::String, xll::Number>;
+    REQUIRE(xll::holds<xll::Array<StrOrNum>>(any));
+}
+
+TEST_CASE("Any - holds Array of Variant(Nil,String,Number) - Bool array does not match",
+          "[xll::Any][holds][xll::Array][xll::Variant]")
+{
+    // xltypeBool is NOT in the Variant's accepted set → false.
+    xll::Array<xll::Bool> boolArr {
+        { xll::Bool(true), xll::Bool(false) },
+        xll::Array<xll::Bool>::Horizontal{}
+    };
+    xll::Any any { boolArr };
+
+    using StrOrNum = xll::Variant<xll::Nil, xll::String, xll::Number>;
+    REQUIRE_FALSE(xll::holds<xll::Array<StrOrNum>>(any));
+}
+
+TEST_CASE("Any - holds Array of Any - any array always matches",
+          "[xll::Any][holds][xll::Array][xll::Variant]")
+{
+    xll::Array<xll::String> strArr {
+        { xll::String("x"), xll::String("y") },
+        xll::Array<xll::String>::Horizontal{}
+    };
+    xll::Any any { strArr };
+
+    REQUIRE(xll::holds<xll::Array<xll::Any>>(any));
+    REQUIRE(xll::holds<xll::Array>(any));
+}
+
 
 TEST_CASE("cast<Error> preserves error code", "[xll::cast]")
 {
