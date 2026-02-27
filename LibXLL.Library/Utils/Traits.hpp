@@ -5,6 +5,7 @@
 #pragma once
 
 #include "../Types/Array.hpp"
+#include "../Types/StringEnum.hpp"
 
 namespace xll
 {
@@ -84,6 +85,13 @@ namespace xll::traits
     template<>
     struct arg_traits<Any>
     {
+        static constexpr std::string_view excel_type = "Q";
+    };
+
+    template<fixstr::basic_fixed_string... Strings>
+    struct arg_traits<StringEnum<Strings...>>
+    {
+        // StringEnum inherits from xll::String — same XLOPER12 layout, same type code.
         static constexpr std::string_view excel_type = "Q";
     };
 

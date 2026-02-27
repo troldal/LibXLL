@@ -18,6 +18,7 @@ add_executable(LibXLL.Tests.default
         Optional.cpp
         Any.cpp
         Tuple.cpp
+        StringEnum.cpp
 )
 target_link_libraries(LibXLL.Tests.default PRIVATE Catch2ForOpenXLL LibXLL)
 
@@ -37,6 +38,7 @@ if (NOT WIN32)
                 Optional.cpp
                 Any.cpp
                 Tuple.cpp
+                StringEnum.cpp
         )
         target_link_libraries(LibXLL.Tests.${sanitizer} PRIVATE Catch2ForOpenXLL LibXLL)
         if (sanitizer STREQUAL "address")

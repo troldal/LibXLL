@@ -42,6 +42,10 @@ add_executable(DemoTuple Types/DemoTuple.cpp)
 target_link_libraries(DemoTuple PUBLIC LibXLL)
 target_compile_definitions(DemoTuple PRIVATE NOMINMAX)
 
+add_executable(DemoStringEnum Types/DemoStringEnum.cpp)
+target_link_libraries(DemoStringEnum PUBLIC LibXLL)
+target_compile_definitions(DemoStringEnum PRIVATE NOMINMAX)
+
 add_library(xllDemoTypesExpected SHARED Types/xllDemoTypesExpected.cpp)
 target_link_libraries(xllDemoTypesExpected PUBLIC LibXLL)
 set_target_properties(xllDemoTypesExpected PROPERTIES OUTPUT_NAME "expected_demo" SUFFIX ".xll")
@@ -56,6 +60,11 @@ add_library(xllDemoAny SHARED Types/xllDemoAny.cpp)
 target_link_libraries(xllDemoAny PUBLIC LibXLL)
 set_target_properties(xllDemoAny PROPERTIES OUTPUT_NAME "any_demo" SUFFIX ".xll")
 target_compile_definitions(xllDemoAny PRIVATE NOMINMAX)
+
+add_library(xllDemoStringEnum SHARED Types/xllDemoStringEnum.cpp)
+target_link_libraries(xllDemoStringEnum PUBLIC LibXLL)
+set_target_properties(xllDemoStringEnum PROPERTIES OUTPUT_NAME "string_enum_demo" SUFFIX ".xll")
+target_compile_definitions(xllDemoStringEnum PRIVATE NOMINMAX)
 
 
 include(../cmake/CompilerWarnings.cmake)
