@@ -249,14 +249,14 @@ PointDistance(const xll::Any* p1Arg, const xll::Any* p2Arg)
         return &result;
     }
 
-    const double x1 = static_cast<double>(xll::get<0>(*p1));
-    const double y1 = static_cast<double>(xll::get<1>(*p1));
-    const double x2 = static_cast<double>(xll::get<0>(*p2));
-    const double y2 = static_cast<double>(xll::get<1>(*p2));
+    const double x1 = xll::get<0>(*p1);
+    const double y1 = xll::get<1>(*p1);
+    const double x2 = xll::get<0>(*p2);
+    const double y2 = xll::get<1>(*p2);
 
     const double dx = x2 - x1;
     const double dy = y2 - y1;
-    result = xll::Expected<xll::Number>(xll::Number(std::sqrt(dx * dx + dy * dy)));
+    result = std::sqrt(dx * dx + dy * dy);
     return &result;
 }
 
