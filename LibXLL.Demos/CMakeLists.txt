@@ -1,3 +1,5 @@
+include(../cmake/Sanitizers.cmake)
+
 add_library(xllDemo SHARED xllDemo.cpp)
 target_link_libraries(xllDemo PUBLIC LibXLL)
 set_target_properties(xllDemo PROPERTIES OUTPUT_NAME "example" SUFFIX ".xll")
@@ -46,6 +48,11 @@ add_executable(DemoStringEnum Types/DemoStringEnum.cpp)
 target_link_libraries(DemoStringEnum PUBLIC LibXLL)
 target_compile_definitions(DemoStringEnum PRIVATE NOMINMAX)
 
+# Deliberate-leak demo used to verify ASan is wired up correctly.
+# The plain target runs without sanitizers; DemoAsanLeak.address enables ASan.
+add_executable(DemoAsanLeak Utils/DemoAsanLeak.cpp)
+target_compile_definitions(DemoAsanLeak PRIVATE NOMINMAX)
+
 add_library(xllDemoTypesExpected SHARED Types/xllDemoTypesExpected.cpp)
 target_link_libraries(xllDemoTypesExpected PUBLIC LibXLL)
 set_target_properties(xllDemoTypesExpected PROPERTIES OUTPUT_NAME "expected_demo" SUFFIX ".xll")
@@ -78,65 +85,28 @@ set_project_warnings(
         "")
 
 if (NOT WIN32)
+    foreach (sanitizer IN ITEMS address undefined thread memory)
+        add_library(xllDemo.${sanitizer} SHARED xllDemo.cpp)
+        target_link_libraries(xllDemo.${sanitizer} PUBLIC LibXLL)
+        target_enable_sanitizer(xllDemo.${sanitizer} ${sanitizer})
 
-    add_library(xllDemo.ASAN SHARED xllDemo.cpp)
-    target_link_libraries(xllDemo.ASAN PUBLIC LibXLL)
-    target_compile_options(xllDemo.ASAN PRIVATE -fsanitize=address -fno-omit-frame-pointer -g)
-    target_link_options(xllDemo.ASAN PRIVATE -fsanitize=address -fno-omit-frame-pointer -g)
+        add_executable(exeDemo.${sanitizer} exeDemo.cpp)
+        target_link_libraries(exeDemo.${sanitizer} PUBLIC LibXLL)
+        target_enable_sanitizer(exeDemo.${sanitizer} ${sanitizer})
+    endforeach ()
 
-    add_executable(exeDemo.ASAN exeDemo.cpp)
-    target_link_libraries(exeDemo.ASAN PUBLIC xllDemo.ASAN)
-    target_compile_options(exeDemo.ASAN PRIVATE -fsanitize=address -fno-omit-frame-pointer -g)
-    target_link_options(exeDemo.ASAN PRIVATE -fsanitize=address -fno-omit-frame-pointer -g)
+    # ASan build of the deliberate-leak demo.
+    # Run it and LSan reports a direct leak of 40 bytes (10 × sizeof(int)).
+    add_executable(DemoAsanLeak.address Utils/DemoAsanLeak.cpp)
+    target_compile_definitions(DemoAsanLeak.address PRIVATE NOMINMAX)
+    target_enable_sanitizer(DemoAsanLeak.address address)
 
-    add_library(xllDemo.UBSAN SHARED xllDemo.cpp)
-    target_link_libraries(xllDemo.UBSAN PUBLIC LibXLL)
-    target_compile_options(xllDemo.UBSAN PRIVATE -fsanitize=undefined -fno-omit-frame-pointer -g)
-    target_link_options(xllDemo.UBSAN PRIVATE -fsanitize=undefined -fno-omit-frame-pointer -g)
+elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC")
+    # Windows clang-cl: only ASan is supported.
+    # Note: LeakSanitizer is not available on Windows; use-after-free and other
+    # heap errors are still detected.
+    add_executable(DemoAsanLeak.address Utils/DemoAsanLeak.cpp)
+    target_compile_definitions(DemoAsanLeak.address PRIVATE NOMINMAX)
+    target_enable_sanitizer(DemoAsanLeak.address address)
+endif()
 
-    add_executable(exeDemo.UBSAN exeDemo.cpp)
-    target_link_libraries(exeDemo.UBSAN PUBLIC xllDemo.UBSAN)
-    target_compile_options(exeDemo.UBSAN PRIVATE -fsanitize=undefined -fno-omit-frame-pointer -g)
-    target_link_options(exeDemo.UBSAN PRIVATE -fsanitize=undefined -fno-omit-frame-pointer -g)
-
-    add_library(xllDemo.TSAN SHARED xllDemo.cpp)
-    target_link_libraries(xllDemo.TSAN PUBLIC LibXLL)
-    target_compile_options(xllDemo.TSAN PRIVATE -fsanitize=thread -fPIC -g)
-    target_link_options(xllDemo.TSAN PRIVATE -fsanitize=thread -fPIC -g)
-
-    add_executable(exeDemo.TSAN exeDemo.cpp)
-    target_link_libraries(exeDemo.TSAN PUBLIC xllDemo.TSAN)
-    target_compile_options(exeDemo.TSAN PRIVATE -fsanitize=thread -fPIE -pie -g)
-    target_link_options(exeDemo.TSAN PRIVATE -fsanitize=thread -fPIE -pie -g)
-
-    add_library(xllDemo.MSAN SHARED xllDemo.cpp)
-    target_link_libraries(xllDemo.MSAN PUBLIC LibXLL)
-    target_compile_options(xllDemo.MSAN PRIVATE -fsanitize=memory -fPIC -fno-omit-frame-pointer -g -fno-optimize-sibling-calls -fsanitize-recover -O1)
-    target_link_options(xllDemo.MSAN PRIVATE -fsanitize=memory -fPIC -fno-omit-frame-pointer -g -fno-optimize-sibling-calls -fsanitize-recover -O1)
-
-    add_executable(exeDemo.MSAN exeDemo.cpp)
-    target_link_libraries(exeDemo.MSAN PUBLIC xllDemo.MSAN)
-    target_compile_options(exeDemo.MSAN PRIVATE -fsanitize=memory -fPIE -fno-omit-frame-pointer -g -fno-optimize-sibling-calls -fsanitize-recover -O1)
-    target_link_options(exeDemo.MSAN PRIVATE -fsanitize=memory -fPIE -fno-omit-frame-pointer -g -fno-optimize-sibling-calls -fsanitize-recover -O1)
-
-#    add_executable(LibXLL.Tests.TSAN
-#            String.cpp
-#            Variant.cpp
-#            Array.cpp
-#    )
-#    target_link_libraries(LibXLL.Tests.TSAN PRIVATE Catch2::Catch2WithMain LibXLL)
-#    target_compile_options(LibXLL.Tests.TSAN PRIVATE -fsanitize=thread -fno-omit-frame-pointer -g)
-#    target_link_options(LibXLL.Tests.TSAN PRIVATE -fsanitize=thread -fno-omit-frame-pointer -g)
-
-    #    add_executable(LibXLL.Tests.MSAN
-    #            String.cpp
-    #            Variant.cpp
-    #            Array.cpp
-    #    )
-    #    target_link_libraries(LibXLL.Tests.MSAN PRIVATE Catch2::Catch2WithMain LibXLL)
-    #    target_compile_options(LibXLL.Tests.MSAN PRIVATE -fsanitize=memory -fPIE -fno-omit-frame-pointer -g -fno-optimize-sibling-calls -fsanitize-recover -O1)
-    #    target_link_options(LibXLL.Tests.MSAN PRIVATE -fsanitize=memory -fPIE -fno-omit-frame-pointer -g -fno-optimize-sibling-calls -fsanitize-recover -O1)
-
-
-    #    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address,leak -fno-omit-frame-pointer -g")
-endif (NOT WIN32)

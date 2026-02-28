@@ -1,10 +1,17 @@
+include(../cmake/Sanitizers.cmake)
+
 add_library(Catch2ForOpenXLL STATIC Catch2/catch_amalgamated.cpp)
 target_include_directories(Catch2ForOpenXLL PUBLIC Catch2)
 
+# A separate Catch2 build compiled with ASan instrumentation for the Windows
+# clang-cl address sanitizer target. All TUs in one executable must agree on
+# the annotate_string ABI flag, so Catch2 must be rebuilt with the same flags.
+add_library(Catch2ForOpenXLL.asan STATIC Catch2/catch_amalgamated.cpp)
+target_include_directories(Catch2ForOpenXLL.asan PUBLIC Catch2)
+target_enable_sanitizer(Catch2ForOpenXLL.asan address)
 
-include(FetchContent)
 
-add_executable(LibXLL.Tests.default
+set(TEST_SOURCES
         String.cpp
         Bool.cpp
         Expected.cpp
@@ -20,41 +27,26 @@ add_executable(LibXLL.Tests.default
         Tuple.cpp
         StringEnum.cpp
 )
+
+
+add_executable(LibXLL.Tests.default ${TEST_SOURCES})
+target_compile_definitions(LibXLL.Tests.default PRIVATE NOMINMAX)
 target_link_libraries(LibXLL.Tests.default PRIVATE Catch2ForOpenXLL LibXLL)
+
 
 if (NOT WIN32)
     foreach (sanitizer IN ITEMS address undefined thread memory)
-        add_executable(LibXLL.Tests.${sanitizer}
-                String.cpp
-                Bool.cpp
-                Expected.cpp
-                Int.cpp
-                Number.cpp
-                Nil.cpp
-                Missing.cpp
-                Error.cpp
-                Variant.cpp
-                Array.cpp
-                Optional.cpp
-                Any.cpp
-                Tuple.cpp
-                StringEnum.cpp
-        )
-        target_link_libraries(LibXLL.Tests.${sanitizer} PRIVATE Catch2ForOpenXLL LibXLL)
-        if (sanitizer STREQUAL "address")
-            target_compile_options(LibXLL.Tests.${sanitizer} PRIVATE -fsanitize=${sanitizer} -fno-omit-frame-pointer -g)
-            target_link_options(LibXLL.Tests.${sanitizer} PRIVATE -fsanitize=${sanitizer} -fno-omit-frame-pointer -g)
-        elseif (sanitizer STREQUAL "undefined")
-            target_compile_options(LibXLL.Tests.${sanitizer} PRIVATE -fsanitize=${sanitizer} -fno-omit-frame-pointer -g)
-            target_link_options(LibXLL.Tests.${sanitizer} PRIVATE -fsanitize=${sanitizer} -fno-omit-frame-pointer -g)
-        elseif (sanitizer STREQUAL "thread")
-            target_compile_options(LibXLL.Tests.${sanitizer} PRIVATE -fsanitize=${sanitizer} -fPIE -pie -g)
-            target_link_options(LibXLL.Tests.${sanitizer} PRIVATE -fsanitize=${sanitizer} -fPIE -pie -g)
-        elseif (sanitizer STREQUAL "memory")
-            target_compile_options(LibXLL.Tests.${sanitizer} PRIVATE -fsanitize=${sanitizer} -fPIE -fno-omit-frame-pointer -g -fno-optimize-sibling-calls -fsanitize-recover -O1)
-            target_link_options(LibXLL.Tests.${sanitizer} PRIVATE -fsanitize=${sanitizer} -fPIE -fno-omit-frame-pointer -g -fno-optimize-sibling-calls -fsanitize-recover -O1)
-        endif ()
+        set(target LibXLL.Tests.${sanitizer})
+        add_executable(${target} ${TEST_SOURCES})
+        target_compile_definitions(${target} PRIVATE NOMINMAX)
+        target_link_libraries(${target} PRIVATE Catch2ForOpenXLL LibXLL)
+        target_enable_sanitizer(${target} ${sanitizer})
     endforeach ()
+elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC")
+    set(target LibXLL.Tests.address)
+    add_executable(${target} ${TEST_SOURCES})
+    target_compile_definitions(${target} PRIVATE NOMINMAX)
+    target_link_libraries(${target} PRIVATE Catch2ForOpenXLL.asan LibXLL)
+    target_enable_sanitizer(${target} address)
 endif ()
 
-add_compile_definitions(NOMINMAX)
