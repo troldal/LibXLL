@@ -17,12 +17,15 @@
  *
  *  - `valid()` — always `true` for normally constructed objects; `false` only
  *    for raw-XLOPER12-derived objects with an unrecognised string.
- *  - `index()` — returns `xll::Optional<xll::Int>`: always engaged for
- *    normally constructed objects, `xll::None` only for raw-XLOPER12 bypass.
+ *  - `index()` — returns the zero-based index of the current element.
+ *    Throws `std::invalid_argument` if the stored string is not a recognised
+ *    element (raw-XLOPER12 bypass).
  *  - `is<"X">()` — returns `true` iff the stored string equals "X".
- *  - `visit(visitor)` — calls `visitor(Type<Str>{})` on a match, or calls
- *    `visitor(Unknown{})` for raw-XLOPER12-derived unknown values.
+ *  - `visit(visitor)` — calls `visitor(Type<Str>{})` on a match.
+ *    Throws `std::invalid_argument` for raw-XLOPER12-derived unknown values.
  *  - `value()` — returns the stored string as `xll::String`.
+ *    Throws `std::invalid_argument` if the stored string is not a recognised
+ *    element (raw-XLOPER12 bypass).
  *
  * @code
  * using Direction = xll::StringEnum<"North", "South", "East", "West">;
@@ -35,9 +38,12 @@
  *     [](Direction::Type<"South">) { ... },
  *     [](Direction::Type<"East">)  { ... },
  *     [](Direction::Type<"West">)  { ... },
- *     [](Direction::Unknown)       { ... },   // only for raw-XLOPER12 bypass
  * });
  * @endcode
+ *
+ * When casting from `xll::Any`, use `xll::cast<Direction>(any)`, which
+ * returns `xll::Optional<Direction>` — engaged only when the stored string
+ * is both `xltypeStr` **and** a recognised element.
  */
 
 #pragma once
@@ -49,6 +55,7 @@
 #include <array>
 #include <optional>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -60,8 +67,10 @@ namespace xll
      *
      * Stores the raw Excel string (`xltypeStr`) in the XLOPER12 payload and
      * provides compile-time enum semantics on top.  An incoming string that
-     * does not match any allowed element is still accepted — use `valid()` to
-     * test before querying the current element.
+     * does not match any allowed element **throws `std::invalid_argument`** at
+     * construction or assignment time.  The only way to obtain an object
+     * holding an unknown string is via a raw `XLOPER12` that bypasses the xll
+     * type system; use `valid()` to test before calling any query function.
      *
      * @tparam Strings  Compile-time string literals defining the allowed elements.
      *                  At least one must be provided.
@@ -74,12 +83,15 @@ namespace xll
 
     public:
         // ------------------------------------------------------------------
-        // Sentinel type for unrecognised values
+        // Sentinel type for unrecognised values (raw-XLOPER12 bypass only)
         // ------------------------------------------------------------------
 
         /**
-         * @brief Tag type passed to a visitor when the stored string does not
-         *        match any compile-time element.
+         * @brief Tag type that can be used to detect unrecognised values when
+         *        inspecting a raw XLOPER12 without going through the throwing API.
+         *
+         * Normal user code should not need this.  It remains available for
+         * advanced use-cases such as `xll::Any::cast` specialisations.
          */
         struct Unknown {};
 
@@ -105,8 +117,6 @@ namespace xll
         constexpr StringEnum()
             : String(std::string_view(std::get<0>(std::tuple{Strings...})))
         {}
-        // Note: default-construction is always valid (first element),
-        // so no call to validate() is needed.
 
         /**
          * @brief Constructs from an `xll::String`.
@@ -208,18 +218,21 @@ namespace xll
          * constructors (which validate on construction).  May return `false`
          * only if the object was populated from a raw `XLOPER12` that
          * bypasses the xll type system.
+         *
+         * Use this as a non-throwing guard before calling `value()`, `index()`,
+         * or `visit()` on objects received from raw Excel data.
          */
         [[nodiscard]] bool valid() const noexcept
         {
-            return index() != npos;
+            return index_raw() != npos;
         }
 
         // ------------------------------------------------------------------
         // Sentinel
         // ------------------------------------------------------------------
 
-        /// Returned by `index()` when the stored string is not a recognised element.
-        /// Mirrors the `std::string::npos` convention.
+        /// Returned by the internal `index_raw()` helper when the stored string
+        /// is not a recognised element.  Mirrors the `std::string::npos` convention.
         static constexpr std::size_t npos = std::numeric_limits<std::size_t>::max();
 
         // ------------------------------------------------------------------
@@ -227,22 +240,23 @@ namespace xll
         // ------------------------------------------------------------------
 
         /**
-         * @brief Returns the zero-based index of the current string.
+         * @brief Returns the zero-based index of the current element.
          *
-         * Returns `npos` (`std::numeric_limits<std::size_t>::max()`) when the
-         * object was populated from a raw `XLOPER12` holding an unrecognised
-         * string (e.g. an Excel UDF argument that did not match any element).
+         * @throws std::invalid_argument if the stored string is not a recognised
+         *         element (i.e. the object was populated from a raw `XLOPER12`
+         *         that bypasses the xll type system).
          *
          * For objects constructed via the normal constructors the return value
          * is always in `[0, size())`.
          */
-        [[nodiscard]] std::size_t index() const noexcept
+        [[nodiscard]] std::size_t index() const
         {
-            try {
-                const auto raw = find_index_raw(raw_value().to_string());
-                return raw.has_value() ? *raw : npos;
-            }
-            catch (...) { return npos; }
+            const std::size_t idx = index_raw();
+            if (idx == npos)
+                throw std::invalid_argument(
+                    "xll::StringEnum::index(): stored string \"" +
+                    raw_value().to_string() + "\" is not a recognised element");
+            return idx;
         }
 
         // ------------------------------------------------------------------
@@ -269,18 +283,22 @@ namespace xll
         // ------------------------------------------------------------------
 
         /**
-         * @brief Returns the stored string as an `xll::Optional<xll::String>`.
+         * @brief Returns the stored string as an `xll::String`.
          *
-         * Returns an engaged Optional when the stored string matches one of the
-         * compile-time elements (i.e. `valid() == true`), or `xll::None` when
-         * the object was populated from a raw `XLOPER12` holding an unrecognised
-         * string.
+         * @throws std::invalid_argument if the stored string is not a recognised
+         *         element (i.e. the object was populated from a raw `XLOPER12`
+         *         that bypasses the xll type system).
+         *
+         * For objects constructed via the normal constructors this always succeeds.
          */
-        [[nodiscard]] xll::Optional<xll::String> value() const
+        [[nodiscard]] xll::String value() const
         {
             const xll::String& s = raw_value();
-            if (!is_known(s.to_string())) return xll::None;
-            return xll::Optional<xll::String>(s);
+            if (!is_known(s.to_string()))
+                throw std::invalid_argument(
+                    "xll::StringEnum::value(): stored string \"" +
+                    s.to_string() + "\" is not a recognised element");
+            return s;
         }
 
         // ------------------------------------------------------------------
@@ -338,18 +356,22 @@ namespace xll
          * @brief Visits the current element.
          *
          * If the stored string matches element at index `I`, calls
-         * `visitor(Type<Strings[I]>{})`.  If no element matches, calls
-         * `visitor(Unknown{})`.
+         * `visitor(Type<Strings[I]>{})`.
          *
-         * The visitor must handle all `sizeof...(Strings)` typed_string types
-         * **and** `Unknown`.
+         * @throws std::invalid_argument if the stored string is not a recognised
+         *         element (i.e. the object was populated from a raw `XLOPER12`
+         *         that bypasses the xll type system).
+         *
+         * The visitor must handle all `sizeof...(Strings)` typed_string types.
          */
         template<typename Visitor>
         constexpr auto visit(Visitor&& visitor) const
         {
-            const std::size_t idx = index();
+            const std::size_t idx = index_raw();
             if (idx == npos)
-                return visitor(Unknown{});
+                throw std::invalid_argument(
+                    "xll::StringEnum::visit(): stored string \"" +
+                    raw_value().to_string() + "\" is not a recognised element");
             return visit_at_index(idx, visitor,
                                   std::index_sequence_for<decltype(Strings)...>{});
         }
@@ -381,12 +403,12 @@ namespace xll
         // ------------------------------------------------------------------
 
         /**
-         * @brief Returns the stored string as an `xll::Optional<xll::String>` (ADL).
+         * @brief Returns the stored string as an `xll::String` (ADL).
          *
-         * Matches the `value()` semantics: engaged for valid strings, `xll::None`
-         * for unrecognised raw-XLOPER12 strings.
+         * @throws std::invalid_argument if the stored string is not a recognised
+         *         element.  Matches the `value()` semantics.
          */
-        [[nodiscard]] friend xll::Optional<xll::String> to_string(const StringEnum& e)
+        [[nodiscard]] friend xll::String to_string(const StringEnum& e)
         { return e.value(); }
 
         /**
@@ -406,8 +428,6 @@ namespace xll
         // ------------------------------------------------------------------
 
         /// Direct access to the underlying xll::String without validity check.
-        /// Used internally wherever the raw stored string is needed regardless
-        /// of whether it is a recognised enum element.
         [[nodiscard]] const xll::String& raw_value() const noexcept
         {
             return static_cast<const xll::String&>(*this);
@@ -423,6 +443,17 @@ namespace xll
             };
             (check(Strings), ...);
             return found;
+        }
+
+        /// Returns the zero-based index of @p s, or npos if not found.
+        /// This is the non-throwing internal counterpart to `index()`.
+        [[nodiscard]] std::size_t index_raw() const noexcept
+        {
+            try {
+                const auto raw = find_index_raw(raw_value().to_string());
+                return raw.has_value() ? *raw : npos;
+            }
+            catch (...) { return npos; }
         }
 
         /// Returns the zero-based index of @p s, or std::nullopt.
@@ -451,7 +482,6 @@ namespace xll
                     sv.to_string() + "\"");
         }
 
-
         /// Tag used by the private no-validate constructor.
         struct NoValidate {};
 
@@ -463,7 +493,6 @@ namespace xll
         template<std::size_t... Is>
         static StringEnum index_to_sv(std::size_t idx, std::index_sequence<Is...>)
         {
-            // Default to first element; will be overwritten for the matching index.
             StringEnum result(std::string_view(std::get<0>(std::tuple{ Strings... })),
                               NoValidate{});
             auto pick = [&]<std::size_t I>(std::integral_constant<std::size_t, I>) {
@@ -482,7 +511,7 @@ namespace xll
             Visitor&&   visitor,
             std::index_sequence<Is...>) const
         {
-            using Ret = decltype(visitor(Unknown{}));
+            using Ret = decltype(visitor(Type<std::get<0>(std::tuple{Strings...})>{}));
 
             if constexpr (std::is_void_v<Ret>) {
                 auto try_one = [&]<std::size_t I>(std::integral_constant<std::size_t, I>) {

@@ -50,8 +50,7 @@ TEST_CASE("StringEnum - Default construction", "[xll::StringEnum][construction]"
     Direction d;
     REQUIRE(d.valid());
     REQUIRE(d.index() == 0);
-    REQUIRE(d.value().has_value());
-    REQUIRE(d.value().value().to_string() == "North");
+    REQUIRE(d.value().to_string() == "North");
 }
 
 TEST_CASE("StringEnum - Construction from xll::String", "[xll::StringEnum][construction]")
@@ -61,7 +60,7 @@ TEST_CASE("StringEnum - Construction from xll::String", "[xll::StringEnum][const
         Direction d { xll::String("East") };
         REQUIRE(d.valid());
         REQUIRE(d.index() == Direction::IndexOf<"East">());
-        REQUIRE(d.value().value().to_string() == "East");
+        REQUIRE(d.value().to_string() == "East");
     }
 
     SECTION("Unknown string throws std::invalid_argument")
@@ -83,7 +82,7 @@ TEST_CASE("StringEnum - Construction from string literal", "[xll::StringEnum][co
     Direction d { "West" };
     REQUIRE(d.valid());
     REQUIRE(d.index() == Direction::IndexOf<"West">());
-    REQUIRE(d.value().value().to_string() == "West");
+    REQUIRE(d.value().to_string() == "West");
 }
 
 TEST_CASE("StringEnum - Construction from std::string_view", "[xll::StringEnum][construction]")
@@ -109,7 +108,7 @@ TEST_CASE("StringEnum - Copy construction", "[xll::StringEnum][construction]")
     Direction b { a };
     REQUIRE(b.valid());
     REQUIRE(b.index() == a.index());
-    REQUIRE(b.value().value().to_string() == "East");
+    REQUIRE(b.value().to_string() == "East");
 }
 
 TEST_CASE("StringEnum - Move construction", "[xll::StringEnum][construction]")
@@ -160,7 +159,7 @@ TEST_CASE("StringEnum - Copy assignment", "[xll::StringEnum][assignment]")
     Direction b;
     b = a;
     REQUIRE(b.index() == a.index());
-    REQUIRE(b.value().value().to_string() == "East");
+    REQUIRE(b.value().to_string() == "East");
 }
 
 TEST_CASE("StringEnum - Move assignment", "[xll::StringEnum][assignment]")
@@ -205,8 +204,8 @@ TEST_CASE("StringEnum - valid() is false for raw-XLOPER12 bypass with unknown st
     static_cast<xll::String&>(d) = xll::String("Nowhere");
 
     REQUIRE_FALSE(d.valid());
-    REQUIRE(d.index() == Direction::npos);
-    REQUIRE_FALSE(d.value().has_value());
+    REQUIRE_THROWS_AS(d.index(), std::invalid_argument);
+    REQUIRE_THROWS_AS(d.value(), std::invalid_argument);
 }
 
 // =============================================================================
@@ -222,12 +221,12 @@ TEST_CASE("StringEnum - index() returns correct zero-based index",
     REQUIRE(Direction("West").index()  == 3);
 }
 
-TEST_CASE("StringEnum - index() returns npos for invalid value",
+TEST_CASE("StringEnum - index() throws for invalid bypass value",
           "[xll::StringEnum][index]")
 {
     Direction d { "North" };
     static_cast<xll::String&>(d) = xll::String("Bad");
-    REQUIRE(d.index() == Direction::npos);
+    REQUIRE_THROWS_AS(d.index(), std::invalid_argument);
 }
 
 TEST_CASE("StringEnum - npos equals numeric_limits max", "[xll::StringEnum][index]")
@@ -262,21 +261,20 @@ TEST_CASE("StringEnum - is<Str>() returns false for invalid bypass value",
 // 6. value()
 // =============================================================================
 
-TEST_CASE("StringEnum - value() returns engaged Optional for valid element",
+TEST_CASE("StringEnum - value() returns xll::String for valid element",
           "[xll::StringEnum][value]")
 {
     Direction d { "South" };
     const auto v = d.value();
-    REQUIRE(v.has_value());
-    REQUIRE(v.value().to_string() == "South");
+    REQUIRE(v.to_string() == "South");
 }
 
-TEST_CASE("StringEnum - value() returns None for invalid bypass value",
+TEST_CASE("StringEnum - value() throws for invalid bypass value",
           "[xll::StringEnum][value]")
 {
     Direction d { "North" };
     static_cast<xll::String&>(d) = xll::String("Bad");
-    REQUIRE_FALSE(d.value().has_value());
+    REQUIRE_THROWS_AS(d.value(), std::invalid_argument);
 }
 
 // =============================================================================
@@ -324,8 +322,8 @@ TEST_CASE("StringEnum - from_index() constructs correct element",
     REQUIRE(Direction::from_index(2).index() == 2);
     REQUIRE(Direction::from_index(3).index() == 3);
 
-    REQUIRE(Direction::from_index(0).value().value().to_string() == "North");
-    REQUIRE(Direction::from_index(3).value().value().to_string() == "West");
+    REQUIRE(Direction::from_index(0).value().to_string() == "North");
+    REQUIRE(Direction::from_index(3).value().to_string() == "West");
 }
 
 TEST_CASE("StringEnum - from_index() throws std::out_of_range for out-of-range index",
@@ -351,7 +349,6 @@ TEST_CASE("StringEnum - visit() dispatches to correct branch (void visitor)",
         else if constexpr (std::is_same_v<T, Direction::Type<"South">>) called = "South";
         else if constexpr (std::is_same_v<T, Direction::Type<"East">>)  called = "East";
         else if constexpr (std::is_same_v<T, Direction::Type<"West">>)  called = "West";
-        else                                                              called = "Unknown";
     });
     REQUIRE(called == "East");
 }
@@ -376,19 +373,15 @@ TEST_CASE("StringEnum - visit() returns value from value-returning visitor",
     REQUIRE(opposite(Direction("West"))  == "East");
 }
 
-TEST_CASE("StringEnum - visit() dispatches to Unknown for invalid bypass value",
+TEST_CASE("StringEnum - visit() throws for invalid bypass value",
           "[xll::StringEnum][visit]")
 {
     Direction d { "North" };
     static_cast<xll::String&>(d) = xll::String("Bad");
 
-    bool got_unknown = false;
-    d.visit([&](auto tag) {
-        using T = decltype(tag);
-        if constexpr (std::is_same_v<T, Direction::Unknown>)
-            got_unknown = true;
-    });
-    REQUIRE(got_unknown);
+    REQUIRE_THROWS_AS(
+        d.visit([](auto) {}),
+        std::invalid_argument);
 }
 
 TEST_CASE("StringEnum - visit() cycles through all elements",
@@ -397,10 +390,9 @@ TEST_CASE("StringEnum - visit() cycles through all elements",
     auto next_light = [](const Light& l) -> Light {
         return l.visit([](auto tag) -> Light {
             using T = decltype(tag);
-            if constexpr (std::is_same_v<T, Light::Type<"Red">>)   return Light("Amber");
+            if constexpr (std::is_same_v<T, Light::Type<"Red">>)        return Light("Amber");
             else if constexpr (std::is_same_v<T, Light::Type<"Amber">>) return Light("Green");
-            else if constexpr (std::is_same_v<T, Light::Type<"Green">>) return Light("Red");
-            else return Light("Red");
+            else                                                          return Light("Red");
         });
     };
 
@@ -495,21 +487,20 @@ TEST_CASE("StringEnum - operator<< streams raw string regardless of validity",
     }
 }
 
-TEST_CASE("StringEnum - to_string() returns engaged Optional for valid element",
+TEST_CASE("StringEnum - to_string() returns xll::String for valid element",
           "[xll::StringEnum][to_string]")
 {
     Direction d { "East" };
     const auto s = to_string(d);
-    REQUIRE(s.has_value());
-    REQUIRE(s.value().to_string() == "East");
+    REQUIRE(s.to_string() == "East");
 }
 
-TEST_CASE("StringEnum - to_string() returns None for invalid bypass value",
+TEST_CASE("StringEnum - to_string() throws for invalid bypass value",
           "[xll::StringEnum][to_string]")
 {
     Direction d { "North" };
     static_cast<xll::String&>(d) = xll::String("Bad");
-    REQUIRE_FALSE(to_string(d).has_value());
+    REQUIRE_THROWS_AS(to_string(d), std::invalid_argument);
 }
 
 // =============================================================================
@@ -542,7 +533,7 @@ TEST_CASE("StringEnum - single-element enum",
     REQUIRE(k.valid());
     REQUIRE(k.index() == 0);
     REQUIRE(k.is<"EXACT">());
-    REQUIRE(k.value().value().to_string() == "EXACT");
+    REQUIRE(k.value().to_string() == "EXACT");
 
     REQUIRE_THROWS_AS(Single { "APPROXIMATE" }, std::invalid_argument);
     REQUIRE_THROWS_AS(Single { "" },            std::invalid_argument);

@@ -63,6 +63,7 @@
 #include "Number.hpp"
 #include "Optional.hpp"
 #include "String.hpp"
+#include "StringEnum.hpp"
 #include "Variant.hpp"
 #include <type_traits>
 
@@ -570,7 +571,7 @@ namespace xll
      * @endcode
      */
     template<typename TTarget>
-        requires is_xll_type<TTarget>
+        requires is_xll_type<TTarget> && (!is_tuple_type<TTarget>)
     [[nodiscard]]
     Optional<TTarget> cast(const Any& any)
     {
@@ -579,19 +580,66 @@ namespace xll
             : xll::None;
     }
 
+
+    // =========================================================================
+    // xll::cast — StringEnum specialisations
+    //
+    // Unlike plain xll::String, a StringEnum requires both:
+    //   1. The stored xltype is xltypeStr, AND
+    //   2. The stored string is one of the compile-time allowed elements
+    //      (StringEnum::valid() == true).
+    //
+    // The generic cast<TTarget> path only tests xltype equality, so it would
+    // accept any xltypeStr value regardless of validity.  These overloads
+    // shadow the primary template for StringEnum specialisations to apply the
+    // extra validity check, returning xll::None when the string is not a
+    // recognised element.
+    // =========================================================================
+
     /**
-     * @brief Retrieves the value from a mutable `xll::Any`.
+     * @brief Casts an `xll::Any` to `xll::StringEnum<Strings...>`.
      *
-     * Identical to the const overload; provided so that non-const `Any` objects
-     * can be passed without an explicit `const_cast`.
+     * Returns an engaged `Optional<StringEnum<Strings...>>` only when:
+     *   - The stored value has xltype == xltypeStr, **and**
+     *   - The stored string is one of the compile-time allowed elements
+     *     (i.e. `StringEnum::valid()` returns `true`).
+     *
+     * Returns `xll::None` on type mismatch or if the stored string is not a
+     * recognised element.
+     *
+     * @tparam Strings  The compile-time allowed strings of the target StringEnum.
+     * @param  any      The `Any` object to cast from.
+     * @return          `Optional<StringEnum<Strings...>>` — engaged on success,
+     *                  `xll::None` on mismatch or invalid string.
+     *
+     * @code
+     * using Direction = xll::StringEnum<"North", "South", "East", "West">;
+     *
+     * xll::Any a = xll::String("North");
+     * auto d = xll::cast<Direction>(a);   // Optional<Direction> = "North"
+     *
+     * xll::Any b = xll::String("Up");
+     * auto u = xll::cast<Direction>(b);   // Optional<Direction> = None
+     *
+     * xll::Any n = xll::Number(3.14);
+     * auto x = xll::cast<Direction>(n);   // Optional<Direction> = None
+     * @endcode
      */
-    template<typename TTarget>
-        requires is_xll_type<TTarget>
+    template<fixstr::basic_fixed_string... Strings>
     [[nodiscard]]
-    Optional<TTarget> cast(Any& any)
+    Optional<StringEnum<Strings...>> cast(const Any& any)
     {
-        return cast<TTarget>(static_cast<const Any&>(any));
+        if (any.type() != xltypeStr)
+            return xll::None;
+
+        const auto* se = std::launder(reinterpret_cast<const StringEnum<Strings...>*>(&any));
+        if (!se->valid())
+            return xll::None;
+
+        return Optional<StringEnum<Strings...>>(*se);
     }
+
+
 }    // namespace xll
 
 

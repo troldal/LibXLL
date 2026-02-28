@@ -15,6 +15,23 @@ namespace xll
     template<typename T>
     concept is_unique_ptr = requires(T t) { typename std::unique_ptr<typename T::element_type, typename T::deleter_type>; };
 
+    // =========================================================================
+    // is_tuple_type — forward declaration
+    //
+    // The full specialisation lives in Tuple.hpp (after Tuple is defined).
+    // The default is false so Any.hpp can safely use !is_tuple_type<T> without
+    // including Tuple.hpp, avoiding a circular dependency.
+    // =========================================================================
+
+    namespace impl
+    {
+        template<typename T>
+        struct is_tuple_impl : std::false_type {};
+    }
+
+    template<typename T>
+    concept is_tuple_type = impl::is_tuple_impl<std::remove_cvref_t<T>>::value;
+
     /**
      * @brief Concept that checks if a type is a valid xll type for use in Expected.
      *

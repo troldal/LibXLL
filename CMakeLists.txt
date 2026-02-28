@@ -33,6 +33,13 @@ CPMAddPackage(
         OPTIONS "FXT_USE_TL_EXPECTED OFF" "FXT_USE_TL_OPTIONAL OFF"
 )
 
+CPMAddPackage(
+        NAME nlohmann_json
+        VERSION 3.12.0
+        # the git repo is incredibly large, so we download the archived include directory
+        URL https://github.com/nlohmann/json/releases/download/v3.12.0/include.zip
+)
+
 #CPMFindPackage(
 #        NAME FXT
 #        GITHUB_REPOSITORY troldal/FXT
