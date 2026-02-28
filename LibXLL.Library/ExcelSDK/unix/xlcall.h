@@ -326,7 +326,9 @@ typedef struct xloper12
 extern "C" {
 #endif
 
-int __attribute__((__cdecl__)) Excel4(int xlfn, LPXLOPER operRes, int count,... );
+//int __attribute__((__cdecl__)) Excel4(int xlfn, LPXLOPER operRes, int count,... );
+int Excel4(int xlfn, LPXLOPER operRes, int count,... );
+
 /* followed by count LPXLOPERs */
 
 int  Excel4v(int xlfn, LPXLOPER operRes, int count, LPXLOPER opers[]);
@@ -335,7 +337,9 @@ int  XLCallVer(void);
 
 long  LPenHelper(int wCode, void *lpv);
 
-int __attribute__((__cdecl__)) Excel12(int xlfn, LPXLOPER12 operRes, int count,... );
+//int __attribute__((__cdecl__)) Excel12(int xlfn, LPXLOPER12 operRes, int count,... );
+int Excel12(int xlfn, LPXLOPER12 operRes, int count,... );
+
 /* followed by count LPXLOPER12s */
 
 int  Excel12v(int xlfn, LPXLOPER12 operRes, int count, LPXLOPER12 opers[]);

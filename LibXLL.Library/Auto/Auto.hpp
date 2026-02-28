@@ -337,7 +337,7 @@ extern "C" inline XLL_EXPORTS void XLLAPI xlAutoFree12(LPXLOPER12 px)
     xll::Registry::instance().register_all();
     xll::Auto<xll::Free>::Execute<xll::Auto<xll::Free>::BeforeTag>();
 
-    if (not px->xltype & xlbitDLLFree) return;
+    if (not (px->xltype & xlbitDLLFree)) return;
 
     px->xltype &= ~xlbitDLLFree;
     switch (px->xltype) {

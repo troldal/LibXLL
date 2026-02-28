@@ -53,7 +53,7 @@ inline __attribute__((used)) void FetchExcel12EntryPt(void)
 #ifdef __cplusplus
 extern "C"
 #endif	
-__attribute__((dllexport))
+//__attribute__((dllexport))
 inline __attribute__((used)) void SetExcel12EntryPt(EXCEL12PROC pexcel12New)
 {
 	// Stub for compiling on Linux.
