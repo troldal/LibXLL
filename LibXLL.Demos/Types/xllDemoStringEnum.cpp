@@ -75,13 +75,11 @@ XLL_REGISTER(directionOppositeReg);
 
 XLL_FUNCTION xll::Expected<xll::String>* XLLAPI DirectionOpposite(const xll::Any* arg)
 {
-    static xll::Expected<xll::String> result;
-
     const auto dir = xll::cast<Direction>(*arg);
     if (!dir) {
         std::cerr << "[DIRECTION.OPPOSITE] Invalid input\n";
-        result = xll::Unexpected(xll::ErrValue);
-        return &result;
+        return xll::AutoFree()(
+            std::make_unique<xll::Expected<xll::String>>(xll::Unexpected(xll::ErrValue)));
     }
 
     xll::String opposite;
@@ -93,8 +91,7 @@ XLL_FUNCTION xll::Expected<xll::String>* XLLAPI DirectionOpposite(const xll::Any
         default: break;
     }
 
-    result = xll::Expected<xll::String>(opposite);
-    return &result;
+    return xll::AutoFree()(std::make_unique<xll::Expected<xll::String>>(opposite));
 }
 
 // ============================================================================

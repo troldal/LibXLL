@@ -332,42 +332,13 @@ extern "C" inline XLL_EXPORTS int XLLAPI xlAutoRemove()
 #pragma comment(linker, "/INCLUDE:xlAutoRemove")
 #endif
 
-extern "C" inline XLL_EXPORTS void XLLAPI xlAutoFree12(LPXLOPER12 px)
+extern "C" inline XLL_EXPORTS void XLLAPI xlAutoFree12(const xll::Any* px)
 {
     xll::Registry::instance().register_all();
     xll::Auto<xll::Free>::Execute<xll::Auto<xll::Free>::BeforeTag>();
 
     if (not (px->xltype & xlbitDLLFree)) return;
-
-    px->xltype &= ~xlbitDLLFree;
-    switch (px->xltype) {
-        case xltypeMulti:
-            delete reinterpret_cast<xll::Array<xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number>>*>(px);
-        break;
-        case xltypeBool:
-            delete reinterpret_cast<xll::Bool*>(px);
-        break;
-        case xltypeErr:
-            delete reinterpret_cast<xll::Error*>(px);
-        break;
-        case xltypeInt:
-            delete reinterpret_cast<xll::Int*>(px);
-        break;
-        case xltypeMissing:
-            delete reinterpret_cast<xll::Missing*>(px);
-        break;
-        case xltypeNil:
-            delete reinterpret_cast<xll::Nil*>(px);
-        break;
-        case xltypeNum:
-            delete reinterpret_cast<xll::Number*>(px);
-        break;
-        case xltypeStr:
-            delete reinterpret_cast<xll::String*>(px);
-        break;
-        default:
-            break;
-    }
+    delete px;
 
     xll::Auto<xll::Free>::Execute<xll::Auto<xll::Free>::AfterTag>();
 }
