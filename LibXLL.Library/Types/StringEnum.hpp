@@ -48,6 +48,7 @@
 
 #pragma once
 
+#include "Any.hpp"
 #include "Optional.hpp"
 #include "String.hpp"
 #include <fxt/enums/StringEnum.hpp>
@@ -545,6 +546,73 @@ namespace xll
     // Layout check — forced via a concrete instantiation.
     static_assert(sizeof(StringEnum<"A">) == sizeof(XLOPER12),
         "xll::StringEnum must not add data members beyond XLOPER12");
+
+    // =========================================================================
+    // is_string_enum_type — specialisation
+    //
+    // The concept itself is forward-declared in Concepts.hpp.
+    // Here we specialise is_string_enum_impl for StringEnum<Strings...>.
+    // =========================================================================
+
+    namespace impl
+    {
+        template<fixstr::basic_fixed_string... Strings>
+        struct is_string_enum_impl<StringEnum<Strings...>> : std::true_type {};
+    }
+
+    // =========================================================================
+    // xll::cast — StringEnum specialisation
+    //
+    // Defined here (not in Any.hpp) to avoid a circular include and to ensure
+    // the single TTarget-parameter overload is selected when the user writes
+    // cast<Direction>(any) with a type alias.  The NTTP-pack overload in
+    // Any.hpp cannot be reached via a type alias.
+    //
+    // The generic cast<TTarget> in Any.hpp is excluded for StringEnum types
+    // via the !is_string_enum_type<TTarget> constraint.
+    // =========================================================================
+
+    /**
+     * @brief Casts an `xll::Any` to `xll::StringEnum<Strings...>`.
+     *
+     * Returns an engaged `Optional<TTarget>` only when:
+     *   - The stored value has xltype == xltypeStr, **and**
+     *   - The stored string is one of the compile-time allowed elements
+     *     (i.e. `TTarget::valid()` returns `true`).
+     *
+     * Returns `xll::None` on type mismatch or unrecognised string.
+     *
+     * @tparam TTarget  A specialisation of `xll::StringEnum`.
+     * @param  any      The `Any` object to cast from.
+     * @return          `Optional<TTarget>` — engaged on success, `None` otherwise.
+     *
+     * @code
+     * using Direction = xll::StringEnum<"North", "South", "East", "West">;
+     *
+     * xll::Any a = xll::String("North");
+     * auto d = xll::cast<Direction>(a);   // Optional<Direction> — engaged
+     *
+     * xll::Any b = xll::String("Vest");
+     * auto u = xll::cast<Direction>(b);   // Optional<Direction> — None
+     *
+     * xll::Any n = xll::Number(3.14);
+     * auto x = xll::cast<Direction>(n);   // Optional<Direction> — None
+     * @endcode
+     */
+    template<typename TTarget>
+        requires is_string_enum_type<TTarget>
+    [[nodiscard]]
+    Optional<TTarget> cast(const Any& any)
+    {
+        if (any.type() != xltypeStr)
+            return xll::None;
+
+        const auto* se = std::launder(reinterpret_cast<const TTarget*>(&any));
+        if (!se->valid())
+            return xll::None;
+
+        return Optional<TTarget>(*se);
+    }
 
 }    // namespace xll
 

@@ -28,7 +28,9 @@
  *
  * To handle potentially-invalid input from Excel without exceptions, use
  * `xll::cast<MyTuple>(any)`, which returns `xll::Optional<MyTuple>` —
- * engaged only when the `Any` holds a structurally valid tuple.
+ * engaged only when the `Any` holds a structurally valid tuple **and** every
+ * element matches its declared type.  A successful cast therefore guarantees
+ * that all `xll::get` calls on the result will succeed.
  *
  * @code
  * using MyTuple = xll::Tuple<xll::String, xll::Number, xll::Bool>;
@@ -253,6 +255,12 @@ namespace xll
             {
                 return t.valid();
             }
+
+            template<typename... Ts>
+            static constexpr size_t arity(const Tuple<Ts...>&) noexcept
+            {
+                return sizeof...(Ts);
+            }
         };
     }
 
@@ -338,32 +346,51 @@ namespace xll
     }
 
     // =========================================================================
-    // xll::cast — Tuple specialisations
+    // xll::cast — Tuple specialisation
     //
     // Defined here (not in Any.hpp) to avoid a circular include:
     //   Any.hpp → Tuple.hpp → Any.hpp
     //
-    // These overloads use a single TTarget parameter constrained by
-    // is_tuple_type so they are unambiguously more specialised than the
-    // generic cast<TTarget> in Any.hpp.  They add the structural validity
-    // check (correct element count) on top of the xltype check.
-    // Individual element types are NOT verified here — use xll::get for that.
+    // Validates both structure AND element types, so a successful cast
+    // guarantees that every xll::get call on the result will succeed.
     // =========================================================================
+
+    namespace impl
+    {
+        /// Core: checks each element against its declared type via cast.
+        template<typename... Ts, size_t... Is>
+        bool all_elements_match(const Tuple<Ts...>& t,
+                                std::index_sequence<Is...>) noexcept
+        {
+            return (... && static_cast<bool>(
+                xll::cast<type_at<Is, Ts...>>(TupleAccess::element_at(t, Is))));
+        }
+
+        /// Convenience overload: deduces Ts... and generates the index sequence.
+        template<typename... Ts>
+        bool all_elements_match(const Tuple<Ts...>& t) noexcept
+        {
+            return all_elements_match(t, std::index_sequence_for<Ts...>{});
+        }
+    }
 
     /**
      * @brief Casts an `xll::Any` to `xll::Tuple<Ts...>`.
      *
-     * Returns an engaged `Optional<TTarget>` only when:
-     *   - The stored value has xltype == xltypeMulti, **and**
-     *   - The array contains exactly `sizeof...(Ts)` elements
-     *     (i.e. `TTarget::valid()` returns `true`).
+     * Returns an engaged `Optional<TTarget>` only when **all** of the
+     * following hold:
+     *   - The stored value has xltype == xltypeMulti.
+     *   - The array contains exactly `sizeof...(Ts)` elements.
+     *   - Every element at position `I` has an xltype compatible with the
+     *     declared type `Ts[I]`.
      *
-     * Returns `xll::None` on xltype mismatch or wrong element count.
-     * Individual element types are **not** verified — use `xll::get`.
+     * Returns `xll::None` if any check fails, so a successful cast guarantees
+     * that every subsequent `xll::get` call on the result will succeed.
      *
      * @tparam TTarget  A specialisation of `xll::Tuple`.
      * @param  any      The `Any` object to cast from.
-     * @return          `Optional<TTarget>` — engaged on success, `None` otherwise.
+     * @return          `Optional<TTarget>` — fully validated on success,
+     *                  `None` on any mismatch.
      *
      * @code
      * using Row = xll::Tuple<xll::String, xll::Number>;
@@ -371,8 +398,8 @@ namespace xll
      * xll::Any a = Row { xll::String("x"), xll::Number(1.0) };
      * auto r = xll::cast<Row>(a);    // Optional<Row> — engaged
      *
-     * xll::Any b = xll::Array<xll::Any>({ xll::Number(1.0) });  // wrong size
-     * auto s = xll::cast<Row>(b);    // Optional<Row> — None
+     * xll::Any b = Row { xll::Number(1.0), xll::String("bad") };  // swapped types
+     * auto s = xll::cast<Row>(b);    // Optional<Row> — None (element mismatch)
      *
      * xll::Any n = xll::Number(3.14);
      * auto t = xll::cast<Row>(n);    // Optional<Row> — None (wrong xltype)
@@ -387,7 +414,11 @@ namespace xll
             return xll::None;
 
         const auto* t = std::launder(reinterpret_cast<const TTarget*>(&any));
+
         if (!impl::TupleAccess::valid(*t))
+            return xll::None;
+
+        if (!impl::all_elements_match(*t))
             return xll::None;
 
         return Optional<TTarget>(*t);

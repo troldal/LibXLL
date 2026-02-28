@@ -73,6 +73,11 @@ target_link_libraries(xllDemoStringEnum PUBLIC LibXLL)
 set_target_properties(xllDemoStringEnum PROPERTIES OUTPUT_NAME "string_enum_demo" SUFFIX ".xll")
 target_compile_definitions(xllDemoStringEnum PRIVATE NOMINMAX)
 
+add_library(xllDemoTuple SHARED Types/xllDemoTuple.cpp)
+target_link_libraries(xllDemoTuple PUBLIC LibXLL)
+set_target_properties(xllDemoTuple PROPERTIES OUTPUT_NAME "tuple_demo" SUFFIX ".xll")
+target_compile_definitions(xllDemoTuple PRIVATE NOMINMAX)
+
 
 include(../cmake/CompilerWarnings.cmake)
 set_project_warnings(

@@ -27,10 +27,17 @@ namespace xll
     {
         template<typename T>
         struct is_tuple_impl : std::false_type {};
+
+        template<typename T>
+        struct is_string_enum_impl : std::false_type {};
     }
 
     template<typename T>
     concept is_tuple_type = impl::is_tuple_impl<std::remove_cvref_t<T>>::value;
+
+    /// Satisfied only by specialisations of xll::StringEnum.
+    template<typename T>
+    concept is_string_enum_type = impl::is_string_enum_impl<std::remove_cvref_t<T>>::value;
 
     /**
      * @brief Concept that checks if a type is a valid xll type for use in Expected.

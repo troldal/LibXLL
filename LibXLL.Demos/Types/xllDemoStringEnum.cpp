@@ -16,9 +16,12 @@
 //   DIRECTION.INDEX      – returns the zero-based index of the direction.
 //                          Returns #VALUE! and logs to stderr on bad input.
 //
-// Because Excel passes arguments as raw XLOPER12 pointers, the StringEnum
-// parameter may hold any string the user typed.  We check valid() before
-// inspecting the value, and return xll::Error(xlerrValue) on bad input.
+// Each function receives an xll::Any argument (the raw XLOPER12 value Excel
+// passes in) and uses xll::cast<StringEnum>(any) to validate it.  The cast
+// returns xll::None when the argument is not an xltypeStr holding a
+// recognised element, so no separate valid() check is needed.  All query
+// operations (index(), is<>(), visit()) are called only on the engaged
+// Optional value and are therefore guaranteed to succeed.
 
 #include <Auto.hpp>
 #include <Functions.hpp>
@@ -62,7 +65,7 @@ auto directionOppositeReg =
     xll::Function("DIRECTION.OPPOSITE")
     | xll::Result<xll::Expected<xll::String>>()
     | xll::Procedure("DirectionOpposite")
-    | xll::Parameter<Direction>("Direction",
+    | xll::Parameter<xll::Any>("Direction",
         "Cardinal direction: \"North\", \"South\", \"East\", or \"West\"")
     | xll::Category("StringEnum Examples")
     | xll::Description(
@@ -70,22 +73,18 @@ auto directionOppositeReg =
         "Returns #VALUE! if the argument is not a recognised direction.");
 XLL_REGISTER(directionOppositeReg);
 
-XLL_FUNCTION xll::Expected<xll::String>* XLLAPI DirectionOpposite(const Direction* dir)
+XLL_FUNCTION xll::Expected<xll::String>* XLLAPI DirectionOpposite(const xll::Any* arg)
 {
     static xll::Expected<xll::String> result;
 
-    if (!dir->valid()) {
-        std::cerr << "[DIRECTION.OPPOSITE] Invalid input: \"" << *dir << "\"\n";
+    const auto dir = xll::cast<Direction>(*arg);
+    if (!dir) {
+        std::cerr << "[DIRECTION.OPPOSITE] Invalid input\n";
         result = xll::Unexpected(xll::ErrValue);
         return &result;
     }
 
     xll::String opposite;
-    // if      (dir->is<"North">()) opposite = xll::String("South");
-    // else if (dir->is<"South">()) opposite = xll::String("North");
-    // else if (dir->is<"East">())  opposite = xll::String("West");
-    // else                            opposite = xll::String("East");
-
     switch (dir->index()) {
         case Direction::IndexOf<"North">(): opposite = xll::String("South"); break;
         case Direction::IndexOf<"South">(): opposite = xll::String("North"); break;
@@ -106,7 +105,7 @@ auto trafficNextReg =
     xll::Function("TRAFFIC.NEXT")
     | xll::Result<xll::Expected<xll::String>>()
     | xll::Procedure("TrafficNext")
-    | xll::Parameter<Light>("State",
+    | xll::Parameter<xll::Any>("State",
         "Traffic-light state: \"Red\", \"Amber\", or \"Green\"")
     | xll::Category("StringEnum Examples")
     | xll::Description(
@@ -114,12 +113,13 @@ auto trafficNextReg =
         "Returns #VALUE! if the argument is not a recognised state.");
 XLL_REGISTER(trafficNextReg);
 
-XLL_FUNCTION xll::Expected<xll::String>* XLLAPI TrafficNext(const Light* light)
+XLL_FUNCTION xll::Expected<xll::String>* XLLAPI TrafficNext(const xll::Any* arg)
 {
     static xll::Expected<xll::String> result;
 
-    if (!light->valid()) {
-        std::cerr << "[TRAFFIC.NEXT] Invalid input: \"" << *light << "\"\n";
+    const auto light = xll::cast<Light>(*arg);
+    if (!light) {
+        std::cerr << "[TRAFFIC.NEXT] Invalid input\n";
         result = xll::Unexpected(xll::ErrValue);
         return &result;
     }
@@ -127,7 +127,7 @@ XLL_FUNCTION xll::Expected<xll::String>* XLLAPI TrafficNext(const Light* light)
     xll::String next;
     if      (light->is<"Red">())   next = xll::String("Amber");
     else if (light->is<"Amber">()) next = xll::String("Green");
-    else                            next = xll::String("Red");
+    else                           next = xll::String("Red");
 
     result = xll::Expected<xll::String>(next);
     return &result;
@@ -141,7 +141,7 @@ auto directionIndexReg =
     xll::Function("DIRECTION.INDEX")
     | xll::Result<xll::Expected<xll::Number>>()
     | xll::Procedure("DirectionIndex")
-    | xll::Parameter<Direction>("Direction",
+    | xll::Parameter<xll::Any>("Direction",
         "Cardinal direction: \"North\", \"South\", \"East\", or \"West\"")
     | xll::Category("StringEnum Examples")
     | xll::Description(
@@ -150,17 +150,17 @@ auto directionIndexReg =
         "Returns #VALUE! for unrecognised input.");
 XLL_REGISTER(directionIndexReg);
 
-XLL_FUNCTION xll::Expected<xll::Number>* XLLAPI DirectionIndex(const Direction* dir)
+XLL_FUNCTION xll::Expected<xll::Number>* XLLAPI DirectionIndex(const xll::Any* arg)
 {
     static xll::Expected<xll::Number> result;
 
-    const std::size_t idx = dir->index();   // npos if unrecognised
-    if (idx == Direction::npos) {
-        std::cerr << "[DIRECTION.INDEX] Invalid input: \"" << *dir << "\"\n";
+    const auto dir = xll::cast<Direction>(*arg);
+    if (!dir) {
+        std::cerr << "[DIRECTION.INDEX] Invalid input\n";
         result = xll::Unexpected(xll::ErrValue);
         return &result;
     }
 
-    result = xll::Expected<xll::Number>(xll::Number(static_cast<double>(idx)));
+    result = xll::Expected<xll::Number>(xll::Number(static_cast<double>(dir->index())));
     return &result;
 }
