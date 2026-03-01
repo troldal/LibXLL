@@ -78,15 +78,14 @@ Any
 Optional
 --------
 
-.. doxygenclass:: xll::Optional
+.. doxygenfile:: Types/Optional.hpp
    :project: LibXLL
-   :members:
-   :undoc-members:
+   :sections: briefdescription detaileddescription
 
 Expected
 --------
 
-.. doxygenclass:: xll::Expected
+.. doxygenclass:: Expected
    :project: LibXLL
    :members:
    :undoc-members:
@@ -94,16 +93,13 @@ Expected
 Tuple
 -----
 
-.. doxygenclass:: xll::Tuple
+.. doxygenfile:: Types/Tuple.hpp
    :project: LibXLL
-   :members:
-   :undoc-members:
+   :sections: briefdescription detaileddescription
 
 StringEnum
 ----------
 
-.. doxygenclass:: xll::StringEnum
+.. doxygenfile:: Types/StringEnum.hpp
    :project: LibXLL
-   :members:
-   :undoc-members:
-
+   :sections: briefdescription detaileddescription

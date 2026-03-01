@@ -129,6 +129,19 @@ if(PROJECT_IS_TOP_LEVEL)
                 DEPENDS ${DOXYGEN_XML_INDEX}
                         ${DOCS_DIR}/conf.py
                         ${DOCS_DIR}/index.rst
+                        ${DOCS_DIR}/introduction.rst
+                        ${DOCS_DIR}/getting-started/index.rst
+                        ${DOCS_DIR}/getting-started/installation.rst
+                        ${DOCS_DIR}/getting-started/hello-world.rst
+                        ${DOCS_DIR}/user-guide/index.rst
+                        ${DOCS_DIR}/user-guide/types.rst
+                        ${DOCS_DIR}/user-guide/functions.rst
+                        ${DOCS_DIR}/user-guide/arguments.rst
+                        ${DOCS_DIR}/user-guide/lifecycle.rst
+                        ${DOCS_DIR}/api/index.rst
+                        ${DOCS_DIR}/api/types.rst
+                        ${DOCS_DIR}/api/registration.rst
+                        ${DOCS_DIR}/api/auto.rst
                 COMMAND ${SPHINX_EXECUTABLE}
                             -b html
                             -Dbreathe_projects.LibXLL=${DOXYGEN_XML_DIR}
