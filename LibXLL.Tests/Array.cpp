@@ -439,7 +439,14 @@ TEST_CASE("Array - move assignment", "[xll::Array][move]")
 
     SECTION("Self-move is safe") {
         NumArr arr({ xll::Number(1.0) });
+#if defined(__GNUC__) || defined(__clang__)
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wself-move"
+#endif
         arr = std::move(arr);
+#if defined(__GNUC__) || defined(__clang__)
+#    pragma GCC diagnostic pop
+#endif
         REQUIRE(arr.xltype == xltypeMulti);
     }
 

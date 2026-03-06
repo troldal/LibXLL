@@ -378,6 +378,8 @@ namespace xll
         using error_policy    = TErrorPolicy;
         using unexpected_type = Unexpected<TError>;
 
+        static constexpr size_t excel_type = TValue::excel_type | TError::excel_type;
+
         /**
          * @brief Default constructor - creates Expected in value state with default-constructed TValue.
          *

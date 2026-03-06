@@ -1,7 +1,11 @@
 include(../cmake/Sanitizers.cmake)
+include(../cmake/CompilerWarnings.cmake)
+include(../cmake/Hardening.cmake)
+create_project_warnings_target(project_warnings)
+create_hardening_target(project_hardening)
 
 add_library(xllDemo SHARED xllDemo.cpp)
-target_link_libraries(xllDemo PUBLIC LibXLL)
+target_link_libraries(xllDemo PUBLIC LibXLL project_warnings project_hardening)
 set_target_properties(xllDemo PROPERTIES OUTPUT_NAME "example" SUFFIX ".xll")
 target_compile_definitions(xllDemo PRIVATE NOMINMAX)
 
@@ -17,35 +21,35 @@ endif ()
 
 
 add_executable(exeDemo exeDemo.cpp)
-target_link_libraries(exeDemo PUBLIC LibXLL)
+target_link_libraries(exeDemo PUBLIC LibXLL project_warnings project_hardening)
 target_compile_definitions(exeDemo PRIVATE NOMINMAX)
 
 add_executable(DemoUtilsEnsure Utils/DemoUtilsEnsure.cpp)
-target_link_libraries(DemoUtilsEnsure PUBLIC LibXLL)
+target_link_libraries(DemoUtilsEnsure PUBLIC LibXLL project_warnings project_hardening)
 target_compile_definitions(DemoUtilsEnsure PRIVATE NOMINMAX)
 
 add_executable(DemoTypesExpected Types/DemoTypesExpected.cpp)
-target_link_libraries(DemoTypesExpected PUBLIC LibXLL)
+target_link_libraries(DemoTypesExpected PUBLIC LibXLL project_warnings project_hardening)
 target_compile_definitions(DemoTypesExpected PRIVATE NOMINMAX)
 
 add_executable(DemoExpectedSameType Types/DemoExpectedSameType.cpp)
-target_link_libraries(DemoExpectedSameType PUBLIC LibXLL)
+target_link_libraries(DemoExpectedSameType PUBLIC LibXLL project_warnings project_hardening)
 target_compile_definitions(DemoExpectedSameType PRIVATE NOMINMAX)
 
 add_executable(DemoArrayShape Types/DemoArrayShape.cpp)
-target_link_libraries(DemoArrayShape PUBLIC LibXLL)
+target_link_libraries(DemoArrayShape PUBLIC LibXLL project_warnings project_hardening)
 target_compile_definitions(DemoArrayShape PRIVATE NOMINMAX)
 
 add_executable(DemoAny Types/DemoAny.cpp)
-target_link_libraries(DemoAny PUBLIC LibXLL)
+target_link_libraries(DemoAny PUBLIC LibXLL project_warnings project_hardening)
 target_compile_definitions(DemoAny PRIVATE NOMINMAX)
 
 add_executable(DemoTuple Types/DemoTuple.cpp)
-target_link_libraries(DemoTuple PUBLIC LibXLL)
+target_link_libraries(DemoTuple PUBLIC LibXLL project_warnings project_hardening)
 target_compile_definitions(DemoTuple PRIVATE NOMINMAX)
 
 add_executable(DemoStringEnum Types/DemoStringEnum.cpp)
-target_link_libraries(DemoStringEnum PUBLIC LibXLL)
+target_link_libraries(DemoStringEnum PUBLIC LibXLL project_warnings project_hardening)
 target_compile_definitions(DemoStringEnum PRIVATE NOMINMAX)
 
 # Deliberate-leak demo used to verify ASan is wired up correctly.
@@ -54,49 +58,39 @@ add_executable(DemoAsanLeak Utils/DemoAsanLeak.cpp)
 target_compile_definitions(DemoAsanLeak PRIVATE NOMINMAX)
 
 add_library(xllDemoTypesExpected SHARED Types/xllDemoTypesExpected.cpp)
-target_link_libraries(xllDemoTypesExpected PUBLIC LibXLL)
+target_link_libraries(xllDemoTypesExpected PUBLIC LibXLL project_warnings project_hardening)
 set_target_properties(xllDemoTypesExpected PROPERTIES OUTPUT_NAME "expected_demo" SUFFIX ".xll")
 target_compile_definitions(xllDemoTypesExpected PRIVATE NOMINMAX)
 
 add_library(xllDemoExpectedValidation SHARED Types/xllDemoExpectedValidation.cpp)
-target_link_libraries(xllDemoExpectedValidation PUBLIC LibXLL)
+target_link_libraries(xllDemoExpectedValidation PUBLIC LibXLL project_warnings project_hardening)
 set_target_properties(xllDemoExpectedValidation PROPERTIES OUTPUT_NAME "expected_validation" SUFFIX ".xll")
 target_compile_definitions(xllDemoExpectedValidation PRIVATE NOMINMAX)
 
 add_library(xllDemoAny SHARED Types/xllDemoAny.cpp)
-target_link_libraries(xllDemoAny PUBLIC LibXLL)
+target_link_libraries(xllDemoAny PUBLIC LibXLL project_warnings project_hardening)
 set_target_properties(xllDemoAny PROPERTIES OUTPUT_NAME "any_demo" SUFFIX ".xll")
 target_compile_definitions(xllDemoAny PRIVATE NOMINMAX)
 
 add_library(xllDemoStringEnum SHARED Types/xllDemoStringEnum.cpp)
-target_link_libraries(xllDemoStringEnum PUBLIC LibXLL)
+target_link_libraries(xllDemoStringEnum PUBLIC LibXLL project_warnings project_hardening)
 set_target_properties(xllDemoStringEnum PROPERTIES OUTPUT_NAME "string_enum_demo" SUFFIX ".xll")
 target_compile_definitions(xllDemoStringEnum PRIVATE NOMINMAX)
 
 add_library(xllDemoTuple SHARED Types/xllDemoTuple.cpp)
-target_link_libraries(xllDemoTuple PUBLIC LibXLL)
+target_link_libraries(xllDemoTuple PUBLIC LibXLL project_warnings project_hardening)
 set_target_properties(xllDemoTuple PROPERTIES OUTPUT_NAME "tuple_demo" SUFFIX ".xll")
 target_compile_definitions(xllDemoTuple PRIVATE NOMINMAX)
 
 
-include(../cmake/CompilerWarnings.cmake)
-set_project_warnings(
-        xllDemo
-#        ${myproject_WARNINGS_AS_ERRORS}
-        ""
-        ""
-        ""
-        ""
-        "")
-
 if (NOT WIN32)
     foreach (sanitizer IN ITEMS address undefined thread memory)
         add_library(xllDemo.${sanitizer} SHARED xllDemo.cpp)
-        target_link_libraries(xllDemo.${sanitizer} PUBLIC LibXLL)
+        target_link_libraries(xllDemo.${sanitizer} PUBLIC LibXLL project_warnings project_hardening)
         target_enable_sanitizer(xllDemo.${sanitizer} ${sanitizer})
 
         add_executable(exeDemo.${sanitizer} exeDemo.cpp)
-        target_link_libraries(exeDemo.${sanitizer} PUBLIC LibXLL)
+        target_link_libraries(exeDemo.${sanitizer} PUBLIC LibXLL project_warnings project_hardening)
         target_enable_sanitizer(exeDemo.${sanitizer} ${sanitizer})
     endforeach ()
 

@@ -5,8 +5,8 @@ import os
 
 # -- Project information -----------------------------------------------------
 project = "LibXLL"
-copyright = "XLThermo"
-author = "XLThermo"
+copyright = "2026, KinetiQ"
+author = "Kenneth Troldal Balslev"
 
 # -- General configuration ---------------------------------------------------
 extensions = [
@@ -23,5 +23,6 @@ breathe_default_project = "LibXLL"
 breathe_default_members = ("members", "undoc-members")
 
 # -- Options for HTML output -------------------------------------------------
-html_theme = "sphinx_rtd_theme"
-
+# html_theme = "sphinx_rtd_theme"
+html_theme = "furo"
+# html_theme = "press"

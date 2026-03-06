@@ -327,16 +327,26 @@ TEST_CASE("Tuple - cast<Tuple>(any) returns None for wrong element count", "[xll
     REQUIRE_FALSE(xll::cast<Row>(any).has_value());
 }
 
-TEST_CASE("Tuple - get throws for element type mismatch after cast", "[xll::Tuple][cast]")
+TEST_CASE("Tuple - cast returns None for element type mismatch", "[xll::Tuple][cast]")
 {
     // Structurally valid (correct size) but element types are swapped.
     using Row = xll::Tuple<xll::String, xll::Number>;
     xll::Any any = Row { xll::Number(1.0), xll::String("swapped") };
 
+    // cast validates both structure AND element types — must return None.
     auto opt = xll::cast<Row>(any);
-    REQUIRE(opt.has_value());   // structure is correct
-    REQUIRE_THROWS_AS(xll::get<xll::String>(*opt), std::invalid_argument);  // wrong element type
-    REQUIRE_THROWS_AS(xll::get<xll::Number>(*opt), std::invalid_argument);
+    REQUIRE_FALSE(opt.has_value());
+}
+
+TEST_CASE("Tuple - get throws for element type mismatch on raw Tuple", "[xll::Tuple][cast]")
+{
+    // Bypass cast and reinterpret directly to test that get throws on type mismatch.
+    using Row = xll::Tuple<xll::String, xll::Number>;
+    xll::Any any = Row { xll::Number(1.0), xll::String("swapped") };
+
+    const auto* raw = std::launder(reinterpret_cast<const Row*>(&any));
+    REQUIRE_THROWS_AS(xll::get<xll::String>(*raw), std::invalid_argument);
+    REQUIRE_THROWS_AS(xll::get<xll::Number>(*raw), std::invalid_argument);
 }
 
 // =============================================================================

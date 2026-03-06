@@ -4,101 +4,111 @@
 
 #pragma once
 
-#include <fxt.hpp>
 #include "Expected.hpp"
 #include "Variant.hpp"
 #include <expected>
+#include <fxt.hpp>
 #include <span>
 
 namespace xll
 {
 
-/**
- * @brief A type-safe, Excel-compatible two-dimensional array.
- *
- * `xll::Array<TValue>` represents the `xltypeMulti` variant of `XLOPER12` —
- * Excel's native two-dimensional array type. It inherits directly from
- * `XLOPER12` so that its address can be passed to and from the Excel C API
- * without conversion or copying.
- *
- * **Memory layout**
- *
- * The class adds no data members beyond `XLOPER12`. Element storage is a
- * heap-allocated array of `XLOPER12` objects, each of which is constructed
- * in-place as a `TValue` via `std::construct_at`. The invariant
- * `sizeof(TValue) == sizeof(XLOPER12)` is enforced by `TValue`'s own
- * static assertions.
- *
- * **Invariants**
- *
- * - `xltype` is *always* `xltypeMulti` for the lifetime of the object.
- * - `val.array.lparray` is `nullptr` if and only if `rows * cols == 0`.
- * - All elements in `[lparray, lparray + rows * cols)` are live `TValue`
- *   objects whose lifetime is managed by this class.
- *
- * **Shape**
- *
- * The logical shape of the array is described by the nested `Shape`
- * type-enum (`fxt::type_enum<Empty, Singular, Horizontal, Vertical,
- * TwoDimensional>`). Shape tags are also used as constructor arguments to
- * select the desired layout when constructing from a range or initializer
- * list:
- *
- * @code
- * // 1-row array sized to fit the initializer list
- * Array<Number> h { {1.0, 2.0, 3.0}, Array<Number>::Horizontal{} };
- *
- * // 1-column array with explicit size and fill padding
- * Array<Number> v { {1.0, 2.0}, Array<Number>::Vertical(5), Number{-1.0} };
- *
- * // 2×3 matrix from a std::vector<double>
- * std::vector<double> src { 1, 2, 3, 4, 5, 6 };
- * Array<Number> m { src, Array<Number>::TwoDimensional{2, 3} };
- * @endcode
- *
- * **Element type requirements**
- *
- * `TValue` must:
- * - Inherit from `XLOPER12` without adding data members
- *   (`sizeof(TValue) == sizeof(XLOPER12)`).
- * - Be default-constructible, copy-constructible, and destructible.
- *
- * `xll::Number`, `xll::String`, `xll::Bool`, `xll::Int`, and
- * `xll::Error` all satisfy these requirements.
- *
- * @tparam TValue The element type stored in the array. Must be an
- *                `xll::impl::Base`-derived type with the same size and
- *                alignment as `XLOPER12`.
- *
- * @see xll::Number
- * @see xll::String
- */
+    /**
+     * @brief A type-safe, Excel-compatible two-dimensional array.
+     *
+     * `xll::Array<TValue>` represents the `xltypeMulti` variant of `XLOPER12` —
+     * Excel's native two-dimensional array type. It inherits directly from
+     * `XLOPER12` so that its address can be passed to and from the Excel C API
+     * without conversion or copying.
+     *
+     * **Memory layout**
+     *
+     * The class adds no data members beyond `XLOPER12`. Element storage is a
+     * heap-allocated array of `XLOPER12` objects, each of which is constructed
+     * in-place as a `TValue` via `std::construct_at`. The invariant
+     * `sizeof(TValue) == sizeof(XLOPER12)` is enforced by `TValue`'s own
+     * static assertions.
+     *
+     * **Invariants**
+     *
+     * - `xltype` is *always* `xltypeMulti` for the lifetime of the object.
+     * - `val.array.lparray` is `nullptr` if and only if `rows * cols == 0`.
+     * - All elements in `[lparray, lparray + rows * cols)` are live `TValue`
+     *   objects whose lifetime is managed by this class.
+     *
+     * **Shape**
+     *
+     * The logical shape of the array is described by the nested `Shape`
+     * type-enum (`fxt::type_enum<Empty, Singular, Horizontal, Vertical,
+     * TwoDimensional>`). Shape tags are also used as constructor arguments to
+     * select the desired layout when constructing from a range or initializer
+     * list:
+     *
+     * @code
+     * // 1-row array sized to fit the initializer list
+     * Array<Number> h { {1.0, 2.0, 3.0}, Array<Number>::Horizontal{} };
+     *
+     * // 1-column array with explicit size and fill padding
+     * Array<Number> v { {1.0, 2.0}, Array<Number>::Vertical(5), Number{-1.0} };
+     *
+     * // 2×3 matrix from a std::vector<double>
+     * std::vector<double> src { 1, 2, 3, 4, 5, 6 };
+     * Array<Number> m { src, Array<Number>::TwoDimensional{2, 3} };
+     * @endcode
+     *
+     * **Element type requirements**
+     *
+     * `TValue` must:
+     * - Inherit from `XLOPER12` without adding data members
+     *   (`sizeof(TValue) == sizeof(XLOPER12)`).
+     * - Be default-constructible, copy-constructible, and destructible.
+     *
+     * `xll::Number`, `xll::String`, `xll::Bool`, `xll::Int`, and
+     * `xll::Error` all satisfy these requirements.
+     *
+     * @tparam TValue The element type stored in the array. Must be an
+     *                `xll::impl::Base`-derived type with the same size and
+     *                alignment as `XLOPER12`.
+     *
+     * @see xll::Number
+     * @see xll::String
+     */
     template<typename TValue>
     class Array : public XLOPER12
     {
-        struct ShapeBase{};
+        struct ShapeBase
+        {
+        };
+
     public:
         /// The element type of this array.
-        using value_type      = TValue;
+        using value_type = TValue;
         /// Unsigned size type.
-        using size_type       = size_t;
+        using size_type = size_t;
         /// Signed difference type for iterator arithmetic.
         using difference_type = std::ptrdiff_t;
         /// Pointer to element.
-        using pointer         = TValue*;
+        using pointer = TValue*;
         /// Pointer to const element.
-        using const_pointer   = const TValue*;
+        using const_pointer = const TValue*;
         /// Reference to element.
-        using reference       = TValue&;
+        using reference = TValue&;
         /// Reference to const element.
         using const_reference = const TValue&;
         /// Iterator type (contiguous, raw pointer).
-        using iterator        = TValue*;
+        using iterator = TValue*;
         /// Const iterator type.
-        using const_iterator  = const TValue*;
+        using const_iterator = const TValue*;
 
         /// The XLOPER12 type tag for all Array specialisations.
         static constexpr int excel_type = xltypeMulti;
+
+    private:
+        /// The native type of the XLOPER12::xltype field. Used to suppress
+        /// sign-conversion warnings when comparing xltype values.
+        using xltype_t = decltype(XLOPER12::xltype);
+
+    public:
 
         // -----------------------------------------------------------------------
         // Shape tags
@@ -118,7 +128,8 @@ namespace xll
          * Array<Number> h2 { {1.0}, Array<Number>::Horizontal(5), Number{0.0} };
          * @endcode
          */
-        struct Horizontal : ShapeBase {
+        struct Horizontal : ShapeBase
+        {
             /// Optional explicit column count. If absent, the size is inferred
             /// from the source range.
             std::optional<size_t> size;
@@ -142,7 +153,8 @@ namespace xll
          * Array<Number> v2 { {1.0}, Array<Number>::Vertical(5), Number{-1.0} };
          * @endcode
          */
-        struct Vertical : ShapeBase {
+        struct Vertical : ShapeBase
+        {
             /// Optional explicit row count. If absent, the size is inferred
             /// from the source range.
             std::optional<size_t> size;
@@ -169,9 +181,10 @@ namespace xll
          *                    Number{-1.0} };
          * @endcode
          */
-        struct TwoDimensional : ShapeBase {
-            size_t rows; ///< Number of rows.
-            size_t cols; ///< Number of columns.
+        struct TwoDimensional : ShapeBase
+        {
+            size_t rows;    ///< Number of rows.
+            size_t cols;    ///< Number of columns.
             /// Constructs a TwoDimensional tag with the given dimensions.
             constexpr TwoDimensional(size_t rows, size_t cols) : rows(rows), cols(cols) {}
         };
@@ -183,7 +196,9 @@ namespace xll
          * immediately after default construction or after assignment from
          * `xll::Missing`.
          */
-        struct Empty : ShapeBase {};
+        struct Empty : ShapeBase
+        {
+        };
 
         /**
          * @brief Shape tag returned by `shape()` when the array has exactly one element.
@@ -191,7 +206,9 @@ namespace xll
          * A 1×1 array is considered singular regardless of whether it was
          * constructed as Horizontal, Vertical, or TwoDimensional.
          */
-        struct Singular : ShapeBase {};
+        struct Singular : ShapeBase
+        {
+        };
 
         /**
          * @brief Type-safe enumeration of all possible array shapes.
@@ -254,12 +271,9 @@ namespace xll
         constexpr Array(size_t rows, size_t cols, TValue v = {}) : Array()
         {
             // same validation as Array(rows, cols)
-            if (rows != 0 && cols > std::numeric_limits<size_t>::max() / rows)
-                throw std::overflow_error("Array dimensions overflow");
-            if (rows > static_cast<size_t>(std::numeric_limits<RW>::max()))
-                throw std::out_of_range("Row count exceeds Excel limit");
-            if (cols > static_cast<size_t>(std::numeric_limits<COL>::max()))
-                throw std::out_of_range("Column count exceeds Excel limit");
+            if (rows != 0 && cols > std::numeric_limits<size_t>::max() / rows) throw std::overflow_error("Array dimensions overflow");
+            if (rows > static_cast<size_t>(std::numeric_limits<RW>::max())) throw std::out_of_range("Row count exceeds Excel limit");
+            if (cols > static_cast<size_t>(std::numeric_limits<COL>::max())) throw std::out_of_range("Column count exceeds Excel limit");
             if (rows * cols == 0) return;
 
             val.array.lparray = make_array(rows * cols, v).release();
@@ -296,8 +310,8 @@ namespace xll
          * @throws std::bad_alloc      if heap allocation fails.
          */
         template<std::ranges::forward_range TRange, typename TShape = Horizontal>
-            requires (std::same_as<TShape, Horizontal> || std::same_as<TShape, Vertical> || std::same_as<TShape, TwoDimensional>)
-                  && std::same_as<std::ranges::range_value_t<TRange>, TValue>
+            requires(std::same_as<TShape, Horizontal> || std::same_as<TShape, Vertical> || std::same_as<TShape, TwoDimensional>) &&
+                    std::same_as<std::ranges::range_value_t<TRange>, TValue>
         constexpr Array(TRange&& values, TShape arrayShape = {}, TValue fill = {}) : Array()
         {
             const size_t values_size = [&]() -> size_t {
@@ -309,53 +323,52 @@ namespace xll
 
             auto populate = [&](size_t count) {
                 auto it = std::ranges::begin(values);
-                for (size_t i = 0; i < count; ++i, ++it)
-                    static_cast<TValue&>(val.array.lparray[i]) = *it;
+                for (size_t i = 0; i < count; ++i, ++it) static_cast<TValue&>(val.array.lparray[i]) = *it;
             };
 
-            Shape(arrayShape).visit(fxt::overload {
-                [&](const Horizontal& s) {
-                    const size_t explicit_size = s.size.value_or(values_size);
-                    if (explicit_size < values_size)
-                        throw std::out_of_range("Specified array size is smaller than the range");
-                    if (explicit_size == 0) return;
-                    if (explicit_size > static_cast<size_t>(std::numeric_limits<COL>::max()))
-                        throw std::out_of_range("Column count exceeds Excel limit");
-                    val.array.lparray = make_array(explicit_size, fill).release();
-                    val.array.rows    = 1;
-                    val.array.columns = static_cast<COL>(explicit_size);
-                    populate(values_size);
-                },
-                [&](const Vertical& s) {
-                    const size_t explicit_size = s.size.value_or(values_size);
-                    if (explicit_size < values_size)
-                        throw std::out_of_range("Specified array size is smaller than the range");
-                    if (explicit_size == 0) return;
-                    if (explicit_size > static_cast<size_t>(std::numeric_limits<RW>::max()))
-                        throw std::out_of_range("Row count exceeds Excel limit");
-                    val.array.lparray = make_array(explicit_size, fill).release();
-                    val.array.rows    = static_cast<RW>(explicit_size);
-                    val.array.columns = 1;
-                    populate(values_size);
-                },
-                [&](const TwoDimensional& s) {
-                    const size_t total = s.rows * s.cols;
-                    if (total < values_size)
-                        throw std::out_of_range("Specified array size is smaller than the range");
-                    if (s.rows > static_cast<size_t>(std::numeric_limits<RW>::max()))
-                        throw std::out_of_range("Row count exceeds Excel limit");
-                    if (s.cols > static_cast<size_t>(std::numeric_limits<COL>::max()))
-                        throw std::out_of_range("Column count exceeds Excel limit");
-                    if (s.rows != 0 && s.cols > std::numeric_limits<size_t>::max() / s.rows)
-                        throw std::overflow_error("Array dimensions overflow");
-                    if (total == 0) return;
-                    val.array.lparray = make_array(total, fill).release();
-                    val.array.rows    = static_cast<RW>(s.rows);
-                    val.array.columns = static_cast<COL>(s.cols);
-                    populate(values_size);
-                },
-                [](const auto&) { throw std::invalid_argument("Unsupported shape type"); }    // Empty, Singular – unreachable given the requires clause
-            });
+            Shape(arrayShape)
+                .visit(fxt::overload {
+                    [&](const Horizontal& s) {
+                        const size_t explicit_size = s.size.value_or(values_size);
+                        if (explicit_size < values_size) throw std::out_of_range("Specified array size is smaller than the range");
+                        if (explicit_size == 0) return;
+                        if (explicit_size > static_cast<size_t>(std::numeric_limits<COL>::max()))
+                            throw std::out_of_range("Column count exceeds Excel limit");
+                        val.array.lparray = make_array(explicit_size, fill).release();
+                        val.array.rows    = 1;
+                        val.array.columns = static_cast<COL>(explicit_size);
+                        populate(values_size);
+                    },
+                    [&](const Vertical& s) {
+                        const size_t explicit_size = s.size.value_or(values_size);
+                        if (explicit_size < values_size) throw std::out_of_range("Specified array size is smaller than the range");
+                        if (explicit_size == 0) return;
+                        if (explicit_size > static_cast<size_t>(std::numeric_limits<RW>::max()))
+                            throw std::out_of_range("Row count exceeds Excel limit");
+                        val.array.lparray = make_array(explicit_size, fill).release();
+                        val.array.rows    = static_cast<RW>(explicit_size);
+                        val.array.columns = 1;
+                        populate(values_size);
+                    },
+                    [&](const TwoDimensional& s) {
+                        const size_t total = s.rows * s.cols;
+                        if (total < values_size) throw std::out_of_range("Specified array size is smaller than the range");
+                        if (s.rows > static_cast<size_t>(std::numeric_limits<RW>::max()))
+                            throw std::out_of_range("Row count exceeds Excel limit");
+                        if (s.cols > static_cast<size_t>(std::numeric_limits<COL>::max()))
+                            throw std::out_of_range("Column count exceeds Excel limit");
+                        if (s.rows != 0 && s.cols > std::numeric_limits<size_t>::max() / s.rows)
+                            throw std::overflow_error("Array dimensions overflow");
+                        if (total == 0) return;
+                        val.array.lparray = make_array(total, fill).release();
+                        val.array.rows    = static_cast<RW>(s.rows);
+                        val.array.columns = static_cast<COL>(s.cols);
+                        populate(values_size);
+                    },
+                    [](const auto&) {
+                        throw std::invalid_argument("Unsupported shape type");
+                    }    // Empty, Singular – unreachable given the requires clause
+                });
         }
 
         /**
@@ -380,11 +393,9 @@ namespace xll
          * @endcode
          */
         template<typename TShape = Horizontal>
-            requires (std::same_as<TShape, Horizontal> || std::same_as<TShape, Vertical> || std::same_as<TShape, TwoDimensional>)
+            requires(std::same_as<TShape, Horizontal> || std::same_as<TShape, Vertical> || std::same_as<TShape, TwoDimensional>)
         constexpr Array(std::initializer_list<TValue> values, TShape shape = {}, TValue fill = {}) : Array()
-        {
-            *this = Array(std::ranges::subrange(values.begin(), values.end()), shape, fill);
-        }
+        { *this = Array(std::ranges::subrange(values.begin(), values.end()), shape, fill); }
 
         /**
          * @brief Constructs an array from a forward range of elements
@@ -414,13 +425,15 @@ namespace xll
          * @endcode
          */
         template<std::ranges::forward_range TRange, typename TShape = Horizontal>
-            requires (std::constructible_from<TValue, std::ranges::range_value_t<TRange>> || std::convertible_to<std::ranges::range_value_t<TRange>, TValue>) &&
-                     (!std::same_as<TValue, std::ranges::range_value_t<TRange>>) &&
-                     (!std::same_as<Array, std::ranges::range_value_t<TRange>>) &&
-                     (std::same_as<TShape, Horizontal> || std::same_as<TShape, Vertical> || std::same_as<TShape, TwoDimensional>)
+            requires(std::constructible_from<TValue, std::ranges::range_value_t<TRange>> ||
+                     std::convertible_to<std::ranges::range_value_t<TRange>, TValue>) &&
+                    (!std::same_as<TValue, std::ranges::range_value_t<TRange>>) &&
+                    (!std::same_as<Array, std::ranges::range_value_t<TRange>>) &&
+                    (std::same_as<TShape, Horizontal> || std::same_as<TShape, Vertical> || std::same_as<TShape, TwoDimensional>)
         constexpr Array(TRange&& values, TShape shape = {}, TValue fill = {}) : Array()
         {
-            auto converted = values | std::views::transform([](const std::ranges::range_value_t<TRange>& u) { return TValue(u); });
+            //auto converted = values | std::views::transform([](const std::ranges::range_value_t<TRange>& u) { return TValue(u); });
+            auto converted = std::views::transform(values, [](const std::ranges::range_value_t<TRange>& u) { return TValue(u); });
             *this          = Array(converted, shape, fill);
         }
 
@@ -454,17 +467,14 @@ namespace xll
          * @endcode
          */
         template<typename U, typename TShape = Horizontal>
-            requires (std::constructible_from<TValue, U> || std::convertible_to<U, TValue>)
-                  && (!std::same_as<TValue, std::remove_cvref_t<U>>)
-                  && (!std::same_as<Array, std::remove_cvref_t<U>>)
-                  && (std::same_as<TShape, Horizontal> || std::same_as<TShape, Vertical> || std::same_as<TShape, TwoDimensional>)
+            requires(std::constructible_from<TValue, U> || std::convertible_to<U, TValue>) &&
+                    (!std::same_as<TValue, std::remove_cvref_t<U>>) && (!std::same_as<Array, std::remove_cvref_t<U>>) &&
+                    (std::same_as<TShape, Horizontal> || std::same_as<TShape, Vertical> || std::same_as<TShape, TwoDimensional>)
         constexpr Array(std::initializer_list<U> values, TShape shape = {}, TValue fill = {}) : Array()
         {
             auto converted = values | std::views::transform([](const U& u) { return TValue(u); });
-            *this = Array(converted, shape, fill);
+            *this          = Array(converted, shape, fill);
         }
-
-
 
         /**
          * @brief Constructs an Array from a Missing value.
@@ -478,8 +488,6 @@ namespace xll
          *       which is useful in Excel contexts where missing arguments need to be handled.
          */
         // Array(const Missing& _) : Array() {}
-
-
 
         /**
          * @brief Copy constructor for the Array class.
@@ -497,16 +505,29 @@ namespace xll
          */
         constexpr Array(const Array& other) : Array()
         {
-            ensure(other.xltype == xltypeMulti);
-            if (other.size() == 0) return;
-            auto buffer = std::make_unique_for_overwrite<XLOPER12[]>(other.size());
-            for (size_t i = 0; i < other.size(); ++i)
-                std::construct_at(
-                    static_cast<TValue*>(&buffer[i]),
-                    static_cast<const TValue&>(other.val.array.lparray[i]));
-            val.array.lparray = buffer.release();
-            val.array.rows    = other.rows();
-            val.array.columns = other.cols();
+            if (other.xltype == xltypeMulti) {
+                if (other.size() == 0) return;
+                auto buffer = std::make_unique_for_overwrite<XLOPER12[]>(other.size());
+                for (size_t i = 0; i < other.size(); ++i)
+                    std::construct_at(static_cast<TValue*>(&buffer[i]), static_cast<const TValue&>(other.val.array.lparray[i]));
+                val.array.lparray = buffer.release();
+                val.array.rows    = other.val.array.rows;
+                val.array.columns = other.val.array.columns;
+            }
+            else if ((TValue::excel_type & other.xltype) == other.xltype)
+            {
+                // else if constexpr (requires { TValue::excel_type; }) {
+                // if (other.xltype == static_cast<xltype_t>(TValue::excel_type)) {
+                val.array.lparray = make_array(1, static_cast<const TValue&>(static_cast<const XLOPER12&>(other))).release();
+                val.array.rows    = 1;
+                val.array.columns = 1;
+                //} else {
+                //    ensure(false, "xll::Array: unsupported xltype in copy constructor");
+                //}
+            }
+            else {
+                ensure(false, "xll::Array: unsupported xltype in copy constructor");
+            }
         }
 
         /**
@@ -524,13 +545,28 @@ namespace xll
          */
         constexpr Array(Array&& other) noexcept : Array()
         {
-            ensure(other.xltype == xltypeMulti);
-            val.array.lparray       = other.val.array.lparray;
-            other.val.array.lparray = nullptr;
-            val.array.rows          = other.rows();
-            val.array.columns       = other.cols();
-            other.val.array.rows    = 0;
-            other.val.array.columns = 0;
+            if (other.xltype == xltypeMulti) {
+                val.array.lparray       = other.val.array.lparray;
+                val.array.rows          = other.val.array.rows;
+                val.array.columns       = other.val.array.columns;
+                other.val.array.lparray = nullptr;
+                other.val.array.rows    = 0;
+                other.val.array.columns = 0;
+            }
+            else if constexpr (requires { TValue::excel_type; }) {
+                if (other.xltype == static_cast<xltype_t>(TValue::excel_type)) {
+                    val.array.lparray = make_array(1, static_cast<const TValue&>(static_cast<const XLOPER12&>(other))).release();
+                    val.array.rows    = 1;
+                    val.array.columns = 1;
+                    other.xltype      = xltypeNil;
+                }
+                else {
+                    ensure(false, "xll::Array: unsupported xltype in move constructor");
+                }
+            }
+            else {
+                ensure(false, "xll::Array: unsupported xltype in move constructor");
+            }
         }
 
         /**
@@ -549,18 +585,22 @@ namespace xll
          */
         constexpr ~Array()
         {
-            if (xltype != xltypeMulti) std::unreachable();
-            if (val.array.lparray != nullptr) {
-                std::destroy(static_cast<TValue*>(val.array.lparray),
-                             static_cast<TValue*>(val.array.lparray) + size());
-                delete[] val.array.lparray;
-                val.array.lparray = nullptr;
+            if (xltype == xltypeMulti) {
+                if (val.array.lparray != nullptr) {
+                    std::destroy(static_cast<TValue*>(val.array.lparray), static_cast<TValue*>(val.array.lparray) + size());
+                    delete[] val.array.lparray;
+                    val.array.lparray = nullptr;
+                }
+                val.array.rows    = 0;
+                val.array.columns = 0;
             }
-
-            xltype            = xltypeMulti;
-            val.array.lparray = nullptr;
-            val.array.rows    = 0;
-            val.array.columns = 0;
+            else if constexpr (requires { TValue::excel_type; }) {
+                if (xltype == static_cast<xltype_t>(TValue::excel_type)) {
+                    // Reached via reinterpret_cast — no heap buffer to free.
+                    // Run TValue's destructor in-place (important for xll::String).
+                    std::destroy_at(static_cast<TValue*>(static_cast<XLOPER12*>(this)));
+                }
+            }
         }
 
         /**
@@ -615,15 +655,35 @@ namespace xll
         constexpr Array& operator=(Array&& other) noexcept
         {
             if (this == &other) return *this;
-            if (other.xltype != xltypeMulti) std::unreachable();
 
             std::destroy_at(this);
-            val.array.lparray       = other.val.array.lparray;
-            val.array.rows          = other.rows();
-            val.array.columns       = other.cols();
-            other.val.array.lparray = nullptr;
-            other.val.array.rows    = 0;
-            other.val.array.columns = 0;
+            xltype            = xltypeMulti;
+            val.array.lparray = nullptr;
+            val.array.rows    = 0;
+            val.array.columns = 0;
+
+            if (other.xltype == xltypeMulti) {
+                val.array.lparray       = other.val.array.lparray;
+                val.array.rows          = other.val.array.rows;
+                val.array.columns       = other.val.array.columns;
+                other.val.array.lparray = nullptr;
+                other.val.array.rows    = 0;
+                other.val.array.columns = 0;
+            }
+            else if constexpr (requires { TValue::excel_type; }) {
+                if (other.xltype == static_cast<xltype_t>(TValue::excel_type)) {
+                    val.array.lparray = make_array(1, static_cast<const TValue&>(static_cast<const XLOPER12&>(other))).release();
+                    val.array.rows    = 1;
+                    val.array.columns = 1;
+                    other.xltype      = xltypeNil;
+                }
+                else {
+                    ensure(false, "xll::Array: unsupported xltype in move assignment");
+                }
+            }
+            else {
+                ensure(false, "xll::Array: unsupported xltype in move assignment");
+            }
             return *this;
         }
 
@@ -645,7 +705,12 @@ namespace xll
         constexpr Array& operator=(const Missing&) noexcept
         {
             std::destroy_at(this);
-            // destructor already resets xltype and array fields; nothing more to do
+            // destructor may leave xltype unchanged for the single-value path;
+            // explicitly restore the canonical empty-array state.
+            xltype            = xltypeMulti;
+            val.array.lparray = nullptr;
+            val.array.rows    = 0;
+            val.array.columns = 0;
             return *this;
         }
 
@@ -676,11 +741,11 @@ namespace xll
             const size_t r = rows();
             const size_t c = cols();
             const size_t n = size();    // avoids repeated multiply and potential overflow
-            if (n == 0) return Empty{};
-            if (n == 1) return Singular{};
-            if (r > 1 && c == 1) return Vertical{r};
-            if (r == 1 && c > 1) return Horizontal{c};
-            return TwoDimensional{r, c};
+            if (n == 0) return Empty {};
+            if (n == 1) return Singular {};
+            if (r > 1 && c == 1) return Vertical { r };
+            if (r == 1 && c > 1) return Horizontal { c };
+            return TwoDimensional { r, c };
         }
 
         /**
@@ -692,7 +757,10 @@ namespace xll
         [[nodiscard]]
         constexpr size_t rows() const
         {
-            ensure(xltype == xltypeMulti, "Array is not valid");
+            if constexpr (requires { TValue::excel_type; })
+                if (xltype == static_cast<xltype_t>(TValue::excel_type)) return 1;
+            // ensure(xltype == xltypeMulti, "Array is not valid");
+            if (xltype != xltypeMulti) return 1;
             return static_cast<size_t>(val.array.rows);
         }
 
@@ -705,7 +773,10 @@ namespace xll
         [[nodiscard]]
         constexpr size_t cols() const
         {
-            ensure(xltype == xltypeMulti, "Array is not valid");
+            if constexpr (requires { TValue::excel_type; })
+                if (xltype == static_cast<xltype_t>(TValue::excel_type)) return 1;
+            // ensure(xltype == xltypeMulti, "Array is not valid");
+            if (xltype != xltypeMulti) return 1;
             return static_cast<size_t>(val.array.columns);
         }
 
@@ -718,7 +789,9 @@ namespace xll
         [[nodiscard]]
         constexpr size_t size() const
         {
-            if (xltype != xltypeMulti) std::unreachable();
+            if constexpr (requires { TValue::excel_type; })
+                if (xltype == static_cast<xltype_t>(TValue::excel_type)) return 1;
+            if (xltype != xltypeMulti) return 1;    // std::unreachable();
             return static_cast<size_t>(val.array.rows) * static_cast<size_t>(val.array.columns);
         }
 
@@ -731,9 +804,7 @@ namespace xll
          */
         [[nodiscard]]
         constexpr bool empty() const
-        {
-            return size() == 0;
-        }
+        { return size() == 0; }
 
         /**
          * @brief Changes the row/column layout without reallocating or moving elements.
@@ -758,14 +829,10 @@ namespace xll
          */
         constexpr void reshape(size_t rows, size_t cols)
         {
-            if (rows > static_cast<size_t>(std::numeric_limits<RW>::max()))
-                throw std::out_of_range("Row count exceeds Excel limit");
-            if (cols > static_cast<size_t>(std::numeric_limits<COL>::max()))
-                throw std::out_of_range("Column count exceeds Excel limit");
-            if (rows != 0 && cols > std::numeric_limits<size_t>::max() / rows)
-                throw std::overflow_error("Array dimensions overflow");
-            if (rows * cols != size())
-                throw std::invalid_argument("reshape: new dimensions must preserve element count");
+            if (rows > static_cast<size_t>(std::numeric_limits<RW>::max())) throw std::out_of_range("Row count exceeds Excel limit");
+            if (cols > static_cast<size_t>(std::numeric_limits<COL>::max())) throw std::out_of_range("Column count exceeds Excel limit");
+            if (rows != 0 && cols > std::numeric_limits<size_t>::max() / rows) throw std::overflow_error("Array dimensions overflow");
+            if (rows * cols != size()) throw std::invalid_argument("reshape: new dimensions must preserve element count");
             val.array.rows    = static_cast<RW>(rows);
             val.array.columns = static_cast<COL>(cols);
         }
@@ -786,6 +853,8 @@ namespace xll
          */
         constexpr TValue* begin()
         {
+            if constexpr (requires { TValue::excel_type; })
+                if (xltype == static_cast<xltype_t>(TValue::excel_type)) return static_cast<TValue*>(static_cast<XLOPER12*>(this));
             ensure(xltype == xltypeMulti, "Array is not valid");
             return static_cast<TValue*>(static_cast<XLOPER12*>(val.array.lparray));
         }
@@ -797,6 +866,8 @@ namespace xll
          */
         constexpr TValue const* begin() const
         {
+            if constexpr (requires { TValue::excel_type; })
+                if (xltype == static_cast<xltype_t>(TValue::excel_type)) return static_cast<const TValue*>(static_cast<const XLOPER12*>(this));
             ensure(xltype == xltypeMulti, "Array is not valid");
             return static_cast<TValue const*>(static_cast<XLOPER12 const*>(val.array.lparray));
         }
@@ -808,6 +879,8 @@ namespace xll
          */
         constexpr TValue* end()
         {
+            if constexpr (requires { TValue::excel_type; })
+                if (xltype == static_cast<xltype_t>(TValue::excel_type)) return static_cast<TValue*>(static_cast<XLOPER12*>(this)) + 1;
             ensure(xltype == xltypeMulti, "Array is not valid");
             return static_cast<TValue*>(static_cast<XLOPER12*>(val.array.lparray)) + size();
         }
@@ -819,6 +892,9 @@ namespace xll
          */
         constexpr TValue const* end() const
         {
+            if constexpr (requires { TValue::excel_type; })
+                if (xltype == static_cast<xltype_t>(TValue::excel_type))
+                    return static_cast<const TValue*>(static_cast<const XLOPER12*>(this)) + 1;
             ensure(xltype == xltypeMulti, "Array is not valid");
             return static_cast<TValue const*>(static_cast<XLOPER12 const*>(val.array.lparray)) + size();
         }
@@ -832,10 +908,7 @@ namespace xll
          * @pre `xltype == xltypeMulti` (checked via `ensure`).
          * @return `const TValue*` pointing to the first element.
          */
-        constexpr const_iterator cbegin() const
-        {
-            return begin();
-        }
+        constexpr const_iterator cbegin() const { return begin(); }
 
         /**
          * @brief Returns a pointer one past the last element (const, explicit).
@@ -846,10 +919,7 @@ namespace xll
          * @pre `xltype == xltypeMulti` (checked via `ensure`).
          * @return `const TValue*` pointing one past the last element.
          */
-        constexpr const_iterator cend() const
-        {
-            return end();
-        }
+        constexpr const_iterator cend() const { return end(); }
 
         /**
          * @brief Returns a pointer to the underlying contiguous element storage (non-const).
@@ -863,9 +933,7 @@ namespace xll
          */
         [[nodiscard]]
         constexpr pointer data() noexcept
-        {
-            return static_cast<TValue*>(static_cast<XLOPER12*>(val.array.lparray));
-        }
+        { return static_cast<TValue*>(static_cast<XLOPER12*>(val.array.lparray)); }
 
         /**
          * @brief Returns a pointer to the underlying contiguous element storage (const).
@@ -875,9 +943,7 @@ namespace xll
          */
         [[nodiscard]]
         constexpr const_pointer data() const noexcept
-        {
-            return static_cast<const TValue*>(static_cast<const XLOPER12*>(val.array.lparray));
-        }
+        { return static_cast<const TValue*>(static_cast<const XLOPER12*>(val.array.lparray)); }
 
         // -----------------------------------------------------------------------
         // Element access
@@ -908,16 +974,17 @@ namespace xll
         template<typename Self>
         constexpr auto& operator[](this Self&& self, size_t index)
         {
-            using QualifiedValue = std::conditional_t<
-                std::is_const_v<std::remove_reference_t<Self>>,
-                const TValue,
-                TValue
-            >;
+            using QualifiedValue = std::conditional_t<std::is_const_v<std::remove_reference_t<Self>>, const TValue, TValue>;
 
-            ensure(self.xltype == xltypeMulti, "Array is not valid");
-            const size_t size = self.size();
-            if (index >= size) throw std::out_of_range("Array index out of range");
-            auto s = std::span<QualifiedValue>(static_cast<QualifiedValue*>(self.val.array.lparray), size);
+            ensure(self.xltype == xltypeMulti || is_scalar_xltype(self.xltype), "Array is not valid");
+            const size_t sz = self.size();
+            if (index >= sz) throw std::out_of_range("Array index out of range");
+
+            if constexpr (requires { TValue::excel_type; })
+                if (self.xltype == static_cast<xltype_t>(TValue::excel_type))
+                    return *static_cast<QualifiedValue*>(const_cast<XLOPER12*>(static_cast<const XLOPER12*>(&self)));
+
+            auto s = std::span<QualifiedValue>(static_cast<QualifiedValue*>(self.val.array.lparray), sz);
             return s[index];
         }
 
@@ -947,13 +1014,17 @@ namespace xll
         template<typename Self>
         constexpr auto& operator[](this Self&& self, size_t row, size_t col)
         {
-            using QualifiedValue = std::conditional_t<
-                std::is_const_v<std::remove_reference_t<Self>>,
-                const TValue,
-                TValue
-            >;
+            using QualifiedValue = std::conditional_t<std::is_const_v<std::remove_reference_t<Self>>, const TValue, TValue>;
 
-            ensure(self.xltype == xltypeMulti, "Array is not valid");
+            ensure(self.xltype == xltypeMulti || is_scalar_xltype(self.xltype), "Array is not valid");
+
+            if constexpr (requires { TValue::excel_type; }) {
+                if (self.xltype == static_cast<xltype_t>(TValue::excel_type)) {
+                    if (row != 0 || col != 0) throw std::out_of_range("Array index out of range");
+                    return *static_cast<QualifiedValue*>(const_cast<XLOPER12*>(static_cast<const XLOPER12*>(&self)));
+                }
+            }
+
             if (row >= static_cast<size_t>(self.val.array.rows) || col >= static_cast<size_t>(self.val.array.columns))
                 throw std::out_of_range("Array index out of range");
 
@@ -986,9 +1057,7 @@ namespace xll
         template<template<typename, typename...> class TContainer>
             requires requires { TContainer<TValue>(std::declval<TValue*>(), std::declval<TValue*>()); }
         constexpr operator TContainer<TValue>() const
-        {
-            return TContainer<TValue>(begin(), end());
-        }
+        { return TContainer<TValue>(begin(), end()); }
 
         /**
          * @brief Converts the array to a container, converting each element to @p TElem.
@@ -1012,8 +1081,7 @@ namespace xll
         constexpr auto to() const
         {
             TContainer<TElem> result {};
-            if constexpr (requires { result.reserve(size_t{}); })
-                result.reserve(size());
+            if constexpr (requires { result.reserve(size_t {}); }) result.reserve(size());
             for (auto const& v : *this) result.push_back(static_cast<TElem>(v));
             return result;
         }
@@ -1037,11 +1105,23 @@ namespace xll
          */
         template<template<typename, typename...> class TContainer>
         constexpr auto to() const
-        {
-            return to<TContainer, TValue>();
-        }
+        { return to<TContainer, TValue>(); }
 
     private:
+        /**
+         * @brief Returns `true` when @p t is the scalar xltype for `TValue`.
+         *
+         * Evaluated at compile time via `if constexpr`: always `false` for
+         * `Array<Any>` because `Any` has no `excel_type` member.
+         */
+        [[nodiscard]]
+        static constexpr bool is_scalar_xltype(xltype_t t) noexcept
+        {
+            if constexpr (requires { TValue::excel_type; })
+                return t == static_cast<xltype_t>(TValue::excel_type);
+            else
+                return false;
+        }
 
         /**
          * @brief Allocates and initialises a raw `XLOPER12` array of @p size elements.
@@ -1161,11 +1241,10 @@ namespace xll
     {
         const size_t r = arr.rows();
         const size_t c = arr.cols();
-        if (arr.empty()) return Array<TValue>{};
+        if (arr.empty()) return Array<TValue> {};
         Array<TValue> result(c, r);
         for (size_t row = 0; row < r; ++row)
-            for (size_t col = 0; col < c; ++col)
-                result[col, row] = arr[row, col];
+            for (size_t col = 0; col < c; ++col) result[col, row] = arr[row, col];
         return result;
     }
 
@@ -1199,20 +1278,17 @@ namespace xll
      * @endcode
      */
     template<typename TValue>
-    [[nodiscard]] constexpr Array<TValue> get_rows(const Array<TValue>& arr,
-                                                   std::initializer_list<size_t> indices)
+    [[nodiscard]] constexpr Array<TValue> get_rows(const Array<TValue>& arr, std::initializer_list<size_t> indices)
     {
-        if (indices.size() == 0) return Array<TValue>{};
+        if (indices.size() == 0) return Array<TValue> {};
         for (size_t idx : indices)
-            if (idx >= arr.rows())
-                throw std::out_of_range("get_rows: row index out of range");
+            if (idx >= arr.rows()) throw std::out_of_range("get_rows: row index out of range");
 
-        const size_t c = arr.cols();
+        const size_t  c = arr.cols();
         Array<TValue> result(indices.size(), c);
-        size_t dst_row = 0;
+        size_t        dst_row = 0;
         for (size_t src_row : indices) {
-            for (size_t col = 0; col < c; ++col)
-                result[dst_row, col] = arr[src_row, col];
+            for (size_t col = 0; col < c; ++col) result[dst_row, col] = arr[src_row, col];
             ++dst_row;
         }
         return result;
@@ -1250,24 +1326,20 @@ namespace xll
      * @endcode
      */
     template<typename TValue>
-    [[nodiscard]] constexpr Array<TValue> get_cols(const Array<TValue>& arr,
-                                                   std::initializer_list<size_t> indices)
+    [[nodiscard]] constexpr Array<TValue> get_cols(const Array<TValue>& arr, std::initializer_list<size_t> indices)
     {
-        if (indices.size() == 0) return Array<TValue>{};
+        if (indices.size() == 0) return Array<TValue> {};
         for (size_t idx : indices)
-            if (idx >= arr.cols())
-                throw std::out_of_range("get_cols: column index out of range");
+            if (idx >= arr.cols()) throw std::out_of_range("get_cols: column index out of range");
 
-        const size_t r = arr.rows();
+        const size_t  r = arr.rows();
         Array<TValue> result(r, indices.size());
-        size_t dst_col = 0;
+        size_t        dst_col = 0;
         for (size_t src_col : indices) {
-            for (size_t row = 0; row < r; ++row)
-                result[row, dst_col] = arr[row, src_col];
+            for (size_t row = 0; row < r; ++row) result[row, dst_col] = arr[row, src_col];
             ++dst_col;
         }
         return result;
     }
 
 }    // namespace xll
-

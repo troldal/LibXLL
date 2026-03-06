@@ -704,87 +704,87 @@ namespace xll
          * and begin() != end().  When disengaged, begin() == this+1 == end(), giving an
          * empty range — all without ever forming a null pointer.
          */
-        class iterator
-        {
-        public:
-            using iterator_category = std::contiguous_iterator_tag;
-            using iterator_concept  = std::contiguous_iterator_tag;
-            using value_type        = TValue;
-            using difference_type   = std::ptrdiff_t;
-            using pointer           = TValue*;
-            using reference         = TValue&;
-
-            constexpr iterator() noexcept : ptr_(nullptr) {}
-            constexpr explicit iterator(TValue* p) noexcept : ptr_(p) {}
-
-            constexpr reference operator*()  const noexcept { return *ptr_; }
-            constexpr pointer   operator->() const noexcept { return  ptr_; }
-
-            constexpr iterator& operator++()    noexcept { ++ptr_; return *this; }
-            constexpr iterator  operator++(int) noexcept { iterator t(*this); ++(*this); return t; }
-            constexpr iterator& operator--()    noexcept { --ptr_; return *this; }
-            constexpr iterator  operator--(int) noexcept { iterator t(*this); --(*this); return t; }
-
-            constexpr iterator& operator+=(difference_type n) noexcept { ptr_ += n; return *this; }
-            constexpr iterator& operator-=(difference_type n) noexcept { ptr_ -= n; return *this; }
-            constexpr iterator  operator+(difference_type n) const noexcept { return iterator(ptr_ + n); }
-            constexpr iterator  operator-(difference_type n) const noexcept { return iterator(ptr_ - n); }
-            friend constexpr iterator operator+(difference_type n, iterator it) noexcept { return it + n; }
-            constexpr difference_type operator-(const iterator& rhs) const noexcept { return ptr_ - rhs.ptr_; }
-            constexpr reference operator[](difference_type n) const noexcept { return ptr_[n]; }
-
-            constexpr bool operator==(const iterator& rhs) const noexcept { return ptr_ == rhs.ptr_; }
-            constexpr bool operator!=(const iterator& rhs) const noexcept { return ptr_ != rhs.ptr_; }
-            constexpr auto operator<=>(const iterator& rhs) const noexcept { return ptr_ <=> rhs.ptr_; }
-
-            constexpr pointer base() const noexcept { return ptr_; }
-
-        private:
-            TValue* ptr_;
-        };
+        // class iterator
+        // {
+        // public:
+        //     using iterator_category = std::contiguous_iterator_tag;
+        //     using iterator_concept  = std::contiguous_iterator_tag;
+        //     using value_type        = TValue;
+        //     using difference_type   = std::ptrdiff_t;
+        //     using pointer           = TValue*;
+        //     using reference         = TValue&;
+        //
+        //     constexpr iterator() noexcept : ptr_(nullptr) {}
+        //     constexpr explicit iterator(TValue* p) noexcept : ptr_(p) {}
+        //
+        //     constexpr reference operator*()  const noexcept { return *ptr_; }
+        //     constexpr pointer   operator->() const noexcept { return  ptr_; }
+        //
+        //     constexpr iterator& operator++()    noexcept { ++ptr_; return *this; }
+        //     constexpr iterator  operator++(int) noexcept { iterator t(*this); ++(*this); return t; }
+        //     constexpr iterator& operator--()    noexcept { --ptr_; return *this; }
+        //     constexpr iterator  operator--(int) noexcept { iterator t(*this); --(*this); return t; }
+        //
+        //     constexpr iterator& operator+=(difference_type n) noexcept { ptr_ += n; return *this; }
+        //     constexpr iterator& operator-=(difference_type n) noexcept { ptr_ -= n; return *this; }
+        //     constexpr iterator  operator+(difference_type n) const noexcept { return iterator(ptr_ + n); }
+        //     constexpr iterator  operator-(difference_type n) const noexcept { return iterator(ptr_ - n); }
+        //     friend constexpr iterator operator+(difference_type n, iterator it) noexcept { return it + n; }
+        //     constexpr difference_type operator-(const iterator& rhs) const noexcept { return ptr_ - rhs.ptr_; }
+        //     constexpr reference operator[](difference_type n) const noexcept { return ptr_[n]; }
+        //
+        //     constexpr bool operator==(const iterator& rhs) const noexcept { return ptr_ == rhs.ptr_; }
+        //     constexpr bool operator!=(const iterator& rhs) const noexcept { return ptr_ != rhs.ptr_; }
+        //     constexpr auto operator<=>(const iterator& rhs) const noexcept { return ptr_ <=> rhs.ptr_; }
+        //
+        //     constexpr pointer base() const noexcept { return ptr_; }
+        //
+        // private:
+        //     TValue* ptr_;
+        // };
 
         /**
          * @brief Const iterator for xll::Optional treated as a single-element range.
          */
-        class const_iterator
-        {
-        public:
-            using iterator_category = std::contiguous_iterator_tag;
-            using iterator_concept  = std::contiguous_iterator_tag;
-            using value_type        = TValue;
-            using difference_type   = std::ptrdiff_t;
-            using pointer           = const TValue*;
-            using reference         = const TValue&;
-
-            constexpr const_iterator() noexcept : ptr_(nullptr) {}
-            constexpr explicit const_iterator(const TValue* p) noexcept : ptr_(p) {}
-            constexpr const_iterator(iterator it) noexcept : ptr_(it.base()) {} // NOLINT implicit
-
-            constexpr reference      operator*()  const noexcept { return *ptr_; }
-            constexpr pointer        operator->() const noexcept { return  ptr_; }
-
-            constexpr const_iterator& operator++()    noexcept { ++ptr_; return *this; }
-            constexpr const_iterator  operator++(int) noexcept { const_iterator t(*this); ++(*this); return t; }
-            constexpr const_iterator& operator--()    noexcept { --ptr_; return *this; }
-            constexpr const_iterator  operator--(int) noexcept { const_iterator t(*this); --(*this); return t; }
-
-            constexpr const_iterator& operator+=(difference_type n) noexcept { ptr_ += n; return *this; }
-            constexpr const_iterator& operator-=(difference_type n) noexcept { ptr_ -= n; return *this; }
-            constexpr const_iterator  operator+(difference_type n) const noexcept { return const_iterator(ptr_ + n); }
-            constexpr const_iterator  operator-(difference_type n) const noexcept { return const_iterator(ptr_ - n); }
-            friend constexpr const_iterator operator+(difference_type n, const_iterator it) noexcept { return it + n; }
-            constexpr difference_type operator-(const const_iterator& rhs) const noexcept { return ptr_ - rhs.ptr_; }
-            constexpr reference operator[](difference_type n) const noexcept { return ptr_[n]; }
-
-            constexpr bool operator==(const const_iterator& rhs) const noexcept { return ptr_ == rhs.ptr_; }
-            constexpr bool operator!=(const const_iterator& rhs) const noexcept { return ptr_ != rhs.ptr_; }
-            constexpr auto operator<=>(const const_iterator& rhs) const noexcept { return ptr_ <=> rhs.ptr_; }
-
-            constexpr pointer base() const noexcept { return ptr_; }
-
-        private:
-            const TValue* ptr_;
-        };
+        // class const_iterator
+        // {
+        // public:
+        //     using iterator_category = std::contiguous_iterator_tag;
+        //     using iterator_concept  = std::contiguous_iterator_tag;
+        //     using value_type        = TValue;
+        //     using difference_type   = std::ptrdiff_t;
+        //     using pointer           = const TValue*;
+        //     using reference         = const TValue&;
+        //
+        //     constexpr const_iterator() noexcept : ptr_(nullptr) {}
+        //     constexpr explicit const_iterator(const TValue* p) noexcept : ptr_(p) {}
+        //     constexpr const_iterator(iterator it) noexcept : ptr_(it.base()) {} // NOLINT implicit
+        //
+        //     constexpr reference      operator*()  const noexcept { return *ptr_; }
+        //     constexpr pointer        operator->() const noexcept { return  ptr_; }
+        //
+        //     constexpr const_iterator& operator++()    noexcept { ++ptr_; return *this; }
+        //     constexpr const_iterator  operator++(int) noexcept { const_iterator t(*this); ++(*this); return t; }
+        //     constexpr const_iterator& operator--()    noexcept { --ptr_; return *this; }
+        //     constexpr const_iterator  operator--(int) noexcept { const_iterator t(*this); --(*this); return t; }
+        //
+        //     constexpr const_iterator& operator+=(difference_type n) noexcept { ptr_ += n; return *this; }
+        //     constexpr const_iterator& operator-=(difference_type n) noexcept { ptr_ -= n; return *this; }
+        //     constexpr const_iterator  operator+(difference_type n) const noexcept { return const_iterator(ptr_ + n); }
+        //     constexpr const_iterator  operator-(difference_type n) const noexcept { return const_iterator(ptr_ - n); }
+        //     friend constexpr const_iterator operator+(difference_type n, const_iterator it) noexcept { return it + n; }
+        //     constexpr difference_type operator-(const const_iterator& rhs) const noexcept { return ptr_ - rhs.ptr_; }
+        //     constexpr reference operator[](difference_type n) const noexcept { return ptr_[n]; }
+        //
+        //     constexpr bool operator==(const const_iterator& rhs) const noexcept { return ptr_ == rhs.ptr_; }
+        //     constexpr bool operator!=(const const_iterator& rhs) const noexcept { return ptr_ != rhs.ptr_; }
+        //     constexpr auto operator<=>(const const_iterator& rhs) const noexcept { return ptr_ <=> rhs.ptr_; }
+        //
+        //     constexpr pointer base() const noexcept { return ptr_; }
+        //
+        // private:
+        //     const TValue* ptr_;
+        // };
 
         /**
          * @brief Returns an iterator to the beginning of the range.
@@ -793,22 +793,22 @@ namespace xll
          * When disengaged: begin() == end() (empty range, no element visited).
          * No null pointer is ever formed.
          */
-        [[nodiscard]]
-        constexpr iterator begin() noexcept
-        {
-            auto* base = std::launder(reinterpret_cast<TValue*>(this));
-            return iterator(has_value() ? base : base + 1);
-        }
-
-        [[nodiscard]]
-        constexpr const_iterator begin() const noexcept
-        {
-            auto* base = std::launder(reinterpret_cast<const TValue*>(this));
-            return const_iterator(has_value() ? base : base + 1);
-        }
-
-        [[nodiscard]]
-        constexpr const_iterator cbegin() const noexcept { return begin(); }
+        // [[nodiscard]]
+        // constexpr iterator begin() noexcept
+        // {
+        //     auto* base = std::launder(reinterpret_cast<TValue*>(this));
+        //     return iterator(has_value() ? base : base + 1);
+        // }
+        //
+        // [[nodiscard]]
+        // constexpr const_iterator begin() const noexcept
+        // {
+        //     auto* base = std::launder(reinterpret_cast<const TValue*>(this));
+        //     return const_iterator(has_value() ? base : base + 1);
+        // }
+        //
+        // [[nodiscard]]
+        // constexpr const_iterator cbegin() const noexcept { return begin(); }
 
         /**
          * @brief Returns an end iterator.
@@ -817,20 +817,20 @@ namespace xll
          * When engaged:    end() == begin() + 1  (range of one element).
          * When disengaged: end() == begin()       (empty range).
          */
-        [[nodiscard]]
-        constexpr iterator end() noexcept
-        {
-            return iterator(std::launder(reinterpret_cast<TValue*>(this)) + 1);
-        }
-
-        [[nodiscard]]
-        constexpr const_iterator end() const noexcept
-        {
-            return const_iterator(std::launder(reinterpret_cast<const TValue*>(this)) + 1);
-        }
-
-        [[nodiscard]]
-        constexpr const_iterator cend() const noexcept { return end(); }
+        // [[nodiscard]]
+        // constexpr iterator end() noexcept
+        // {
+        //     return iterator(std::launder(reinterpret_cast<TValue*>(this)) + 1);
+        // }
+        //
+        // [[nodiscard]]
+        // constexpr const_iterator end() const noexcept
+        // {
+        //     return const_iterator(std::launder(reinterpret_cast<const TValue*>(this)) + 1);
+        // }
+        //
+        // [[nodiscard]]
+        // constexpr const_iterator cend() const noexcept { return end(); }
 
         /**
          * @brief Returns the number of elements in the range (0 or 1).

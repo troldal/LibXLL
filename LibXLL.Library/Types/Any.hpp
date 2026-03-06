@@ -175,6 +175,19 @@ namespace xll
     class Any final : public XLOPER12
     {
     public:
+
+        static constexpr size_t excel_type = xltypeNum
+                                            | xltypeStr
+                                            | xltypeBool
+                                            | xltypeRef
+                                            | xltypeErr
+                                            | xltypeFlow
+                                            | xltypeMulti
+                                            | xltypeMissing
+                                            | xltypeNil
+                                            | xltypeSRef
+                                            | xltypeInt;
+
         // ------------------------------------------------------------------
         // Default constructor — stores xll::Nil (xltypeNil)
         // ------------------------------------------------------------------
@@ -497,6 +510,12 @@ namespace xll
     constexpr bool holds(const Any& any) noexcept
     {
         if constexpr (is_typed_array<TTarget>) {
+            // A single scalar of the element type is treated as a 1×1 array.
+            // (Not applicable for Array<Any> since Any has no excel_type.)
+            if constexpr (!std::same_as<typename TTarget::value_type, Any>) {
+                if (any.type() == static_cast<int>(TTarget::value_type::excel_type)) return true;
+            }
+
             // Array<Any>: only check that xltype is xltypeMulti — Any accepts every element type.
             if (any.type() != xltypeMulti) return false;
             if constexpr (std::same_as<typename TTarget::value_type, Any>) {

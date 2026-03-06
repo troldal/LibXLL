@@ -246,8 +246,8 @@ namespace xll::impl
          */
         [[nodiscard]]
         constexpr bool is_valid() const {
-            constexpr int TYPE_MASK = ~(xlbitDLLFree | xlbitXLFree);
-            return (xltype & TYPE_MASK) == XLType;
+            constexpr auto TYPE_MASK = static_cast<decltype(xltype)>(~(xlbitDLLFree | xlbitXLFree));
+            return (xltype & TYPE_MASK) == static_cast<decltype(xltype)>(XLType);
         }
 
         /**

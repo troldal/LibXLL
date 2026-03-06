@@ -384,13 +384,14 @@ namespace xll
      *   - Every element at position `I` has an xltype compatible with the
      *     declared type `Ts[I]`.
      *
-     * Returns `xll::None` if any check fails, so a successful cast guarantees
-     * that every subsequent `xll::get` call on the result will succeed.
+     * Returns `xll::None` if any check fails. A successful cast therefore
+     * guarantees that every subsequent `xll::get` call on the result will
+     * succeed without throwing.
      *
      * @tparam TTarget  A specialisation of `xll::Tuple`.
      * @param  any      The `Any` object to cast from.
-     * @return          `Optional<TTarget>` — fully validated on success,
-     *                  `None` on any mismatch.
+     * @return          `Optional<TTarget>` — engaged on success, `None` on
+     *                  any structural or element-type mismatch.
      *
      * @code
      * using Row = xll::Tuple<xll::String, xll::Number>;
@@ -399,7 +400,7 @@ namespace xll
      * auto r = xll::cast<Row>(a);    // Optional<Row> — engaged
      *
      * xll::Any b = Row { xll::Number(1.0), xll::String("bad") };  // swapped types
-     * auto s = xll::cast<Row>(b);    // Optional<Row> — None (element mismatch)
+     * auto s = xll::cast<Row>(b);    // Optional<Row> — None (element type mismatch)
      *
      * xll::Any n = xll::Number(3.14);
      * auto t = xll::cast<Row>(n);    // Optional<Row> — None (wrong xltype)
