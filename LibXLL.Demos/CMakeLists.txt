@@ -85,6 +85,10 @@ target_compile_definitions(xllDemoTuple PRIVATE NOMINMAX)
 
 if (NOT WIN32)
     foreach (sanitizer IN ITEMS address undefined thread memory)
+        # MSan (-fsanitize=memory) is Clang-only; skip it for GCC
+        if(sanitizer STREQUAL "memory" AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+            continue()
+        endif()
         add_library(xllDemo.${sanitizer} SHARED xllDemo.cpp)
         target_link_libraries(xllDemo.${sanitizer} PUBLIC LibXLL project_warnings project_hardening)
         target_enable_sanitizer(xllDemo.${sanitizer} ${sanitizer})

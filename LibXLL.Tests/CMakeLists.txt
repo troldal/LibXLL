@@ -40,6 +40,10 @@ target_link_libraries(LibXLL.Tests.default PRIVATE Catch2ForOpenXLL LibXLL proje
 
 if (NOT WIN32)
     foreach (sanitizer IN ITEMS address undefined thread memory)
+        # MSan (-fsanitize=memory) is Clang-only; skip it for GCC
+        if(sanitizer STREQUAL "memory" AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+            continue()
+        endif()
         set(target LibXLL.Tests.${sanitizer})
         add_executable(${target} ${TEST_SOURCES})
         target_compile_definitions(${target} PRIVATE NOMINMAX)
