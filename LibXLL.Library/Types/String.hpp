@@ -337,6 +337,8 @@ namespace xll
          */
         constexpr friend String operator+(const String& lhs, const String& rhs)
         {
+            ensure(lhs.is_valid());
+            ensure(rhs.is_valid());
             const std::string result = to_string(lhs.value()) + to_string(rhs.value());
             return String(result); // NOLINT
         }
@@ -363,6 +365,7 @@ namespace xll
                      std::convertible_to<TOther, std::string>
         constexpr friend String operator+(const String& lhs, TOther&& rhs)
         {
+            ensure(lhs.is_valid());
             const std::string result = to_string(lhs.value()) + std::string(std::forward<TOther>(rhs));
             return String(result); // NOLINT
         }
@@ -387,6 +390,7 @@ namespace xll
                      std::convertible_to<TOther, std::string>
         constexpr friend String operator+(TOther&& lhs, const String& rhs)
         {
+            ensure(rhs.is_valid());
             const std::string result = std::string(std::forward<TOther>(lhs)) + to_string(rhs.value());
             return String(result); // NOLINT
         }

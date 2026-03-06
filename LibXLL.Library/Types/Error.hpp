@@ -282,6 +282,8 @@ namespace xll
          */
         constexpr friend bool operator==(const xll::Error& lhs, const xll::Error& rhs)
         {
+            ensure(lhs.is_valid());
+            ensure(rhs.is_valid());
             return lhs.value() == rhs.value();
         }
 

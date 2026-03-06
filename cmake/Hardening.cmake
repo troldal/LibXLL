@@ -68,12 +68,15 @@ function(create_hardening_target target_name)
 
     # ── Linux / macOS (GCC or Clang with GNU driver) ─────────────────────────
     elseif(NOT WIN32)
-        # Base flags supported by all GCC/Clang versions we care about
+        # Base flags supported by all GCC/Clang versions we care about.
+        # -fPIE is only appropriate for executables; shared libraries need -fPIC
+        # (which CMake adds automatically for SHARED targets). Applying -fPIE to
+        # a shared library causes R_X86_64_PC32 relocation errors at link time.
         set(_compile_flags
             -fstack-protector-strong
             -D_FORTIFY_SOURCE=2
             -O2             # Required for _FORTIFY_SOURCE to be effective
-            -fPIE
+            $<$<STREQUAL:$<TARGET_PROPERTY:TYPE>,EXECUTABLE>:-fPIE>
             -fwrapv
         )
 
@@ -88,7 +91,7 @@ function(create_hardening_target target_name)
             -Wl,-z,relro
             -Wl,-z,now
             -Wl,-z,noexecstack
-            -pie
+            $<$<STREQUAL:$<TARGET_PROPERTY:TYPE>,EXECUTABLE>:-pie>
         )
 
         # -fstack-clash-protection (GCC + Clang ≥ 11, x86/x86_64/aarch64)
@@ -111,7 +114,7 @@ function(create_hardening_target target_name)
     else()
         set(_mingw_compile_flags
             -fstack-protector-strong
-            -fPIE
+            $<$<STREQUAL:$<TARGET_PROPERTY:TYPE>,EXECUTABLE>:-fPIE>
             -fwrapv
         )
         # -fno-strict-overflow is GCC-only; Clang silently ignores it but warns

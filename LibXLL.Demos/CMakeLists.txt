@@ -82,6 +82,15 @@ target_link_libraries(xllDemoTuple PUBLIC LibXLL project_warnings project_harden
 set_target_properties(xllDemoTuple PROPERTIES OUTPUT_NAME "tuple_demo" SUFFIX ".xll")
 target_compile_definitions(xllDemoTuple PRIVATE NOMINMAX)
 
+add_library(xllDemoScalarValidation SHARED Types/xllDemoScalarValidation.cpp)
+target_link_libraries(xllDemoScalarValidation PUBLIC LibXLL project_warnings project_hardening)
+set_target_properties(xllDemoScalarValidation PROPERTIES OUTPUT_NAME "scalar_validation" SUFFIX ".xll" PREFIX "")
+target_compile_definitions(xllDemoScalarValidation PRIVATE NOMINMAX)
+
+add_executable(DemoMockExcelScalar Types/DemoMockExcelScalar.cpp)
+target_link_libraries(DemoMockExcelScalar PUBLIC LibXLL project_warnings project_hardening)
+target_compile_definitions(DemoMockExcelScalar PRIVATE NOMINMAX)
+
 
 if (NOT WIN32)
     foreach (sanitizer IN ITEMS address undefined thread memory)

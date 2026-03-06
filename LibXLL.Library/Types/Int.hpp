@@ -122,6 +122,7 @@ namespace xll
          */
         constexpr Int& operator++()
         {
+            ensure(is_valid());
             ++value();
             return *this;
         }
@@ -139,6 +140,7 @@ namespace xll
          */
         constexpr Int operator++(int)
         {
+            ensure(is_valid());
             Int old = *this;
             ++value();
             return old;
@@ -156,6 +158,7 @@ namespace xll
          */
         constexpr Int& operator--()
         {
+            ensure(is_valid());
             --value();
             return *this;
         }
@@ -173,6 +176,7 @@ namespace xll
          */
         constexpr Int operator--(int)
         {
+            ensure(is_valid());
             Int old = *this;
             --value();
             return old;
@@ -201,9 +205,8 @@ namespace xll
         constexpr Int& operator%=(TValue rhs)
             requires std::convertible_to<TValue, int>
         {
-            // ensure(is_valid());
+            ensure(is_valid());
             auto rhsValue = static_cast<int>(rhs);
-            // ensure(rhsValue != 0 && "Modulo by zero");
             value() %= rhsValue;
             return *this;
         }
@@ -229,6 +232,7 @@ namespace xll
             requires (std::same_as<std::remove_cvref_t<TOther>, Int> || std::same_as<std::remove_cvref_t<TOther>, xll::Bool>)
         constexpr friend Int operator%(const Int& lhs, TOther&& rhs)
         {
+            ensure(lhs.is_valid());
             Int result = lhs;
             result %= std::forward<TOther>(rhs);
             return result;
@@ -254,6 +258,7 @@ namespace xll
             requires std::integral<TValue>
         constexpr friend Int operator%(const Int& lhs, TValue rhs)
         {
+            ensure(lhs.is_valid());
             Int result = lhs;
             result %= rhs;
             return result;

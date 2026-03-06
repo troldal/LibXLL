@@ -131,36 +131,3 @@ if(PROJECT_IS_TOP_LEVEL)
         message(STATUS "sphinx-build not found – 'docs' target will not be available")
     endif()
 endif()
-
-#target_compile_options(LibXLL PRIVATE "/J" "/utf-8" "/bigobj")
-
-
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer -g -O1")
-# C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\Llvm\x64\bin\clang-cl.exe
-
-
-#target_compile_options(LibXLL PRIVATE -fsanitize=address -fno-omit-frame-pointer -g)
-#target_link_directories(LibXLL PRIVATE "C:\\MinGW_LLVM\\lib\\clang\\20\\lib\\windows")
-#target_link_libraries(LibXLL PRIVATE -Wl,--whole-archive clang_rt.asan_dynamic-x86_64 clang_rt.asan_dynamic_runtime_thunk-x86_64 -Wl,--no-whole-archive)
-
-#target_compile_options(LibXLLTest PRIVATE -fsanitize=address -fno-omit-frame-pointer -g)
-#target_link_directories(LibXLLTest PRIVATE "C:\\MinGW_LLVM\\lib\\clang\\20\\lib\\windows")
-#target_link_libraries(LibXLLTest PRIVATE -Wl,--whole-archive clang_rt.asan_dynamic-x86_64 clang_rt.asan_dynamic_runtime_thunk-x86_64 -Wl,--no-whole-archive)
-
-
-# For GCC/MinGW
-#target_link_options(LibXLL PRIVATE
-#    -Wl,--whole-archive
-#    "clang_rt.asan_dynamic_runtime_thunk-x86_64"
-#    "-Wl,--no-whole-archive"
-#)
-
-#target_compile_options(LibXLL PRIVATE -fsanitize=address -fno-omit-frame-pointer -g)
-#target_link_directories(LibXLL PRIVATE "$ENV{ProgramFiles\(x86\)}/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/x64/lib/clang/19/lib/windows")
-#target_link_libraries(LibXLL PRIVATE clang_rt.asan_dynamic-x86_64 clang_rt.asan_dynamic_runtime_thunk-x86_64)
-#target_link_options(LibXLL PRIVATE /wholearchive:clang_rt.asan_dynamic_runtime_thunk-x86_64.lib)
-#
-#target_compile_options(LibXLLTest PRIVATE -fsanitize=address -fno-omit-frame-pointer -g)
-#target_link_directories(LibXLLTest PRIVATE "$ENV{ProgramFiles\(x86\)}/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/x64/lib/clang/19/lib/windows")
-#target_link_libraries(LibXLLTest PRIVATE clang_rt.asan_dynamic-x86_64 clang_rt.asan_dynamic_runtime_thunk-x86_64)
-#target_link_options(LibXLLTest PRIVATE /wholearchive:clang_rt.asan_dynamic_runtime_thunk-x86_64.lib)
