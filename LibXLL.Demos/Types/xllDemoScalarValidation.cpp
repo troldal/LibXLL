@@ -65,7 +65,9 @@ XLL_FUNCTION xll::Number* XLLAPI AddNumbers(
     // If the xltype is wrong (e.g. xltypeStr), operator+ calls
     // ensure(lhs.is_valid()) which throws std::runtime_error.
     auto result = *a + *b;
-    return xll::AutoFree()(result);
+    //return xll::AutoFree()(result);
+    return xll::AutoFree()(std::make_unique<xll::Number>(*a + *b));
+    //return std::make_unique<xll::Number>(*a + *b).release();
 }
 
 // ============================================================================

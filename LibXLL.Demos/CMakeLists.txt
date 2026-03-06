@@ -88,7 +88,7 @@ set_target_properties(xllDemoScalarValidation PROPERTIES OUTPUT_NAME "scalar_val
 target_compile_definitions(xllDemoScalarValidation PRIVATE NOMINMAX)
 
 add_executable(DemoMockExcelScalar Types/DemoMockExcelScalar.cpp)
-target_link_libraries(DemoMockExcelScalar PUBLIC LibXLL project_warnings project_hardening)
+target_link_libraries(DemoMockExcelScalar PUBLIC MockXL)
 target_compile_definitions(DemoMockExcelScalar PRIVATE NOMINMAX)
 
 
@@ -105,6 +105,17 @@ if (NOT WIN32)
         add_executable(exeDemo.${sanitizer} exeDemo.cpp)
         target_link_libraries(exeDemo.${sanitizer} PUBLIC LibXLL project_warnings project_hardening)
         target_enable_sanitizer(exeDemo.${sanitizer} ${sanitizer})
+
+        add_library(xllDemoScalarValidation.${sanitizer} SHARED Types/xllDemoScalarValidation.cpp)
+        target_link_libraries(xllDemoScalarValidation.${sanitizer} PUBLIC LibXLL)
+        set_target_properties(xllDemoScalarValidation.${sanitizer} PROPERTIES OUTPUT_NAME "scalar_validation.${sanitizer}" SUFFIX ".xll" PREFIX "")
+        target_compile_definitions(xllDemoScalarValidation.${sanitizer} PRIVATE NOMINMAX)
+        target_enable_sanitizer(xllDemoScalarValidation.${sanitizer} ${sanitizer})
+
+        add_executable(DemoMockExcelScalar.${sanitizer} Types/DemoMockExcelScalar.cpp)
+        target_link_libraries(DemoMockExcelScalar.${sanitizer} PUBLIC MockXL)
+        target_compile_definitions(DemoMockExcelScalar.${sanitizer} PRIVATE NOMINMAX)
+        target_enable_sanitizer(DemoMockExcelScalar.${sanitizer} ${sanitizer})
     endforeach ()
 
     # ASan build of the deliberate-leak demo.

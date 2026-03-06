@@ -181,7 +181,7 @@ namespace xll
         constexpr String(const String& other) : Base() // NOLINT
         {
             ensure(other.is_valid());
-            ensure(xltype == other.xltype);
+            ensure(base_xltype(xltype) == base_xltype(other.xltype));
             value() = make_string(to_string(other.val.str)).release();
         }
 
@@ -251,7 +251,7 @@ namespace xll
 
             ensure(is_valid());
             ensure(other.is_valid());
-            ensure(xltype == other.xltype);
+            ensure(base_xltype(xltype) == base_xltype(other.xltype));
 
             using xll::impl::swap;
             auto lhs = other;

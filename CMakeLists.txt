@@ -8,6 +8,9 @@ set(CMAKE_CXX_STANDARD 23)
 # Fetch dependency manager
 #==============================================================================
 include(cmake/get_cpm.cmake)
+if(PROJECT_IS_TOP_LEVEL)
+    set(CPM_SOURCE_CACHE ${CMAKE_CURRENT_LIST_DIR}/_packages)
+endif()
 
 #==============================================================================
 # Fetch dependencies
@@ -36,6 +39,7 @@ CPMAddPackage(
 add_subdirectory(LibXLL.Library)
 
 if(PROJECT_IS_TOP_LEVEL)
+    add_subdirectory(LibXLL.Mock)
     add_subdirectory(LibXLL.Demos)
     add_subdirectory(LibXLL.Tests)
 

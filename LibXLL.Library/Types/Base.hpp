@@ -250,6 +250,13 @@ namespace xll::impl
             return (xltype & TYPE_MASK) == static_cast<decltype(xltype)>(XLType);
         }
 
+        /** \brief Returns xltype with xlbitDLLFree and xlbitXLFree masked off. */
+        [[nodiscard]]
+        static constexpr auto base_xltype(decltype(XLOPER12::xltype) t) noexcept {
+            constexpr auto TYPE_MASK = static_cast<decltype(t)>(~(xlbitDLLFree | xlbitXLFree));
+            return t & TYPE_MASK;
+        }
+
         /**
          * \brief Type alias for the active union member's type
          *
@@ -313,7 +320,7 @@ namespace xll::impl
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>>
             : Base()
         {
-            ensure(v.xltype == XLType, "XLOPER12 type not convertible to type");
+            ensure(base_xltype(v.xltype) == static_cast<decltype(xltype)>(XLType), "XLOPER12 type not convertible to type");
             xltype = v.xltype;
             val    = v.val;
         }
@@ -340,7 +347,7 @@ namespace xll::impl
             : Base()
         {
             ensure(other.is_valid());
-            ensure(xltype == other.xltype);
+            ensure(base_xltype(xltype) == base_xltype(other.xltype));
             value() = other.value();
         }
 
@@ -448,7 +455,7 @@ namespace xll::impl
 
             ensure(is_valid());
             ensure(other.is_valid());
-            ensure(xltype == other.xltype);
+            ensure(base_xltype(xltype) == base_xltype(other.xltype));
 
             val = other.val;  // Simple POD copy
             return *this;
@@ -1054,7 +1061,7 @@ namespace xll::impl
          * \note Standard C++ conversion rules apply. Narrowing conversions are allowed.
          */
         template<typename T = value_type>
-        constexpr operator T() const
+        constexpr operator T() const // NOLINT
             requires std::is_arithmetic_v<T> && std::is_arithmetic_v<std::remove_cvref_t<value_type>> &&
                      std::convertible_to<value_type, T> && (not std::same_as<T, bool>)
         {
