@@ -54,18 +54,18 @@ inline __attribute__((used)) void FetchExcel12EntryPt(void)
 extern "C"
 #endif	
 //__attribute__((dllexport))
-inline __attribute__((used)) void SetExcel12EntryPt(EXCEL12PROC pexcel12New)
+inline __attribute__((used)) void SetExcel12EntryPt(EXCEL12PROC /*pexcel12New*/)
 {
 	// Stub for compiling on Linux.
 }
 
-inline __attribute__((used)) int Excel12(int xlfn, LPXLOPER12 operRes, int count, ...)
+inline __attribute__((used)) int Excel12(int /*xlfn*/, LPXLOPER12 /*operRes*/, int /*count*/, ...)
 {
 	// Stub for compiling on Linux.
 	return 0;
 }
 
-inline __attribute__((used)) int Excel12v(int xlfn, LPXLOPER12 operRes, int count, LPXLOPER12 opers[])
+inline __attribute__((used)) int Excel12v(int /*xlfn*/, LPXLOPER12 /*operRes*/, int /*count*/, LPXLOPER12 /*opers*/[])
 {
 	// Stub for compiling on Linux.
 	return 0;

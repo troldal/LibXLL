@@ -81,3 +81,4 @@ function(create_project_warnings_target target_name)
             $<$<COMPILE_LANGUAGE:C>:${SELECTED_WARNINGS}>
     )
 endfunction()
+

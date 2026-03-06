@@ -114,6 +114,8 @@ namespace xll
 
         static constexpr size_t arity = sizeof...(Ts);
 
+        using xltype_t = decltype(xltype);
+
     public:
         /// Excel type tag — always xltypeMulti.  Required by is_xll_type and
         /// needed so that xll::Any can store a Tuple via its converting constructor.
@@ -172,7 +174,7 @@ namespace xll
         {
             const auto& raw = static_cast<const XLOPER12&>(
                 static_cast<const Base&>(*this));
-            constexpr int TYPE_MASK = ~(xlbitDLLFree | xlbitXLFree);
+            constexpr auto TYPE_MASK = ~static_cast<xltype_t>(xlbitDLLFree | xlbitXLFree);
             if ((raw.xltype & TYPE_MASK) != xltypeMulti) return false;
             const size_t n = static_cast<size_t>(raw.val.array.rows) *
                              static_cast<size_t>(raw.val.array.columns);
@@ -191,7 +193,7 @@ namespace xll
             if (!valid()) {
                 const auto& raw = static_cast<const XLOPER12&>(
                     static_cast<const Base&>(*this));
-                constexpr int TYPE_MASK = ~(xlbitDLLFree | xlbitXLFree);
+                constexpr auto TYPE_MASK = ~static_cast<xltype_t>(xlbitDLLFree | xlbitXLFree);
                 if ((raw.xltype & TYPE_MASK) != xltypeMulti)
                     throw std::invalid_argument(
                         "xll::Tuple: underlying XLOPER12 is not xltypeMulti");
@@ -208,7 +210,7 @@ namespace xll
         // ------------------------------------------------------------------
 
         /// Returns the XLOPER12 type tag (always xltypeMulti for a valid Tuple).
-        [[nodiscard]] constexpr int xltype() const noexcept
+        [[nodiscard]] constexpr xltype_t xltype() const noexcept
         {
             return static_cast<const XLOPER12&>(static_cast<const Base&>(*this)).xltype;
         }

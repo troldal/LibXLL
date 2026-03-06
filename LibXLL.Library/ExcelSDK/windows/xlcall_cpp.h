@@ -46,14 +46,19 @@ inline EXCEL12PROC pexcel12;
 
 __forceinline void FetchExcel12EntryPt(void)
 {
-	if (pexcel12 == NULL)
-	{
-		hmodule = GetModuleHandle(NULL);
-		if (hmodule != NULL)
-		{
-			pexcel12 = (EXCEL12PROC) GetProcAddress(hmodule, EXCEL12ENTRYPT);
-		}
-	}
+    if (pexcel12 == NULL) {
+        hmodule = GetModuleHandle(NULL);
+        if (hmodule != NULL) {
+#ifdef __GNUC__
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wcast-function-type"
+#endif
+            pexcel12 = reinterpret_cast<EXCEL12PROC>(GetProcAddress(hmodule, EXCEL12ENTRYPT));
+#ifdef __GNUC__
+#    pragma GCC diagnostic pop
+#endif
+        }
+    }
 }
 
 /*

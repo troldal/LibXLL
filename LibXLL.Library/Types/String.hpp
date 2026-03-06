@@ -457,7 +457,7 @@ namespace xll
         {
             ensure(is_valid());
             if (val.str == nullptr) return 0;
-            return val.str[0];
+            return static_cast<size_t>(val.str[0]);
             //return std::wstring_view(&val.str[1]).size();
         }
 
@@ -528,7 +528,7 @@ namespace xll
 
             if (not str or str[0] == L'\0') return "";
 
-            const int size = WideCharToMultiByte(CP_UTF8,    // Code page
+            const auto size = static_cast<size_t>(WideCharToMultiByte(CP_UTF8,    // Code page
                                            0,          // Flags
                                            &str[1],    // Source wide string
                                            str[0],     // Source length
@@ -536,7 +536,7 @@ namespace xll
                                            0,          // Destination buffer size
                                            nullptr,    // Default char
                                            nullptr     // Used default char flag
-            );
+            ));
 
             if (size == 0) throw std::runtime_error("String conversion failed");
 
@@ -544,7 +544,7 @@ namespace xll
             std::string text(size, '\0');
 
             // Convert the wide string to UTF-8
-            if (WideCharToMultiByte(CP_UTF8, 0, &str[1], str[0], text.data(), size, nullptr, nullptr) == 0) {
+            if (WideCharToMultiByte(CP_UTF8, 0, &str[1], str[0], text.data(), static_cast<int>(size), nullptr, nullptr) == 0) {
                 throw std::runtime_error("String conversion failed");
             }
 
@@ -590,7 +590,7 @@ namespace xll
 
         #ifdef _WIN32
             auto data = str.data();
-            auto sz   = MultiByteToWideChar(CP_UTF8, 0, data, static_cast<int>(str.size()), nullptr, 0);
+            auto sz   = static_cast<size_t>(MultiByteToWideChar(CP_UTF8, 0, data, static_cast<int>(str.size()), nullptr, 0));
             if (sz == 0) throw std::runtime_error("String conversion failed");
             if (sz > 65535) throw std::length_error("String exceeds Excel maximum length of 65535 characters");
 
@@ -598,7 +598,7 @@ namespace xll
             buffer[0]      = static_cast<XCHAR>(sz);
             buffer[sz + 1] = 0;
 
-            if (MultiByteToWideChar(CP_UTF8, 0, data, static_cast<int>(str.size()), &buffer[1], sz) == 0)
+            if (MultiByteToWideChar(CP_UTF8, 0, data, static_cast<int>(str.size()), &buffer[1], static_cast<int>(sz)) == 0)
                 throw std::runtime_error("String conversion failed");
 
             return buffer;
@@ -613,7 +613,7 @@ namespace xll
             buffer[0]      = static_cast<XCHAR>(sz);
             buffer[sz + 1] = 0;
 
-            for (int idx = 1; auto c : output)
+            for (size_t idx = 1; auto c : output)
                 buffer[idx++] = static_cast<XCHAR>(c);
 
             return buffer;
@@ -791,7 +791,7 @@ namespace xll
     {
         std::string result = str.to_string();
         std::ranges::transform(result, result.begin(), [](unsigned char c) {
-            return std::toupper(c);
+            return static_cast<char>(std::toupper(c));
         });
 
         return String(result); // NOLINT

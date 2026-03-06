@@ -613,10 +613,19 @@ namespace xll
         constexpr ~Expected()
         {
             // Use std::launder to obtain valid pointers to objects created via std::construct_at
+            // Both branches may be textually identical when TValue == TError (e.g. Expected<string, string>),
+            // but they are semantically distinct: each destroys a different union member.
+#if defined(__GNUC__) && !defined(__clang__)
+#  pragma GCC diagnostic push
+#  pragma GCC diagnostic ignored "-Wduplicated-branches"
+#endif
             if (has_value())
                 std::destroy_at(std::launder(reinterpret_cast<TValue*>(this)));
             else
                 std::destroy_at(std::launder(reinterpret_cast<TError*>(this)));
+#if defined(__GNUC__) && !defined(__clang__)
+#  pragma GCC diagnostic pop
+#endif
 
             impl::clear_metadata(*this);  // Safe for Excel consumption
         }
@@ -809,7 +818,7 @@ namespace xll
         constexpr bool has_value() const noexcept
         {
 
-            auto error_state = xll::impl::is_error_state(*this);
+            [[maybe_unused]] auto error_state = xll::impl::is_error_state(*this);
 
             // If metadata is present, trust it
             if (impl::has_metadata(*this)) {
@@ -1211,9 +1220,16 @@ namespace xll
         [[nodiscard]]
         constexpr auto and_then(this Self&& self, Func&& func) -> Result
         {
+#ifdef _MSC_VER
+#    pragma warning(push)
+#    pragma warning(disable: 4238)
+#endif
             return self.has_value()
                 ? std::invoke(std::forward<Func>(func), self.value())
                 : Result(Unexpected(std::forward_like<Self>(self.error())));
+#ifdef _MSC_VER
+#    pragma warning(pop)
+#endif
         }
 
         /**
@@ -1247,9 +1263,16 @@ namespace xll
             using result_type          = std::invoke_result_t<Func, TValue&>;
             using expected_result_type = xll::Expected<result_type, TError>;
 
+#ifdef _MSC_VER
+#    pragma warning(push)
+#    pragma warning(disable: 4238)
+#endif
             return self.has_value()
                 ? expected_result_type(std::invoke(std::forward<Func>(func), self.value()))
                 : expected_result_type(Unexpected(std::forward_like<Self>(self.error())));
+#ifdef _MSC_VER
+#    pragma warning(pop)
+#endif
         }
 
         /**
@@ -1278,9 +1301,16 @@ namespace xll
         {
             using result_type = std::invoke_result_t<Func, const TError&>;
 
+#ifdef _MSC_VER
+#    pragma warning(push)
+#    pragma warning(disable: 4238)
+#endif
             return !self.has_value()
                 ? std::invoke(std::forward<Func>(func), std::forward_like<Self>(self.error()))
                 : result_type(self.value());
+#ifdef _MSC_VER
+#    pragma warning(pop)
+#endif
         }
 
         /**
@@ -1309,9 +1339,16 @@ namespace xll
             using result_type          = std::invoke_result_t<Func, const TError&>;
             using expected_result_type = xll::Expected<TValue, result_type>;
 
+#ifdef _MSC_VER
+#    pragma warning(push)
+#    pragma warning(disable: 4238)
+#endif
             return !self.has_value()
                 ? expected_result_type(Unexpected(std::invoke(std::forward<Func>(func), std::forward_like<Self>(self.error()))))
                 : expected_result_type(self.value());
+#ifdef _MSC_VER
+#    pragma warning(pop)
+#endif
         }
 
         /**

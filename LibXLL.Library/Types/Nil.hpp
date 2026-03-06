@@ -84,7 +84,7 @@ namespace xll
      */
     class Nil : public impl::Base<Nil, xltypeNil>
     {
-        // using BASE = impl::Base<Nil, xltypeNil>;
+        using BASE = impl::Base<Nil, xltypeNil>;
 
     public:
         // using BASE::BASE;
@@ -112,10 +112,10 @@ namespace xll
          * @post `xltype == xltypeNil`
          * @post `is_valid() == true`
          */
-        constexpr Nil(const Nil&)
-        {
-            xltype = xltypeNil;
-        }
+        constexpr Nil(const Nil&) : BASE() {}
+        // {
+        //     xltype = xltypeNil;
+        // }
 
         /**
          * @brief Copy assignment operator — re-asserts the null/empty-cell type.

@@ -83,7 +83,8 @@ TEST_CASE("Number - Construction", "[xll::Number][construction]")
     }
 
     SECTION("Construction from float") {
-        xll::Number n = 1.5f;
+        const float f = 1.5f;
+        xll::Number n = static_cast<double>(f);  // float->double promotion is intentional
         REQUIRE(n.xltype == xltypeNum);
         REQUIRE(n == Catch::Approx(1.5));
     }
@@ -217,8 +218,9 @@ TEST_CASE("Number - Assignment", "[xll::Number][assignment]")
     }
 
     SECTION("Copy self-assignment") {
-        xll::Number n = 1.0;
-        n             = n;    // NOLINT(self-assign)
+        xll::Number  n    = 1.0;
+        xll::Number& self = n;  // indirection makes self-assignment opaque to the compiler
+        n = self;
         REQUIRE(n == 1.0);
         REQUIRE(n.xltype == xltypeNum);
     }
@@ -395,6 +397,10 @@ TEST_CASE("Number - Comparison", "[xll::Number][comparison]")
         REQUIRE(zero == xll::Bool(false));
     }
 
+#if defined(__GNUC__) && !defined(__clang__)
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wuseless-cast"
+#endif
     SECTION("Three-way comparison (spaceship)") {
         xll::Number a = 1.0;
         xll::Number b = 2.0;
@@ -413,6 +419,9 @@ TEST_CASE("Number - Comparison", "[xll::Number][comparison]")
         REQUIRE(bool((n <=> 4.0) > 0));
         REQUIRE(bool((n <=> 6.0) < 0));
     }
+#if defined(__GNUC__) && !defined(__clang__)
+#    pragma GCC diagnostic pop
+#endif
 
     SECTION("NaN comparisons are unordered (partial_ordering)") {
         xll::Number nan = std::numeric_limits<double>::quiet_NaN();

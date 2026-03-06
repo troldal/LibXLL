@@ -136,7 +136,8 @@ TEST_CASE("Optional - Move assignment", "[xll::Optional][assignment]")
 TEST_CASE("Optional - Self assignment", "[xll::Optional][assignment]")
 {
     xll::Optional<xll::Number> opt = 3.0;
-    opt = opt;   // NOLINT (intentional self-assign)
+    xll::Optional<xll::Number>& self = opt;  // indirection makes self-assignment opaque to the compiler
+    opt = self;
     REQUIRE(opt.has_value());
     REQUIRE(opt.value() == 3.0);
 }
@@ -396,13 +397,13 @@ TEST_CASE("Optional - sizeof equals XLOPER12", "[xll::Optional][layout]")
 TEST_CASE("Optional - disengaged xltype is xltypeNil", "[xll::Optional][layout]")
 {
     xll::Optional<xll::Number> opt;
-    REQUIRE((opt.xltype & ~(xlbitDLLFree | xlbitXLFree)) == xltypeNil);
+    REQUIRE((opt.xltype & ~static_cast<decltype(opt.xltype)>(xlbitDLLFree | xlbitXLFree)) == xltypeNil);
 }
 
 TEST_CASE("Optional - engaged xltype matches TValue", "[xll::Optional][layout]")
 {
     xll::Optional<xll::Number> opt = 1.0;
-    REQUIRE((opt.xltype & ~(xlbitDLLFree | xlbitXLFree)) == xltypeNum);
+    REQUIRE((opt.xltype & ~static_cast<decltype(opt.xltype)>(xlbitDLLFree | xlbitXLFree)) == xltypeNum);
 }
 
 // =============================================================================

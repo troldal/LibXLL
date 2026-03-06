@@ -85,7 +85,7 @@ namespace xll
      */
     class Missing : public impl::Base<Missing, xltypeMissing>
     {
-        // using BASE = impl::Base<Missing, xltypeMissing>;
+        using BASE = impl::Base<Missing, xltypeMissing>;
 
     public:
         // using BASE::BASE;
@@ -114,10 +114,10 @@ namespace xll
          * @post `xltype == xltypeMissing`
          * @post `is_valid() == true`
          */
-        constexpr Missing(const Missing&)
-        {
-            xltype = xltypeMissing;
-        }
+        constexpr Missing(const Missing&) : BASE() {}
+        // {
+        //     xltype = xltypeMissing;
+        // }
 
         /**
          * @brief Copy assignment operator — re-asserts the missing-argument type.

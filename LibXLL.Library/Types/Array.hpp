@@ -132,7 +132,7 @@ namespace xll
         {
             /// Optional explicit column count. If absent, the size is inferred
             /// from the source range.
-            std::optional<size_t> size;
+            std::optional<size_t> size {};
             /// Constructs a Horizontal tag with auto-fit size.
             constexpr Horizontal() = default;
             /// Constructs a Horizontal tag requesting exactly @p n columns.
@@ -157,7 +157,7 @@ namespace xll
         {
             /// Optional explicit row count. If absent, the size is inferred
             /// from the source range.
-            std::optional<size_t> size;
+            std::optional<size_t> size {};
             /// Constructs a Vertical tag with auto-fit size.
             constexpr Vertical() = default;
             /// Constructs a Vertical tag requesting exactly @p n rows.
@@ -186,7 +186,7 @@ namespace xll
             size_t rows;    ///< Number of rows.
             size_t cols;    ///< Number of columns.
             /// Constructs a TwoDimensional tag with the given dimensions.
-            constexpr TwoDimensional(size_t rows, size_t cols) : rows(rows), cols(cols) {}
+            constexpr TwoDimensional(size_t numRows, size_t numCols) : rows(numRows), cols(numCols) {}
         };
 
         /**

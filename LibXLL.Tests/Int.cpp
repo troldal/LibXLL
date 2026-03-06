@@ -76,11 +76,29 @@ TEST_CASE("Int - Construction", "[xll::Int][construction]")
     }
 
     SECTION("Construction from double (truncation towards zero)") {
-        xll::Int i = 3.9;
+        // Suppress narrowing/float-conversion warnings: truncation is intentional here.
+#if defined(_MSC_VER)
+#    pragma warning(push)
+#    pragma warning(disable: 4244)  // 'conversion from double to int, possible loss of data'
+#elif defined(__clang__)
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wconversion"
+#elif defined(__GNUC__)
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wfloat-conversion"
+#endif
+        xll::Int i   = 3.9;
+        xll::Int neg = -3.9;
+#if defined(_MSC_VER)
+#    pragma warning(pop)
+#elif defined(__clang__)
+#    pragma clang diagnostic pop
+#elif defined(__GNUC__)
+#    pragma GCC diagnostic pop
+#endif
+
         REQUIRE(i == 3);
         REQUIRE(i.xltype == xltypeInt);
-
-        xll::Int neg = -3.9;
         REQUIRE(neg == -3);
     }
 
@@ -178,7 +196,26 @@ TEST_CASE("Int - Assignment", "[xll::Int][assignment]")
 
     SECTION("Assignment from double (truncation)") {
         xll::Int i;
+        // Suppress narrowing/float-conversion warnings: truncation is intentional here.
+#if defined(_MSC_VER)
+#    pragma warning(push)
+#    pragma warning(disable: 4244)  // 'conversion from double to int, possible loss of data'
+#elif defined(__clang__)
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wconversion"
+#elif defined(__GNUC__)
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wfloat-conversion"
+#endif
         i = 7.9;
+#if defined(_MSC_VER)
+#    pragma warning(pop)
+#elif defined(__clang__)
+#    pragma clang diagnostic pop
+#elif defined(__GNUC__)
+#    pragma GCC diagnostic pop
+#endif
+
         REQUIRE(i == 7);
         REQUIRE(i.xltype == xltypeInt);
     }
@@ -193,8 +230,9 @@ TEST_CASE("Int - Assignment", "[xll::Int][assignment]")
     }
 
     SECTION("Copy self-assignment") {
-        xll::Int i = 10;
-        i          = i;    // NOLINT(self-assign)
+        xll::Int  i    = 10;
+        xll::Int& self = i;  // indirection makes self-assignment opaque to the compiler
+        i = self;
         REQUIRE(i == 10);
         REQUIRE(i.xltype == xltypeInt);
     }
@@ -440,6 +478,10 @@ TEST_CASE("Int - Comparison", "[xll::Int][comparison]")
         REQUIRE_FALSE(i == m);
     }
 
+#if defined(__GNUC__) && !defined(__clang__)
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wuseless-cast"
+#endif
     SECTION("Three-way comparison (spaceship)") {
         xll::Int a = 3;
         xll::Int b = 5;
@@ -458,6 +500,10 @@ TEST_CASE("Int - Comparison", "[xll::Int][comparison]")
         REQUIRE(bool((i <=> 9)  > 0));
         REQUIRE(bool((i <=> 11) < 0));
     }
+#if defined(__GNUC__) && !defined(__clang__)
+#    pragma GCC diagnostic pop
+#endif
+
 }
 
 // =============================================================================

@@ -206,7 +206,14 @@ TEST_CASE("String - Assignment", "[xll::String][assignment]")
     SECTION("Self move assignment") {
         xll::String s("self");
         XCHAR* ptr = s.val.str;
+#if defined(__GNUC__) || defined(__clang__)
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wself-move"
+#endif
         s = std::move(s);    // swap with self: pointer unchanged
+#if defined(__GNUC__) || defined(__clang__)
+#    pragma GCC diagnostic pop
+#endif
         REQUIRE(s.xltype == xltypeStr);
         REQUIRE(s.val.str == ptr);
         REQUIRE(s == "self");
@@ -327,6 +334,10 @@ TEST_CASE("String - Comparison", "[xll::String][comparison]")
         REQUIRE(a.empty());
     }
 
+#if defined(__GNUC__) && !defined(__clang__)
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wuseless-cast"
+#endif
     SECTION("Three-way comparison - xll::String vs xll::String") {
         xll::String a("apple");
         xll::String b("banana");
@@ -353,6 +364,9 @@ TEST_CASE("String - Comparison", "[xll::String][comparison]")
         REQUIRE(bool((s <=> std::string("hello")) == 0));
         REQUIRE(bool((s <=> std::string("world")) < 0));
     }
+#if defined(__GNUC__) && !defined(__clang__)
+#    pragma GCC diagnostic pop
+#endif
 }
 
 // =============================================================================

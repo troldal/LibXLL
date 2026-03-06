@@ -405,7 +405,8 @@ TEST_CASE("Array - copy assignment", "[xll::Array][copy]")
 
     SECTION("Self-assignment is safe") {
         NumArr arr({ xll::Number(1.0), xll::Number(2.0) });
-        arr = arr;
+        NumArr& self = arr;  // indirection makes self-assignment opaque to the compiler
+        arr = self;
         REQUIRE(arr.size() == 2);
         REQUIRE(static_cast<double>(arr[0]) == 1.0);
     }

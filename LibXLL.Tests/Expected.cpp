@@ -216,7 +216,8 @@ TEST_CASE("Expected - Copy Assignment", "[xll::Expected][assignment]")
 
     SECTION("Self-assignment") {
         xll::Expected<xll::Number> exp{xll::Number(3.14)};
-        exp = exp;
+        xll::Expected<xll::Number>& self = exp;  // indirection makes self-assignment opaque to the compiler
+        exp = self;
         REQUIRE(exp.has_value());
         REQUIRE(exp.value() == 3.14);
     }
@@ -1140,7 +1141,7 @@ TEST_CASE("Expected - Lazy Error Materialization", "[xll::Expected][lazy_materia
         REQUIRE_FALSE(exp.has_value());
 
         // Materialize
-        auto err = exp.error();
+        [[maybe_unused]] auto err = exp.error();
 
         // Should still be in error state
         REQUIRE_FALSE(exp.has_value());

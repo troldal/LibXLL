@@ -92,11 +92,31 @@ TEST_CASE("Bool - Construction", "[xll::Bool][construction]")
     }
 
     SECTION("Construction from double") {
+
+
+#if defined(_MSC_VER)
+#    pragma warning(push)
+#    pragma warning(disable: 4244)  // 'conversion from double to int, possible loss of data'
+#elif defined(__clang__)
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wconversion"
+#elif defined(__GNUC__)
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wfloat-conversion"
+#endif
         xll::Bool bt = 3.14;
+        xll::Bool bf = 0.0;
+#if defined(_MSC_VER)
+#    pragma warning(pop)
+#elif defined(__clang__)
+#    pragma clang diagnostic pop
+#elif defined(__GNUC__)
+#    pragma GCC diagnostic pop
+#endif
+
         REQUIRE(bt == true);
         REQUIRE(bt.xltype == xltypeBool);
 
-        xll::Bool bf = 0.0;
         REQUIRE(bf == false);
         REQUIRE(bf.xltype == xltypeBool);
     }
@@ -197,9 +217,28 @@ TEST_CASE("Bool - Assignment", "[xll::Bool][assignment]")
 
     SECTION("Assignment from double") {
         xll::Bool b;
+
+#if defined(_MSC_VER)
+#    pragma warning(push)
+#    pragma warning(disable: 4244)  // 'conversion from double to int, possible loss of data'
+#elif defined(__clang__)
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wconversion"
+#elif defined(__GNUC__)
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wfloat-conversion"
+#endif
         b = 3.14;
         REQUIRE(b == true);
         b = 0.0;
+#if defined(_MSC_VER)
+#    pragma warning(pop)
+#elif defined(__clang__)
+#    pragma clang diagnostic pop
+#elif defined(__GNUC__)
+#    pragma GCC diagnostic pop
+#endif
+
         REQUIRE(b == false);
         REQUIRE(b.xltype == xltypeBool);
     }
@@ -287,6 +326,10 @@ TEST_CASE("Bool - Comparison", "[xll::Bool][comparison]")
         REQUIRE(f == xll::Number(0.0));
     }
 
+#if defined(__GNUC__) && !defined(__clang__)
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wuseless-cast"
+#endif
     SECTION("Three-way comparison (spaceship) with xll::Bool") {
         xll::Bool t = true;
         xll::Bool f = false;
@@ -306,6 +349,9 @@ TEST_CASE("Bool - Comparison", "[xll::Bool][comparison]")
         REQUIRE(bool((t <=> 1) == 0));
         REQUIRE(bool((t <=> 0) > 0));
     }
+#if defined(__GNUC__) && !defined(__clang__)
+#    pragma GCC diagnostic pop
+#endif
 }
 
 // =============================================================================

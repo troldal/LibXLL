@@ -161,8 +161,10 @@ namespace xll
             if (impl::has_metadata(*this))
                 return impl::is_error_state(*this);
             // Fallback for raw XLOPER12 from Excel: xltypeNil → disengaged.
-            return (xltype & ~(xlbitDLLFree | xlbitXLFree)) == xltypeNil;
+            return (xltype & ~static_cast<xltype_t>(xlbitDLLFree | xlbitXLFree)) == xltypeNil;
         }
+
+        using xltype_t = decltype(xltype);
 
     public:
         using value_type = TValue;
@@ -300,10 +302,17 @@ namespace xll
          */
         constexpr ~Optional()
         {
+#if defined(__GNUC__) && !defined(__clang__)
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wduplicated-branches"
+#endif
             if (has_value())
                 std::destroy_at(std::launder(reinterpret_cast<TValue*>(this)));
             else
                 std::destroy_at(std::launder(reinterpret_cast<xll::Nil*>(this)));
+#if defined(__GNUC__) && !defined(__clang__)
+#    pragma GCC diagnostic pop
+#endif
 
             impl::clear_metadata(*this);
         }

@@ -220,7 +220,8 @@ TEST_CASE("Any - copy assignment replaces existing value", "[xll::Any][assignmen
 TEST_CASE("Any - self copy assignment", "[xll::Any][assignment]")
 {
     xll::Any a{xll::Number(7.0)};
-    a = a;  // NOLINT
+    xll::Any& self = a;  // indirection makes self-assignment opaque to the compiler
+    a = self;
     REQUIRE(xll::holds<xll::Number>(a));
 }
 

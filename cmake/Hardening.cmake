@@ -19,8 +19,8 @@
 #   Linker:    /DYNAMICBASE  /NXCOMPAT  /HIGHENTROPYVA  /GUARD:CF  /CETCOMPAT
 #
 # Windows – MinGW-w64 (GCC or Clang with GNU driver)
-#   Compiler:  -fstack-protector-strong  -fPIE
-#              -fno-strict-overflow  -fwrapv
+#   Compiler:  -fstack-protector-strong  -fPIE  -fwrapv
+#              -fno-strict-overflow  (GCC only; Clang uses -fwrapv for the same effect)
 #   Linker:    (relies on toolchain defaults; explicit PE-flag control requires
 #              ld/lld-specific options not universally portable here)
 #
@@ -56,7 +56,7 @@ function(create_hardening_target target_name)
             /GS            # Stack buffer overrun detection (cookie/canary)
             /sdl           # Additional SDL security checks (superset of /GS)
             /guard:cf      # Control Flow Guard instrumentation
-            /Qspectre      # Spectre v1 mitigation patterns
+            $<$<CXX_COMPILER_ID:MSVC>:/Qspectre>   # Spectre v1 mitigation (cl.exe only; not supported by clang-cl)
         )
         target_link_options(${target_name} INTERFACE
             /DYNAMICBASE   # Enable ASLR (Address Space Layout Randomisation)
@@ -74,9 +74,16 @@ function(create_hardening_target target_name)
             -D_FORTIFY_SOURCE=2
             -O2             # Required for _FORTIFY_SOURCE to be effective
             -fPIE
-            -fno-strict-overflow
             -fwrapv
         )
+
+        # -fno-strict-overflow is GCC-only; Clang does not support it.
+        # (-fwrapv above already covers the same ground on both compilers.)
+        # check_cxx_compiler_flag is unreliable here because Clang accepts
+        # the flag without error but warns at compile time (-Wunused-command-line-argument).
+        if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+            list(APPEND _compile_flags -fno-strict-overflow)
+        endif()
         set(_link_flags
             -Wl,-z,relro
             -Wl,-z,now
@@ -102,12 +109,16 @@ function(create_hardening_target target_name)
 
     # ── Windows MinGW-w64 (GCC or Clang with GNU driver on Windows) ──────────
     else()
-        target_compile_options(${target_name} INTERFACE
+        set(_mingw_compile_flags
             -fstack-protector-strong
             -fPIE
-            -fno-strict-overflow
             -fwrapv
         )
+        # -fno-strict-overflow is GCC-only; Clang silently ignores it but warns
+        if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+            list(APPEND _mingw_compile_flags -fno-strict-overflow)
+        endif()
+        target_compile_options(${target_name} INTERFACE ${_mingw_compile_flags})
         # Note: PE-level flags (DYNAMICBASE, NXCOMPAT, HIGHENTROPYVA) depend on
         # how the MinGW-w64 ld/lld was configured. Modern MinGW-w64 toolchains
         # typically enable DYNAMICBASE and NXCOMPAT by default; add explicit
