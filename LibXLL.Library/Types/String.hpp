@@ -159,7 +159,7 @@ namespace xll
          */
         constexpr explicit String(const XLOPER12& v) : Base()
         {
-            ensure(v.xltype == xltypeStr, "XLOPER12 type not convertible to String");
+            ensure(base_xltype(v.xltype) == xltypeStr, "XLOPER12 type not convertible to String");
             value() = make_string(to_string(v.val.str)).release();
         }
 

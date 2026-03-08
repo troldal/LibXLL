@@ -52,21 +52,15 @@ inline __attribute__((used)) void FetchExcel12EntryPt(void)
 */
 #ifdef __cplusplus
 extern "C"
-#endif	
+#endif
 //__attribute__((dllexport))
 inline __attribute__((used)) void SetExcel12EntryPt(EXCEL12PROC /*pexcel12New*/)
 {
 	// Stub for compiling on Linux.
 }
 
-inline __attribute__((used)) int Excel12(int /*xlfn*/, LPXLOPER12 /*operRes*/, int /*count*/, ...)
-{
-	// Stub for compiling on Linux.
-	return 0;
-}
-
-inline __attribute__((used)) int Excel12v(int /*xlfn*/, LPXLOPER12 /*operRes*/, int /*count*/, LPXLOPER12 /*opers*/[])
-{
-	// Stub for compiling on Linux.
-	return 0;
-}
+// Excel12 and Excel12v are declared in xlcall.h as extern "C".
+// No definition is provided here — the symbols must be resolved from the host
+// process at runtime.  On Linux, the host executable (e.g. MockXL) provides
+// strong definitions and exports them via -rdynamic so that this shared library
+// can resolve them through the dynamic linker.

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <stdexcept>
 #include <string>
 #include <typeinfo>
@@ -7,7 +8,7 @@
 
 namespace MockXL {
 
-using AutoFreeFn = void (*)(const XLOPER12*);
+using FAutoFree = std::function<void(const XLOPER12*)>;
 
 /**
  * @brief RAII owner of an XLOPER12* returned by an XLL function.
@@ -27,7 +28,7 @@ class XloperResult
 public:
     XloperResult() = default;
 
-    explicit XloperResult(XLOPER12* ptr, AutoFreeFn autoFree = nullptr) noexcept
+    explicit XloperResult(XLOPER12* ptr, FAutoFree autoFree = nullptr) noexcept
         : m_ptr(ptr), m_autoFree(autoFree) {}
 
     ~XloperResult() { reset(); }
@@ -132,7 +133,7 @@ public:
 
 private:
     XLOPER12*  m_ptr{};
-    AutoFreeFn m_autoFree{};
+    FAutoFree m_autoFree{};
 };
 
 } // namespace MockExcel

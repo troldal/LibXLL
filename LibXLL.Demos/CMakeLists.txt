@@ -90,6 +90,9 @@ target_compile_definitions(xllDemoScalarValidation PRIVATE NOMINMAX)
 add_executable(DemoMockExcelScalar Types/DemoMockExcelScalar.cpp)
 target_link_libraries(DemoMockExcelScalar PUBLIC MockXL)
 target_compile_definitions(DemoMockExcelScalar PRIVATE NOMINMAX)
+if (NOT WIN32)
+    target_link_options(DemoMockExcelScalar PRIVATE -rdynamic)
+endif()
 
 
 if (NOT WIN32)
@@ -115,6 +118,7 @@ if (NOT WIN32)
         add_executable(DemoMockExcelScalar.${sanitizer} Types/DemoMockExcelScalar.cpp)
         target_link_libraries(DemoMockExcelScalar.${sanitizer} PUBLIC MockXL)
         target_compile_definitions(DemoMockExcelScalar.${sanitizer} PRIVATE NOMINMAX)
+        target_link_options(DemoMockExcelScalar.${sanitizer} PRIVATE -rdynamic)
         target_enable_sanitizer(DemoMockExcelScalar.${sanitizer} ${sanitizer})
     endforeach ()
 
