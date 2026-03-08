@@ -11,8 +11,12 @@
 #include <fxt/monads/Expected.hpp>
 #include <fxt/utils/Failure.hpp>
 
+#include <xlcall.hpp>
+
 #ifdef _WIN32
-#    include <windows.h>    // SetDllDirectoryA
+#    include <windows.h>    // SetDllDirectoryA, GetProcAddress, GetModuleHandle
+#else
+#    include <dlfcn.h>       // dlsym, RTLD_DEFAULT
 #endif
 
 namespace MockXL::impl
@@ -81,6 +85,26 @@ namespace MockXL::impl
             return std::function<Sig>{ [imported]<typename... TArgs>(TArgs&&... args) {
                 return imported(std::forward<TArgs>(args)...);
             }};
+        }
+
+        /**
+         * @brief Returns the raw function pointer for a named export, or nullptr
+         * if the symbol is not present.  Used to cache procedure pointers in
+         * Registration records so that functions can be called by their Excel name.
+         */
+        [[nodiscard]] void* resolve_raw(const std::string& name) const noexcept
+        {
+            if (!m_lib.has(name))
+                return nullptr;
+            // Use the OS-native handle to look up the symbol address directly.
+            // This avoids writing a function-type alias with a calling-convention
+            // qualifier, which is syntactically broken when PASCAL expands to nothing.
+#ifdef _WIN32
+            return reinterpret_cast<void*>(
+                ::GetProcAddress(static_cast<HMODULE>(m_lib.native()), name.c_str()));
+#else
+            return ::dlsym(m_lib.native(), name.c_str());
+#endif
         }
 
         [[nodiscard]] const std::filesystem::path& path() const noexcept { return m_path; }

@@ -15,14 +15,6 @@
 
 
 // ============================================================================
-// XLL function pointer types
-// ============================================================================
-
-using AddNumbersFn   = decltype(+[](const XLOPER12*, const XLOPER12*) -> XLOPER12* { return nullptr; });
-using NegateBoolFn   = decltype(+[](const XLOPER12*)                  -> XLOPER12* { return nullptr; });
-using StringLengthFn = decltype(+[](const XLOPER12*)                  -> XLOPER12* { return nullptr; });
-
-// ============================================================================
 // Helpers
 // ============================================================================
 
@@ -84,36 +76,31 @@ int main(int argc, char* argv[])
 
     run_test("1a. Number(3.0) + Number(4.0)  => expected: 7.0", [&] {
         xll::Number a{3.0}, b{4.0};
-        xll::Any r = session.call<AddNumbersFn>("AddNumbers", a, b).value();
-        print_any(r);
+        print_any(session.call<"ADD.NUMBERS">(a, b));
     });
 
     run_test("1b. String(\"hello\") + Number(4.0)  => expected: EXCEPTION", [&] {
         xll::String a{"hello"};
         xll::Number b{4.0};
-        xll::Any r = session.call<AddNumbersFn>("AddNumbers", a, b).value();
-        print_any(r);
+        print_any(session.call<"ADD.NUMBERS">(a, b));
     });
 
     run_test("1c. Bool(true) + Number(4.0)  => expected: EXCEPTION", [&] {
         xll::Bool   a{true};
         xll::Number b{4.0};
-        xll::Any r = session.call<AddNumbersFn>("AddNumbers", a, b).value();
-        print_any(r);
+        print_any(session.call<"ADD.NUMBERS">(a, b));
     });
 
     run_test("1d. Error(#N/A) + Number(4.0)  => expected: EXCEPTION", [&] {
         xll::Error  a{xll::ErrNA};
         xll::Number b{4.0};
-        xll::Any r = session.call<AddNumbersFn>("AddNumbers", a, b).value();
-        print_any(r);
+        print_any(session.call<"ADD.NUMBERS">(a, b));
     });
 
     run_test("1e. Int(5) + Number(4.0)  => expected: EXCEPTION", [&] {
         xll::Int    a{5};
         xll::Number b{4.0};
-        xll::Any r = session.call<AddNumbersFn>("AddNumbers", a, b).value();
-        print_any(r);
+        print_any(session.call<"ADD.NUMBERS">(a, b));
     });
 
     std::cout << "\n";
@@ -125,20 +112,17 @@ int main(int argc, char* argv[])
 
     run_test("2a. Bool(true)  => expected: FALSE", [&] {
         xll::Bool v{true};
-        xll::Any r = session.call<NegateBoolFn>("NegateBool", v).value();
-        print_any(r);
+        print_any(session.call<"NEGATE.BOOL">(v));
     });
 
     run_test("2b. Number(1.0)  => expected: EXCEPTION", [&] {
         xll::Number v{1.0};
-        xll::Any r = session.call<NegateBoolFn>("NegateBool", v).value();
-        print_any(r);
+        print_any(session.call<"NEGATE.BOOL">(v));
     });
 
     run_test("2c. String(\"true\")  => expected: EXCEPTION", [&] {
         xll::String v{"true"};
-        xll::Any r = session.call<NegateBoolFn>("NegateBool", v).value();
-        print_any(r);
+        print_any(session.call<"NEGATE.BOOL">(v));
     });
 
     std::cout << "\n";
@@ -150,20 +134,17 @@ int main(int argc, char* argv[])
 
     run_test("3a. String(\"Hello\")  => expected: 5.0", [&] {
         xll::String v{"Hello"};
-        xll::Any r = session.call<StringLengthFn>("StringLength", v).value();
-        print_any(r);
+        print_any(session.call<"STRING.LENGTH">(v));
     });
 
     run_test("3b. Number(42.0)  => expected: EXCEPTION", [&] {
         xll::Number v{42.0};
-        xll::Any r = session.call<StringLengthFn>("StringLength", v).value();
-        print_any(r);
+        print_any(session.call<"STRING.LENGTH">(v));
     });
 
     run_test("3c. Bool(false)  => expected: EXCEPTION", [&] {
         xll::Bool v{false};
-        xll::Any r = session.call<StringLengthFn>("StringLength", v).value();
-        print_any(r);
+        print_any(session.call<"STRING.LENGTH">(v));
     });
 
     std::cout << "\n";
