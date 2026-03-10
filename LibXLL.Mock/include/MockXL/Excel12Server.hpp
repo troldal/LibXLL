@@ -58,14 +58,13 @@
 //   name) is injected by the Session class after the XLL is loaded.
 
 #include "Function.hpp"
+#include "Registration.hpp"
 #include "Types/Any.hpp"
 #include "Types/Nil.hpp"
 
 #include <array>
 #include <functional>
 #include <iostream>
-#include <optional>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -83,143 +82,8 @@
 #  endif
 #endif
 
-namespace MockXL {
+namespace MockXL::impl {
 
-// ============================================================================
-// Registration
-// ============================================================================
-
-/**
- * @brief One entry produced by an xlfRegister call from the add-in.
- *
- * Constructed by Excel12Server when it handles an xlfRegister call.
- * The xlfRegister operands are parsed into named fields for easier access,
- * and invoke() executes the resolved exported function.
- */
-class Registration
-{
-public:
-    Registration() = default;
-
-    explicit Registration(int id, const std::vector<xll::Any>& args)
-        : m_function_id(id)
-        , m_module_path(require_string(args, 0, "module path"))
-        , m_procedure_name(require_string(args, 1, "procedure name"))
-        , m_signature(require_string(args, 2, "signature"))
-        , m_excel_name(require_string(args, 3, "Excel name"))
-        , m_argument_names(require_string(args, 4, "argument names"))
-        , m_function_type(optional_int(args, 5))
-        , m_category(optional_any(args, 6))
-        , m_reserved(optional_any(args, 7))
-        , m_help_topic(optional_string(args, 8))
-        , m_description(optional_string(args, 9))
-        , m_argument_help(collect_strings(args, 10))
-    {}
-
-    // ------------------------------------------------------------------
-    // Accessors
-    // ------------------------------------------------------------------
-
-    [[nodiscard]] int                                function_id()    const noexcept { return m_function_id; }
-    [[nodiscard]] const xll::String&                 module_path()    const noexcept { return m_module_path; }
-    [[nodiscard]] const xll::String&                 procedure_name() const noexcept { return m_procedure_name; }
-    [[nodiscard]] const xll::String&                 signature()      const noexcept { return m_signature; }
-    [[nodiscard]] const xll::String&                 excel_name()     const noexcept { return m_excel_name; }
-    [[nodiscard]] const xll::String&                 argument_names() const noexcept { return m_argument_names; }
-    [[nodiscard]] const std::optional<xll::Int>&     function_type()  const noexcept { return m_function_type; }
-    [[nodiscard]] const std::optional<xll::Any>&     category()       const noexcept { return m_category; }
-    [[nodiscard]] const std::optional<xll::Any>&     reserved()       const noexcept { return m_reserved; }
-    [[nodiscard]] const std::optional<xll::String>&  help_topic()     const noexcept { return m_help_topic; }
-    [[nodiscard]] const std::optional<xll::String>&  description()    const noexcept { return m_description; }
-    [[nodiscard]] const std::vector<xll::String>&    argument_help()  const noexcept { return m_argument_help; }
-    [[nodiscard]] const Function&                    function()       const noexcept { return m_function; }
-
-    void set_function(Function function) noexcept
-    {
-        m_function = function;
-    }
-
-    [[nodiscard]] explicit operator bool() const noexcept { return static_cast<bool>(m_function); }
-
-    // ------------------------------------------------------------------
-    // Invocation
-    // ------------------------------------------------------------------
-
-    [[nodiscard]] LPXLOPER12 invoke(const XLOPER12* const* xlargs, int nargs) const
-    {
-        static XLOPER12 s_nil = xll::Nil{};
-        std::array<LPXLOPER12, MaxXllArity + 1> p{};
-        p.fill(&s_nil);
-        for (int i = 0; i < nargs && i < static_cast<int>(MaxXllArity + 1); ++i)
-            p[static_cast<std::size_t>(i)] = const_cast<LPXLOPER12>(xlargs[i]);
-        return m_function(p.data());
-    }
-
-private:
-    static xll::String require_string(const std::vector<xll::Any>& args,
-                                      std::size_t index,
-                                      std::string_view field_name)
-    {
-        if (index >= args.size())
-            throw std::runtime_error("[MockXL] missing required xlfRegister field: " + std::string(field_name));
-        if (auto value = xll::cast<xll::String>(args[index]))
-            return *value;
-        throw std::runtime_error("[MockXL] xlfRegister field is not a string: " + std::string(field_name));
-    }
-
-    static std::optional<xll::String> optional_string(const std::vector<xll::Any>& args,
-                                                      std::size_t index)
-    {
-        if (index >= args.size() || xll::holds<xll::Nil>(args[index]))
-            return std::nullopt;
-        if (auto value = xll::cast<xll::String>(args[index]))
-            return *value;
-        return std::nullopt;
-    }
-
-    static std::optional<xll::Int> optional_int(const std::vector<xll::Any>& args,
-                                                std::size_t index)
-    {
-        if (index >= args.size() || xll::holds<xll::Nil>(args[index]))
-            return std::nullopt;
-        if (auto value = xll::cast<xll::Int>(args[index]))
-            return *value;
-        return std::nullopt;
-    }
-
-    static std::optional<xll::Any> optional_any(const std::vector<xll::Any>& args,
-                                                std::size_t index)
-    {
-        if (index >= args.size() || xll::holds<xll::Nil>(args[index]))
-            return std::nullopt;
-        return args[index];
-    }
-
-    static std::vector<xll::String> collect_strings(const std::vector<xll::Any>& args,
-                                                    std::size_t first_index)
-    {
-        std::vector<xll::String> result;
-        for (std::size_t i = first_index; i < args.size(); ++i) {
-            if (auto value = xll::cast<xll::String>(args[i]))
-                result.push_back(*value);
-        }
-        return result;
-    }
-
-    int                        m_function_id{};
-    xll::String                m_module_path;
-    xll::String                m_procedure_name;
-    xll::String                m_signature;
-    xll::String                m_excel_name;
-    xll::String                m_argument_names;
-    std::optional<xll::Int>    m_function_type;
-    std::optional<xll::Any>    m_category;
-    std::optional<xll::Any>    m_reserved;
-    std::optional<xll::String> m_help_topic;
-    std::optional<xll::String> m_description;
-    std::vector<xll::String>   m_argument_help;
-    Function                   m_function;
-};
 
 // ============================================================================
 // Excel12Server
@@ -357,14 +221,12 @@ public:
             // xlfRegister  — record function registration, return ID
             // ----------------------------------------------------------
             case xlfRegister: {
-                const int id = m_next_id++;
-
                 std::vector<xll::Any> args;
                 for (int i = 0; i < coper; ++i)
                     if (rgpxloper12[i])
                         args.emplace_back(*rgpxloper12[i]);
 
-                Registration reg{ id, args };
+                Registration reg{ args };
 
                 if (m_proc_resolver) {
                     std::string sig = static_cast<std::string>(reg.signature());
@@ -382,11 +244,12 @@ public:
                           << static_cast<std::string>(reg.procedure_name())
                           << '\n';
 
+                const int function_id = reg.function_id();
                 m_registrations.emplace(static_cast<std::string>(reg.excel_name()), std::move(reg));
 
                 if (xloper12Res) {
                     xloper12Res->xltype  = xltypeNum;
-                    xloper12Res->val.num = static_cast<double>(id);
+                    xloper12Res->val.num = static_cast<double>(function_id);
                 }
                 return xlretSuccess;
             }
@@ -412,7 +275,6 @@ private:
 
     xll::String                                      m_xll_name  { "MockXL.xll" };
     std::unordered_map<std::string, Registration>    m_registrations;
-    int                                              m_next_id   { 1 };
     std::function<void*(const std::string&)>         m_proc_resolver;
 
 

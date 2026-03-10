@@ -1,65 +1,126 @@
 #pragma once
 
-#include "AddInLoader.hpp"
 #include "Excel12Server.hpp"
 #include "XloperResult.hpp"
 #include "fxt/monads/Tap.hpp"
 #include "fxt/monads/Tee.hpp"
 
+#include <atomic>
 #include <filesystem>
+#include <functional>
+#include <string>
 #include <fxt/monads/Expected.hpp>
 #include <fxt/utils/Failure.hpp>
 #include <fixed_string.hpp>
 #include <iostream>
 #include <xlcall.hpp>
 
+#include <boost/dll/shared_library.hpp>
+#include <boost/dll/shared_library_load_mode.hpp>
+#include <boost/dll/import.hpp>
+
+#ifdef _WIN32
+#    include <windows.h>
+#else
+#    include <dlfcn.h>
+#endif
+
 namespace MockXL
 {
 
     namespace fs = std::filesystem;
 
-    /**
-     * @brief Façade that owns an XllLoader and drives the xlAutoOpen/xlAutoClose
-     * lifecycle, exactly as Excel does when loading and unloading an add-in.
-     *
-     * call() resolves an export by name, invokes it with the supplied xll:: type
-     * arguments (which must be derived from XLOPER12), and returns an XloperResult
-     * that owns the returned pointer.  The cast to const XLOPER12* is performed
-     * internally — no explicit cast is needed at the call site.
-     *
-     * Usage:
-     * @code
-     * MockXL::Session session("scalar_validation.xll");
-     *
-     * xll::Number a{3.0}, b{4.0};
-     * auto result = session.call<AddNumbersFn>("AddNumbers", a, b);
-     *
-     * std::cout << result.as_number() << "\n"; // 7.0
-     * @endcode
-     */
     class Session
     {
+        // ----------------------------------------------------------------
+        // Private nested loader — implementation detail, not part of the
+        // public API.
+        // ----------------------------------------------------------------
+        class AddInLoader
+        {
+            boost::dll::shared_library m_lib;
+            fs::path                   m_path;
+
+        public:
+            explicit AddInLoader(const fs::path& path) : m_path(fs::absolute(path))
+            {
+#ifdef _WIN32
+                SetDllDirectoryA(m_path.parent_path().string().c_str());
+#endif
+                m_lib.load(boost::dll::fs::path{ m_path.string() },
+                           boost::dll::load_mode::rtld_now |
+                           boost::dll::load_mode::rtld_global);
+            }
+
+            ~AddInLoader() = default;
+
+            AddInLoader(const AddInLoader&)            = delete;
+            AddInLoader& operator=(const AddInLoader&) = delete;
+            AddInLoader(AddInLoader&&)                 = delete;
+            AddInLoader& operator=(AddInLoader&&)      = delete;
+
+            template<typename FnPtr>
+            auto resolve(const char* name) const
+                -> fxt::expected<std::function<std::remove_pointer_t<FnPtr>>, fxt::failure>
+            {
+                using Sig = std::remove_pointer_t<FnPtr>;
+                if (!m_lib.has(name))
+                    return fxt::unexpected(fxt::failure{
+                        std::string("Symbol not found in ") +
+                        m_path.filename().string() + ": " + name });
+
+                auto imported = boost::dll::import_symbol<Sig>(m_lib, name);
+                return std::function<Sig>{ [imported]<typename... TArgs>(TArgs&&... args) {
+                    return imported(std::forward<TArgs>(args)...);
+                }};
+            }
+
+            [[nodiscard]] void* resolve_raw(const std::string& name) const noexcept
+            {
+                if (!m_lib.has(name))
+                    return nullptr;
+#ifdef _WIN32
+                return reinterpret_cast<void*>(
+                    ::GetProcAddress(static_cast<HMODULE>(m_lib.native()), name.c_str()));
+#else
+                return ::dlsym(m_lib.native(), name.c_str());
+#endif
+            }
+
+            [[nodiscard]] const fs::path& path() const noexcept { return m_path; }
+        };
+
+        // ----------------------------------------------------------------
+        // Session state
+        // ----------------------------------------------------------------
+
         using xlAutoOpen  = decltype(+[]{ return 0; });
         using xlAutoClose = decltype(+[]{ return 0; });
         using xlAutoFree  = decltype(+[](const XLOPER12*){ });
 
-        impl::AddInLoader m_loader;
-        FAutoFree         m_xlAutoFree {};
+        inline static std::atomic<int> s_instance_count { 0 };
+
+        AddInLoader m_loader;
+        FAutoFree   m_xlAutoFree {};
 
     public:
         explicit Session(const fs::path& xllPath) : m_loader(xllPath)
         {
+            if (s_instance_count.fetch_add(1) != 0) {
+                s_instance_count.fetch_sub(1);
+                throw std::runtime_error("Only one MockXL::Session may exist at a time");
+            }
             // resolve returns fxt::expected; value_or({}) gives an empty
             // std::function if xlAutoFree12 is not exported.
             m_xlAutoFree = m_loader.resolve<xlAutoFree>("xlAutoFree12")
                             .value_or(FAutoFree{});
 
             // Tell the mock server the XLL's path so xlGetName returns the right value.
-            Excel12Server::instance().set_xll_name(xllPath.stem().string() + ".xll");
+            impl::Excel12Server::instance().set_xll_name(xllPath.stem().string() + ".xll");
 
             // Supply a proc resolver so xlfRegister can cache raw function pointers.
             // This enables call<"EXCEL.NAME">(args...) after xlAutoOpen.
-            Excel12Server::instance().set_proc_resolver(
+            impl::Excel12Server::instance().set_proc_resolver(
                 [this](const std::string& name) { return m_loader.resolve_raw(name); });
 
 #ifdef _WIN32
@@ -70,7 +131,7 @@ namespace MockXL
             using SetEntryPt = void (*)(EXCEL12PROC);
             if (auto setter = m_loader.resolve<SetEntryPt>("SetExcel12EntryPt"); setter.has_value()) {
                 (*setter)([](int xlfn, int coper, LPXLOPER12* rgpxloper12, LPXLOPER12 res) -> int {
-                    return MockXL::Excel12Server::instance().dispatch(xlfn, coper, rgpxloper12, res);
+                    return MockXL::impl::Excel12Server::instance().dispatch(xlfn, coper, rgpxloper12, res);
                 });
             }
 #endif
@@ -86,6 +147,8 @@ namespace MockXL
          */
         ~Session()
         {
+            s_instance_count.fetch_sub(1);
+
             // Drive xlAutoClose exactly as Excel does on add-in unload.
             m_loader.resolve<xlAutoClose>("xlAutoClose")
                 | fxt::tee([](const auto& fn) { fn(); })
@@ -140,7 +203,7 @@ namespace MockXL
             std::array<const XLOPER12*, sizeof...(Args)> ptrs{
                 static_cast<const XLOPER12*>(&args)...
             };
-            return Excel12Server::instance().call_by_excel_name(
+            return impl::Excel12Server::instance().call_by_excel_name(
                 std::string_view(Name.data(), Name.size()),
                 ptrs.data(),
                 static_cast<int>(ptrs.size()));
@@ -160,7 +223,7 @@ namespace MockXL
             std::array<const XLOPER12*, sizeof...(Args)> ptrs{
                 static_cast<const XLOPER12*>(&args)...
             };
-            return Excel12Server::instance().call_by_excel_name(
+            return impl::Excel12Server::instance().call_by_excel_name(
                 excelName,
                 ptrs.data(),
                 static_cast<int>(ptrs.size()));

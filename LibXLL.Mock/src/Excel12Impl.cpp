@@ -21,14 +21,14 @@ int Excel12(int xlfn, LPXLOPER12 operRes, int count, ...)
     for (int i = 0; i < count; ++i)
         ops[static_cast<std::size_t>(i)] = va_arg(ap, LPXLOPER12);
     va_end(ap);
-    return MockXL::Excel12Server::instance()
+    return MockXL::impl::Excel12Server::instance()
                .dispatch(xlfn, count, ops.data(), operRes);
 }
 
 extern "C" __attribute__((visibility("default")))
 int Excel12v(int xlfn, LPXLOPER12 operRes, int count, LPXLOPER12 opers[])
 {
-    return MockXL::Excel12Server::instance()
+    return MockXL::impl::Excel12Server::instance()
                .dispatch(xlfn, count, &opers[0], operRes);
 }
 
