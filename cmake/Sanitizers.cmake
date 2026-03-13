@@ -73,22 +73,44 @@ function(target_enable_sanitizer target sanitizer)
 
     # ── Linux / macOS ────────────────────────────────────────────────────────
     if (NOT WIN32)
+        # Shared/module libraries must be compiled with -fPIC; executables use
+        # -fPIE.  Using -fPIE for a MODULE or SHARED target causes the linker to
+        # reject PC-relative relocations against non-local symbols.
+        get_target_property(_target_type ${target} TYPE)
+        if (_target_type STREQUAL "MODULE_LIBRARY" OR
+            _target_type STREQUAL "SHARED_LIBRARY")
+            set(_pic_flag -fPIC)
+            set(_pie_link_flag "")   # -pie is an executable-only linker flag
+        else ()
+            set(_pic_flag -fPIE)
+            set(_pie_link_flag -pie)
+        endif ()
+
         if (sanitizer STREQUAL "address")
             set(_flags -fsanitize=address -fno-omit-frame-pointer -g)
         elseif (sanitizer STREQUAL "undefined")
             set(_flags -fsanitize=undefined -fno-omit-frame-pointer -g)
         elseif (sanitizer STREQUAL "thread")
-            set(_flags -fsanitize=thread -fPIE -pie -g)
+            set(_compile_flags -fsanitize=thread ${_pic_flag} -g)
+            set(_link_flags    -fsanitize=thread ${_pic_flag} ${_pie_link_flag} -g)
         elseif (sanitizer STREQUAL "memory")
-            set(_flags -fsanitize=memory -fPIE -fno-omit-frame-pointer -g
+            set(_compile_flags -fsanitize=memory ${_pic_flag} -fno-omit-frame-pointer -g
                     -fno-optimize-sibling-calls -fsanitize-recover=all -O1)
+            set(_link_flags ${_compile_flags})
         else ()
             message(WARNING "target_enable_sanitizer: unknown sanitizer '${sanitizer}' — ignored")
             return()
         endif ()
 
-        target_compile_options(${target} PRIVATE ${_flags})
-        target_link_options(${target} PRIVATE ${_flags})
+        # thread and memory set their own _compile_flags/_link_flags above;
+        # for address and undefined _flags is used for both.
+        if (NOT DEFINED _compile_flags)
+            set(_compile_flags ${_flags})
+            set(_link_flags    ${_flags})
+        endif ()
+
+        target_compile_options(${target} PRIVATE ${_compile_flags})
+        target_link_options(${target} PRIVATE ${_link_flags})
 
     # ── Windows clang-cl ─────────────────────────────────────────────────────
     elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND
