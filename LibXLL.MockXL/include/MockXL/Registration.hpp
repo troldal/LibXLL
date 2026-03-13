@@ -73,6 +73,7 @@ class Registration
         , m_help_topic(opt<xll::String, 8>(args))
         , m_description(opt<xll::String, 9>(args))
         , m_argument_help(vec<xll::String, 10>(args))
+        , m_function({})
     {}
 
 public:

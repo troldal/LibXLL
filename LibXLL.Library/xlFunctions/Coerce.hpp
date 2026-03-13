@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include "Types/Int.hpp"
+
 #include <xlcall.hpp>
 
 namespace xll

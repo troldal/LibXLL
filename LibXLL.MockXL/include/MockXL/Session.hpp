@@ -228,7 +228,7 @@ namespace MockXL
                     return nullptr;
 #ifdef _WIN32
                 return reinterpret_cast<void*>(
-                    ::GetProcAddress(static_cast<HMODULE>(m_lib.native()), name.c_str()));
+                    ::GetProcAddress(m_lib.native(), name.c_str()));
 #else
                 return ::dlsym(m_lib.native(), name.c_str());
 #endif

@@ -78,16 +78,16 @@ int main(int argc, char* argv[])
 
     // Prints the value held in an xll::Any by casting to each known type.
     auto print_any = [](const xll::Any& any) {
-        if (auto v = xll::cast<xll::Number>(any))
-            std::cout << "    Result: Number(" << v.value() << ")\n";
-        else if (auto v = xll::cast<xll::Bool>(any))
-            std::cout << "    Result: Bool(" << (v.value() ? "true" : "false") << ")\n";
-        else if (auto v = xll::cast<xll::String>(any))
-            std::cout << "    Result: String(\"" << v.value() << "\")\n";
-        else if (auto v = xll::cast<xll::Int>(any))
-            std::cout << "    Result: Int(" << v.value() << ")\n";
-        else if (auto v = xll::cast<xll::Error>(any))
-            std::cout << "    Result: Error(" << v.value() << ")\n";
+        if (auto num = xll::cast<xll::Number>(any))
+            std::cout << "    Result: Number(" << num.value() << ")\n";
+        else if (auto bval = xll::cast<xll::Bool>(any))
+            std::cout << "    Result: Bool(" << (bval.value() ? "true" : "false") << ")\n";
+        else if (auto str = xll::cast<xll::String>(any))
+            std::cout << "    Result: String(\"" << str.value() << "\")\n";
+        else if (auto ival = xll::cast<xll::Int>(any))
+            std::cout << "    Result: Int(" << ival.value() << ")\n";
+        else if (auto err = xll::cast<xll::Error>(any))
+            std::cout << "    Result: Error(" << err.value() << ")\n";
         else if (xll::holds<xll::Missing>(any))
             std::cout << "    Result: Missing\n";
         else if (xll::holds<xll::Nil>(any))
