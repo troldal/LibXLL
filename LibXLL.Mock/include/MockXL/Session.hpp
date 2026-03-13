@@ -115,6 +115,10 @@ namespace MockXL
             m_xlAutoFree = m_loader.resolve<xlAutoFree>("xlAutoFree12")
                             .value_or(FAutoFree{});
 
+            // Inject the free callback into the server so Function::operator()
+            // can call xlAutoFree12 after deep-copying DLL-allocated return values.
+            impl::Excel12Server::instance().set_auto_free(m_xlAutoFree);
+
             // Tell the mock server the XLL's path so xlGetName returns the right value.
             impl::Excel12Server::instance().set_xll_name(xllPath.stem().string() + ".xll");
 
@@ -123,18 +127,17 @@ namespace MockXL
             impl::Excel12Server::instance().set_proc_resolver(
                 [this](const std::string& name) { return m_loader.resolve_raw(name); });
 
-#ifdef _WIN32
-            // On Windows xlcall_cpp.h uses GetProcAddress(GetModuleHandle(NULL),
-            // "MdCallBack12") to find the callback.  The add-in also exports
-            // SetExcel12EntryPt which lets a non-Excel host inject the pointer
-            // directly — use it here as a belt-and-suspenders measure.
+            // Inject the dispatch callback into the XLL via SetExcel12EntryPt.
+            // On Windows this is the primary (and only) mechanism.
+            // On Linux, xlcall_cpp.h now provides a real implementation that stores
+            // the pointer in a per-XLL hidden inline variable, so Excel12/Excel12v
+            // inside the XLL forward to Excel12Server without any host-side symbols.
             using SetEntryPt = void (*)(EXCEL12PROC);
             if (auto setter = m_loader.resolve<SetEntryPt>("SetExcel12EntryPt"); setter.has_value()) {
                 (*setter)([](int xlfn, int coper, LPXLOPER12* rgpxloper12, LPXLOPER12 res) -> int {
                     return MockXL::impl::Excel12Server::instance().dispatch(xlfn, coper, rgpxloper12, res);
                 });
             }
-#endif
 
             // Drive xlAutoOpen exactly as Excel does on add-in load.
             m_loader.resolve<xlAutoOpen>("xlAutoOpen")
@@ -199,14 +202,9 @@ namespace MockXL
             requires(std::is_base_of_v<XLOPER12, std::remove_cvref_t<Args>> && ...)
         [[nodiscard]] xll::Any call(Args&&... args) const
         {
-            // Build a stack-local array of const XLOPER12* from the argument pack.
-            std::array<const XLOPER12*, sizeof...(Args)> ptrs{
-                static_cast<const XLOPER12*>(&args)...
-            };
             return impl::Excel12Server::instance().call_by_excel_name(
                 std::string_view(Name.data(), Name.size()),
-                ptrs.data(),
-                static_cast<int>(ptrs.size()));
+                std::vector<xll::Any>{ xll::Any(args)... });
         }
 
         /**
@@ -220,13 +218,9 @@ namespace MockXL
             requires(std::is_base_of_v<XLOPER12, std::remove_cvref_t<Args>> && ...)
         [[nodiscard]] xll::Any call(std::string_view excelName, Args&&... args) const
         {
-            std::array<const XLOPER12*, sizeof...(Args)> ptrs{
-                static_cast<const XLOPER12*>(&args)...
-            };
             return impl::Excel12Server::instance().call_by_excel_name(
                 excelName,
-                ptrs.data(),
-                static_cast<int>(ptrs.size()));
+                std::vector<xll::Any>{ xll::Any(args)... });
         }
     };
 

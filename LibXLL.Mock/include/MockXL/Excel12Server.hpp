@@ -122,6 +122,16 @@ public:
 
     [[nodiscard]] const xll::String& xll_name() const noexcept { return m_xll_name; }
 
+    /**
+     * @brief Supplies the xlAutoFree12 callback so Function::operator() can
+     * free DLL-allocated return values after deep-copying them into xll::Any.
+     * Session calls this immediately after resolving xlAutoFree12.
+     */
+    void set_auto_free(FAutoFree autoFree) noexcept
+    {
+        m_auto_free = std::move(autoFree);
+    }
+
     // ------------------------------------------------------------------
     // Registration records
     // ------------------------------------------------------------------
@@ -154,29 +164,16 @@ public:
     /**
      * @brief Invokes a registered XLL function by its Excel-visible name.
      *
-     * Each element of @p xlargs is passed as a pointer to the XLL function.
-     * Up to 30 arguments are supported (the Excel SDK maximum).
+     * Each element of @p xlargs is an `xll::Any` value whose underlying `XLOPER12`
+     * pointer is forwarded to the XLL function pointer. Up to `MaxXllArity`
+     * arguments are supported; any beyond that limit are silently ignored.
      *
-     * @return The function's return value as an xll::Any, or xltypeNil on failure.
+     * @return The function's return value as an `xll::Any`, or `xll::Nil` on failure.
      */
     [[nodiscard]] xll::Any call_by_excel_name(std::string_view excel_name,
-                                               std::initializer_list<const XLOPER12*> xlargs) const
+                                               const std::vector<xll::Any>& xlargs) const
     {
-        return call_impl(excel_name, xlargs.begin(), static_cast<int>(xlargs.size()));
-    }
-
-    /** @overload Accepts a vector of XLOPER12 pointers. */
-    [[nodiscard]] xll::Any call_by_excel_name(std::string_view excel_name,
-                                               const std::vector<const XLOPER12*>& xlargs) const
-    {
-        return call_impl(excel_name, xlargs.data(), static_cast<int>(xlargs.size()));
-    }
-
-    /** @overload Accepts a raw pointer array and count. Used by Session::call<Name>. */
-    [[nodiscard]] xll::Any call_by_excel_name(std::string_view excel_name,
-                                               const XLOPER12* const* xlargs, int nargs) const
-    {
-        return call_impl(excel_name, xlargs, nargs);
+        return call_impl(excel_name, xlargs);
     }
 
     // ------------------------------------------------------------------
@@ -276,6 +273,7 @@ private:
     xll::String                                      m_xll_name  { "MockXL.xll" };
     std::unordered_map<std::string, Registration>    m_registrations;
     std::function<void*(const std::string&)>         m_proc_resolver;
+    FAutoFree                                        m_auto_free;
 
 
     // ------------------------------------------------------------------
@@ -283,7 +281,7 @@ private:
     // ------------------------------------------------------------------
 
     [[nodiscard]] xll::Any call_impl(std::string_view excel_name,
-                                     const XLOPER12* const* xlargs, int nargs) const
+                                     const std::vector<xll::Any>& xlargs) const
     {
         const auto it = m_registrations.find(std::string(excel_name));
         if (it == m_registrations.end()) {
@@ -296,10 +294,7 @@ private:
             return xll::Any{ xll::Nil{} };
         }
 
-        LPXLOPER12 ret = reg.invoke(xlargs, nargs);
-
-        if (!ret) return xll::Any{ xll::Nil{} };
-        return xll::Any{ *ret };
+        return reg.invoke(xlargs, m_auto_free);
     }
 
     /**
