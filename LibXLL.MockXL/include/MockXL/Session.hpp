@@ -21,6 +21,25 @@
  * Only one `Session` may exist at a time.  Attempting to construct a second one
  * while the first is alive throws `std::runtime_error`.
  *
+ * ### Expected XLL function signature
+ * MockXL dispatches calls through a uniform function-pointer type of the form:
+ * @code
+ * xll::Any* fn(const xll::Any*, const xll::Any*, ...);
+ * @endcode
+ * XLL-exported functions **must** therefore be declared with `xll::Any*` as
+ * both the return type and every parameter type:
+ * @code
+ * XLL_FUNCTION xll::Any* XLLAPI MyFunction(const xll::Any* arg1, const xll::Any* arg2);
+ * @endcode
+ * Using a more specific XLOPER12-derived type (e.g. `xll::Number*`,
+ * `xll::String const*`) instead of `xll::Any*` is **binary-compatible** on all
+ * supported platforms — every xll type inherits from `XLOPER12` and adds no
+ * data members — but constitutes undefined behaviour under the C++ type system,
+ * because the function is called through a pointer to a different (though
+ * layout-compatible) type.  Undefined Behaviour Sanitizer (`-fsanitize=function`)
+ * will report a warning for every such call.  To keep UBSan clean, always use
+ * `xll::Any*` in the exported signature and cast to the specific type internally.
+ *
  * ### Platform notes
  * - **Windows** – `SetDllDirectoryA` is called before loading so that MinGW
  *   runtime dependencies can be found next to the XLL.
@@ -75,6 +94,22 @@ namespace MockXL
      * ## Thread safety
      * `Session` is **not** thread-safe.  Only one `Session` may exist at a time;
      * the constructor enforces this with an atomic instance counter.
+     *
+     * ## Required XLL function signature
+     * MockXL dispatches every registered function through a uniform
+     * function-pointer type whose parameters and return type are all
+     * `xll::Any*`.  XLL-exported functions **must** therefore match that
+     * signature exactly:
+     * @code
+     * XLL_FUNCTION xll::Any* XLLAPI MyFunction(const xll::Any* a, const xll::Any* b);
+     * @endcode
+     * Declaring parameters or the return type as a more specific
+     * XLOPER12-derived type (e.g. `xll::Number*`, `xll::String const*`) is
+     * binary-compatible but is technically undefined behaviour: the function
+     * will be called through a pointer to a different C++ type.
+     * Undefined Behaviour Sanitizer (`-fsanitize=function`) will emit a warning
+     * for every such call.  Cast to the specific type *inside* the function body
+     * to keep UBSan clean.
      *
      * ## Calling registered functions
      * After construction, functions registered by `xlAutoOpen` can be called via
@@ -211,7 +246,7 @@ namespace MockXL
 
         using xlAutoOpen  = decltype(+[]{ return 0; });           ///< Function-pointer type for `xlAutoOpen`  (returns `int`, no parameters).
         using xlAutoClose = decltype(+[]{ return 0; });           ///< Function-pointer type for `xlAutoClose` (returns `int`, no parameters).
-        using xlAutoFree  = decltype(+[](const XLOPER12*){ });    ///< Function-pointer type for `xlAutoFree12` (returns `void`, takes `const XLOPER12*`).
+        using xlAutoFree  = decltype(+[](const xll::Any*){ });    ///< Function-pointer type for `xlAutoFree12` (returns `void`, takes `const XLOPER12*`).
 
         inline static std::atomic<int> s_instance_count { 0 };   ///< Global instance counter; enforces the "at most one Session" invariant.
 
@@ -269,8 +304,8 @@ namespace MockXL
             // the pointer in a per-XLL hidden inline variable, so Excel12/Excel12v
             // inside the XLL forward to Excel12Server without any host-side symbols.
             using SetEntryPt = void (*)(EXCEL12PROC);
-            if (auto setter = m_loader.resolve<SetEntryPt>("SetExcel12EntryPt"); setter.has_value()) {
-                (*setter)([](int xlfn, int coper, LPXLOPER12* rgpxloper12, LPXLOPER12 res) -> int {
+            if (const auto setter = m_loader.resolve<SetEntryPt>("SetExcel12EntryPt"); setter.has_value()) {
+                (*setter)([](const int xlfn, const int coper, LPXLOPER12* rgpxloper12, LPXLOPER12 res) -> int { // NOLINT
                     return MockXL::impl::Excel12Server::instance().dispatch(xlfn, coper, rgpxloper12, res);
                 });
             }
@@ -322,7 +357,7 @@ namespace MockXL
          * @param xlfn    The Excel function/command code (e.g. `xlcAlert`).
          * @param handler Callable matching `impl::Excel12Server::HandlerFn`.
          */
-        void register_handler(int xlfn, impl::Excel12Server::HandlerFn handler)
+        void register_handler(int xlfn, impl::Excel12Server::HandlerFn handler) // NOLINT
         {
             impl::Excel12Server::instance().register_handler(xlfn, std::move(handler));
         }
@@ -335,7 +370,7 @@ namespace MockXL
          *
          * @param xlfn The Excel function/command code whose handler to remove.
          */
-        void unregister_handler(int xlfn)
+        void unregister_handler(int xlfn) // NOLINT
         {
             impl::Excel12Server::instance().unregister_handler(xlfn);
         }
@@ -361,7 +396,7 @@ namespace MockXL
          */
         template<fixstr::fixed_string Name, typename... Args>
             requires(std::is_base_of_v<XLOPER12, std::remove_cvref_t<Args>> && ...)
-        [[nodiscard]] xll::Any call(Args&&... args) const
+        [[nodiscard]] xll::Any call(Args&&... args) const // NOLINT
         {
             return impl::Excel12Server::instance().call_by_excel_name(
                 std::string_view(Name.data(), Name.size()),
@@ -389,7 +424,7 @@ namespace MockXL
          */
         template<typename... Args>
             requires(std::is_base_of_v<XLOPER12, std::remove_cvref_t<Args>> && ...)
-        [[nodiscard]] xll::Any call(std::string_view excelName, Args&&... args) const
+        [[nodiscard]] xll::Any call(std::string_view excelName, Args&&... args) const //NOLINT
         {
             return impl::Excel12Server::instance().call_by_excel_name(
                 excelName,

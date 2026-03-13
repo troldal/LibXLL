@@ -57,18 +57,11 @@ auto addNumbersReg =
     | xll::Description("Adds two numbers. Throws if arguments are not xltypeNum.");
 XLL_REGISTER(addNumbersReg);
 
-XLL_FUNCTION xll::Number* XLLAPI AddNumbers(
-    xll::Number const* a,
-    xll::Number const* b)
+XLL_FUNCTION xll::Any* AddNumbers(const xll::Any* a, const xll::Any* b)
 {
-    // Both a and b are pointers to XLOPER12-layout objects.
-    // If the caller filled them with a correct xltypeNum, this works.
-    // If the xltype is wrong (e.g. xltypeStr), operator+ calls
-    // ensure(lhs.is_valid()) which throws std::runtime_error.
-    auto result = *a + *b;
-    //return xll::AutoFree()(result);
-    return xll::AutoFree()(std::make_unique<xll::Number>(*a + *b));
-    //return std::make_unique<xll::Number>(*a + *b).release();
+    auto na = xll::cast<xll::Number>(*a);
+    auto nb = xll::cast<xll::Number>(*b);
+    return xll::AutoFree()(std::make_unique<xll::Any>(*na + *nb));
 }
 
 // ============================================================================
@@ -86,12 +79,12 @@ auto negateBoolReg =
     | xll::Description("Negates a boolean. Throws if argument is not xltypeBool.");
 XLL_REGISTER(negateBoolReg);
 
-XLL_FUNCTION xll::Bool* XLLAPI NegateBool(
-    xll::Bool const* val)
+XLL_FUNCTION xll::Any* XLLAPI NegateBool(
+    const xll::Any* val)
 {
     // operator bool() calls ensure(is_valid()) — throws if xltype != xltypeBool
-    auto result = xll::Bool(!static_cast<bool>(*val));
-    return xll::AutoFree()(result);
+    auto result = xll::Bool(!static_cast<bool>(*xll::cast<xll::Bool>(*val)));
+    return xll::AutoFree()(xll::Any{result});
 }
 
 // ============================================================================
@@ -109,12 +102,14 @@ auto strLenReg =
     | xll::Description("Returns string length. Throws if argument is not xltypeStr.");
 XLL_REGISTER(strLenReg);
 
-XLL_FUNCTION xll::Number* XLLAPI StringLength(
-    xll::String const* text)
+XLL_FUNCTION xll::Any* XLLAPI StringLength(
+    const xll::Any* text)
 {
-    // size() calls ensure(is_valid()) — throws if xltype != xltypeStr
-    auto result = xll::Number(static_cast<double>(text->size()));
-    return xll::AutoFree()(result);
+    auto str = xll::cast<xll::String>(*text);
+    if (!str)
+        return xll::AutoFree()(xll::Any{xll::ErrValue});
+    auto result = xll::Number(static_cast<double>(str->size()));
+    return xll::AutoFree()(xll::Any{result});
 }
 
 // ============================================================================
@@ -135,16 +130,16 @@ auto showAlertReg =
     | xll::Description("Shows an Excel alert. Throws if Message is not xltypeStr or Type is not xltypeInt.");
 XLL_REGISTER(showAlertReg);
 
-XLL_FUNCTION xll::Bool* XLLAPI ShowAlert(
-    xll::String const* message,
-    xll::Int    const* type)
+XLL_FUNCTION xll::Any* XLLAPI ShowAlert(
+    const xll::Any* message,
+    const xll::Any* type)
 {
-    // .size() triggers ensure() — throws if message xltype != xltypeStr.
-    (void)message->size();
-    // static_cast<int> triggers ensure() — throws if type xltype != xltypeInt.
-    const auto alert_type = static_cast<xll::Alert::Type>(static_cast<int>(*type));
-    xll::alert(*message, alert_type);
-    return xll::AutoFree()(xll::Bool(true));
+    auto msg  = xll::cast<xll::String>(*message);
+    auto atype = xll::cast<xll::Int>(*type);
+    if (!msg || !atype)
+        return xll::AutoFree()(xll::Any{xll::ErrValue});
+    xll::alert(*msg, static_cast<xll::Alert::Type>(static_cast<int>(*atype)));
+    return xll::AutoFree()(xll::Any{xll::Bool(true)});
 }
 
 

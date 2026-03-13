@@ -47,7 +47,7 @@
 namespace MockXL
 {
 
-    using FAutoFree = std::function<void(const XLOPER12*)>;
+    using FAutoFree = std::function<void(const xll::Any*)>;
 
     // ----------------------------------------------------------------------------
     // XlArgT
@@ -68,7 +68,7 @@ namespace MockXL
      * @tparam I Parameter position (unused at runtime; drives pack expansion only).
      */
     template<std::size_t I>
-    using XlArgT = xll::Any*;
+    using XlArgT = const xll::Any*;
 
     // ----------------------------------------------------------------------------
     // XllFnN
@@ -97,8 +97,7 @@ namespace MockXL
     template<std::size_t... Is>
     struct XllFnType<std::index_sequence<Is...>>
     {
-        using type =
-            decltype(+[](XlArgT<Is>...) -> xll::Any* { return nullptr; });    ///< Typed function-pointer type for arity `sizeof...(Is)`.
+        using type = decltype(+[](XlArgT<Is>...) -> xll::Any* { return nullptr; });    ///< Typed function-pointer type for arity `sizeof...(Is)`.
     };
 
     /**
@@ -251,8 +250,8 @@ namespace MockXL
             const auto n = std::min(args.size(), MaxXllArity + 1);
             for (std::size_t i = 0; i < n; ++i) p[i] = const_cast<xll::Any*>(&args[i]);
 
-            const xll::Any* ret = std::visit(
-                [&]<typename TFunc>(TFunc f) -> xll::Any* {
+            const LPXLOPER12 ret = std::visit(
+                [&]<typename TFunc>(TFunc f) -> LPXLOPER12 {
                     return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
                         return f(p[Is]...);
                     }(std::make_index_sequence<function_arity_v<TFunc>> {});
@@ -260,8 +259,8 @@ namespace MockXL
                 fn);
 
             if (!ret) return xll::Nil {};
-            auto result = *ret;
-            if ((ret->xltype & xlbitDLLFree) && autoFree) autoFree(ret);
+            auto result = xll::Any {*ret};
+            if ((ret->xltype & xlbitDLLFree) && autoFree) autoFree(reinterpret_cast<xll::Any*>(ret));
             return result;
         }
     };

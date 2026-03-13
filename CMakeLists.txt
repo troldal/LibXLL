@@ -48,7 +48,7 @@ CPMAddPackage(
 add_subdirectory(LibXLL.Library)
 
 if(PROJECT_IS_TOP_LEVEL)
-    add_subdirectory(LibXLL.Mock)
+    add_subdirectory(LibXLL.MockXL)
     add_subdirectory(LibXLL.Demos)
     add_subdirectory(LibXLL.Tests)
 

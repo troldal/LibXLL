@@ -41,7 +41,7 @@ int main(int argc, char* argv[])
 {
     std::cout << "=== Mock-Excel: Scalar Type Validation Demo ===\n\n";
 
-    const std::string xll_path = (argc > 1) ? argv[1] : "scalar_validation.xll";
+    const std::string xll_path = (argc > 1) ? argv[1] : "scalar_validation.undefined.xll";
 
     // XllSession loads the XLL, calls xlAutoOpen, resolves xlAutoFree12.
     // Its destructor calls xlAutoClose and unloads the library.
