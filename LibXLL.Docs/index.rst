@@ -8,4 +8,5 @@ LibXLL Documentation
    introduction
    getting-started/index
    user-guide/index
+   testing/index
    api/index
