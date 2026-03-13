@@ -14,20 +14,9 @@
 // calls through it.  On Windows this is resolved at runtime via
 //   GetProcAddress(GetModuleHandle(NULL), "MdCallBack12")
 // i.e. the host *executable* must export the symbol.
-// On Linux the entry points Excel12/Excel12v are declared extern "C" in
-// xlcall.h and must be provided as a strong symbol by the executable (the
-// unix/xlcall_cpp.h has only stub no-op definitions so they must be
-// overridden).
-//
-// How MockXL provides them
-// -------------------------
-// 1.  Include this header in your mock-executable translation unit.
-// 2.  Call MockXL::Excel12Server::install() before the XLL is loaded.
-//     (Session::Session() does this automatically when this header is
-//     included before Session.hpp, but you can also call it explicitly.)
-// 3.  Place the macro  MOCK_XL_DEFINE_EXCEL12()  in exactly ONE .cpp file
-//     of the mock executable.  This defines the exported entry points that
-//     the add-in resolves.
+// On Linux, unix/xlcall_cpp.h provides real implementations that store the
+// dispatch callback supplied via SetExcel12EntryPt, so no host-side symbols
+// are required.
 //
 // Handled function codes
 // -----------------------
@@ -38,8 +27,26 @@
 //  xlfRegister — records the registration and returns a numeric function ID
 //  xlCoerce    — performs basic scalar type coercion (num<->bool<->int)
 //
-// All other function codes return xlretSuccess with an xltypeNil result,
-// which is the correct "not implemented / don't care" behaviour for a mock.
+// All other function codes are looked up in the user-supplied handler map
+// (see register_handler / unregister_handler).  If no handler is registered
+// for a given code, the call succeeds silently with an xltypeNil result.
+//
+// Custom handlers
+// ----------------
+// To mock a function code not handled natively (e.g. xlcAlert, xlcMessage),
+// register a handler before xlAutoOpen is called:
+//
+//   server.register_handler(xlcAlert,
+//       [](const std::vector<xll::Any>& args, xll::Any& result) -> int {
+//           std::cout << "Alert: " << ... << '\n';
+//           return xlretSuccess;
+//       });
+//
+// The handler receives the xlfn arguments as a vector of xll::Any values and
+// a reference to the result (pre-initialised to xll::Nil).  It returns an
+// xlret code (xlretSuccess, xlretFailed, etc.).  Built-in codes (xlFree,
+// xlGetName, xlfRegister, xlCoerce) are always handled internally and cannot
+// be overridden via the handler map.
 //
 // Registration records
 // ---------------------
@@ -158,6 +165,53 @@ public:
     }
 
     // ------------------------------------------------------------------
+    // Custom handler registration
+    // ------------------------------------------------------------------
+
+    /**
+     * @brief Callable type for a custom `Excel12` handler.
+     *
+     * @param args   The `xlfn` arguments converted to `xll::Any` values.
+     *               Passed by `const` reference; the handler must not store
+     *               pointers into the vector beyond the call.
+     * @param result Reference to the result value, pre-initialised to
+     *               `xll::Nil`.  The handler writes its return value here.
+     * @return An `xlret` code: `xlretSuccess`, `xlretFailed`, etc.
+     */
+    using HandlerFn = std::function<int(const std::vector<xll::Any>& args,
+                                        xll::Any& result)>;
+
+    /**
+     * @brief Registers a custom handler for an Excel function/command code.
+     *
+     * The handler is invoked by `dispatch()` for any `xlfn` not handled
+     * internally (`xlFree`, `xlGetName`, `xlfRegister`, `xlCoerce`).
+     * Registering a handler for a code that already has one silently
+     * replaces the previous handler.
+     *
+     * @param xlfn    The Excel function/command code (e.g. `xlcAlert`).
+     * @param handler The callable to invoke.  See `HandlerFn` for the
+     *                required signature.
+     */
+    void register_handler(int xlfn, HandlerFn handler)
+    {
+        m_handlers.insert_or_assign(xlfn, std::move(handler));
+    }
+
+    /**
+     * @brief Removes the custom handler for @p xlfn, if one exists.
+     *
+     * After this call, `dispatch()` will revert to the silent-default
+     * behaviour for that code (`xlretSuccess` with `xll::Nil`).
+     *
+     * @param xlfn The Excel function/command code whose handler to remove.
+     */
+    void unregister_handler(int xlfn)
+    {
+        m_handlers.erase(xlfn);
+    }
+
+    // ------------------------------------------------------------------
     // Call a registered function by its Excel name
     // ------------------------------------------------------------------
 
@@ -218,10 +272,7 @@ public:
             // xlfRegister  — record function registration, return ID
             // ----------------------------------------------------------
             case xlfRegister: {
-                std::vector<xll::Any> args;
-                for (int i = 0; i < coper; ++i)
-                    if (rgpxloper12[i])
-                        args.emplace_back(*rgpxloper12[i]);
+                const auto args = make_args(coper, rgpxloper12);
 
                 Registration reg{ args };
 
@@ -258,10 +309,20 @@ public:
                 return handle_coerce(coper, rgpxloper12, xloper12Res);
 
             // ----------------------------------------------------------
-            // Everything else — succeed silently with nil result
+            // Everything else — consult the custom handler map, then
+            // succeed silently if no handler is registered.
             // ----------------------------------------------------------
-            default:
-                return xlretSuccess;
+            default: {
+                const auto it = m_handlers.find(xlfn);
+                if (it == m_handlers.end())
+                    return xlretSuccess;
+
+                xll::Any result{ xll::Nil{} };
+                const int ret = it->second(make_args(coper, rgpxloper12), result);
+                if (xloper12Res)
+                    *xloper12Res = static_cast<XLOPER12>(result);
+                return ret;
+            }
         }
     }
 
@@ -274,11 +335,34 @@ private:
     std::unordered_map<std::string, Registration>    m_registrations;
     std::function<void*(const std::string&)>         m_proc_resolver;
     FAutoFree                                        m_auto_free;
+    std::unordered_map<int, HandlerFn>               m_handlers; ///< Custom handlers keyed by Excel function/command code.
 
 
     // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
+
+    /**
+     * @brief Converts a raw `LPXLOPER12` argument array to `std::vector<xll::Any>`.
+     *
+     * Null pointers in @p rgpxloper12 are skipped; all valid entries are
+     * deep-copied into `xll::Any` values via `xll::Any(const XLOPER12&)`.
+     * Shared by the `xlfRegister` case and the custom-handler path so
+     * argument construction is not duplicated.
+     *
+     * @param coper        Number of entries in @p rgpxloper12.
+     * @param rgpxloper12  Raw argument pointer array from `Excel12`/`Excel12v`.
+     * @return A vector of `xll::Any` values, one per non-null argument.
+     */
+    [[nodiscard]] static std::vector<xll::Any> make_args(int coper, LPXLOPER12* rgpxloper12)
+    {
+        std::vector<xll::Any> args;
+        args.reserve(static_cast<std::size_t>(coper));
+        for (int i = 0; i < coper; ++i)
+            if (rgpxloper12[i])
+                args.emplace_back(*rgpxloper12[i]);
+        return args;
+    }
 
     [[nodiscard]] xll::Any call_impl(std::string_view excel_name,
                                      const std::vector<xll::Any>& xlargs) const

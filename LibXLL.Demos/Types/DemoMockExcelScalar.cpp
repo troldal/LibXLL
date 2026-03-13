@@ -41,13 +41,40 @@ int main(int argc, char* argv[])
 {
     std::cout << "=== Mock-Excel: Scalar Type Validation Demo ===\n\n";
 
-    const std::string xll_path = (argc > 1) ? argv[1] : "scalar_validation.address.xll";
+    const std::string xll_path = (argc > 1) ? argv[1] : "scalar_validation.xll";
 
     // XllSession loads the XLL, calls xlAutoOpen, resolves xlAutoFree12.
     // Its destructor calls xlAutoClose and unloads the library.
 
     MockXL::Session session{ xll_path };
     std::cout << "Loaded: " << session.path().string() << "\n\n";
+
+    // Register a mock handler for xlcAlert.
+    // The real Excel would show a modal dialog; here we simply print the
+    // message and type prefix to the console so automated runs stay non-interactive.
+    session.register_handler(xlcAlert,
+        [](const std::vector<xll::Any>& args, xll::Any& /*result*/) -> int
+        {
+            std::string msg  = "<no message>";
+            int         type = 0;
+
+            if (!args.empty())
+                if (auto msg_opt = xll::cast<xll::String>(args[0]))
+                    msg = static_cast<std::string>(*msg_opt);
+
+            if (args.size() >= 2)
+                if (auto type_opt = xll::cast<xll::Int>(args[1]))
+                    type = static_cast<int>(*type_opt);
+
+            const std::array<const char*, 4> prefix{
+                "[NONE]", "[QUESTION]", "[INFORMATION]", "[ERROR]"
+            };
+            const char* p = (type >= 0 && type < 4)
+                                ? prefix[static_cast<std::size_t>(type)]
+                                : "[ALERT]";
+            std::cout << "    " << p << " " << msg << "\n";
+            return xlretSuccess;
+        });
 
     // Prints the value held in an xll::Any by casting to each known type.
     auto print_any = [](const xll::Any& any) {
@@ -145,6 +172,49 @@ int main(int argc, char* argv[])
     run_test("3c. Bool(false)  => expected: EXCEPTION", [&] {
         xll::Bool v{false};
         print_any(session.call<"STRING.LENGTH">(v));
+    });
+
+    std::cout << "\n";
+
+    // =================================================================
+    // TEST GROUP 4: ShowAlert (xlcAlert mock)
+    // =================================================================
+    std::cout << "--- ShowAlert (xlcAlert) ---\n";
+
+    run_test("4a. ShowAlert(\"Hello!\", 0)  => expected: [NONE] Hello!", [&] {
+        xll::String msg{"Hello!"};
+        xll::Int    type{0};
+        print_any(session.call<"SHOW.ALERT">(msg, type));
+    });
+
+    run_test("4b. ShowAlert(\"Is this correct?\", 1)  => expected: [QUESTION]", [&] {
+        xll::String msg{"Is this correct?"};
+        xll::Int    type{1};
+        print_any(session.call<"SHOW.ALERT">(msg, type));
+    });
+
+    run_test("4c. ShowAlert(\"FYI\", 2)  => expected: [INFORMATION]", [&] {
+        xll::String msg{"FYI"};
+        xll::Int    type{2};
+        print_any(session.call<"SHOW.ALERT">(msg, type));
+    });
+
+    run_test("4d. ShowAlert(\"Something went wrong!\", 3)  => expected: [ERROR]", [&] {
+        xll::String msg{"Something went wrong!"};
+        xll::Int    type{3};
+        print_any(session.call<"SHOW.ALERT">(msg, type));
+    });
+
+    run_test("4e. ShowAlert(Number(42), 0)  => expected: EXCEPTION (message not xltypeStr)", [&] {
+        xll::Number msg{42.0};
+        xll::Int    type{0};
+        print_any(session.call<"SHOW.ALERT">(msg, type));
+    });
+
+    run_test("4f. ShowAlert(\"Hello\", Number(2.0))  => expected: EXCEPTION (type not xltypeInt)", [&] {
+        xll::String  msg{"Hello"};
+        xll::Number  type{2.0};
+        print_any(session.call<"SHOW.ALERT">(msg, type));
     });
 
     std::cout << "\n";

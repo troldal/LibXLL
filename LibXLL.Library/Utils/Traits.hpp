@@ -95,4 +95,17 @@ namespace xll::traits
         static constexpr std::string_view excel_type = "Q";
     };
 
+    // Catch-all for any xll type not otherwise explicitly specialised above.
+    // Covers Bool, Int, Error, Missing, Nil, and any future xll types added
+    // to the library.  All are XLOPER12-based and share the same "Q" type code.
+    // Explicit full specialisations (String, Number, Any, …) always take
+    // precedence over this partial specialisation in the C++ template
+    // partial-ordering rules.
+    template<typename T>
+        requires is_xll_type<T>
+    struct arg_traits<T>
+    {
+        static constexpr std::string_view excel_type = "Q";
+    };
+
 }    // namespace xll::traits

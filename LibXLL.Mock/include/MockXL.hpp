@@ -5,5 +5,3 @@
 #include "MockXL/Excel12Server.hpp"
 #include "MockXL/Function.hpp"
 #include "MockXL/Session.hpp"
-#include "MockXL/XloperPrinter.hpp"
-#include "MockXL/XloperResult.hpp"

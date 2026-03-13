@@ -1,7 +1,39 @@
+/**
+ * @file Session.hpp
+ * @brief Scoped RAII owner of a loaded XLL add-in and its MockXL execution context.
+ *
+ * A `Session` is the sole public entry point for client code that wants to load
+ * an XLL and call its registered functions under MockXL.  Creating a `Session`
+ * performs the full Excel add-in lifecycle:
+ *
+ * 1. Load the XLL shared library (`.xll` / `.dll` / `.so`) via Boost.DLL.
+ * 2. Resolve and cache `xlAutoFree12` so the add-in can release DLL-allocated
+ *    return values.
+ * 3. Configure `impl::Excel12Server` with the XLL name, a free callback, and a
+ *    symbol resolver for `xlfRegister` calls.
+ * 4. Inject the `Excel12Server::dispatch` callback into the XLL via
+ *    `SetExcel12EntryPt`, so every `Excel12` / `Excel12v` call made from inside
+ *    the XLL is routed to the mock server.
+ * 5. Call `xlAutoOpen` exactly as Excel would on add-in load.
+ *
+ * Destroying the `Session` calls `xlAutoClose` and unloads the library.
+ *
+ * Only one `Session` may exist at a time.  Attempting to construct a second one
+ * while the first is alive throws `std::runtime_error`.
+ *
+ * ### Platform notes
+ * - **Windows** – `SetDllDirectoryA` is called before loading so that MinGW
+ *   runtime dependencies can be found next to the XLL.
+ * - **Linux** – The XLL is loaded with `RTLD_GLOBAL` so that the hidden
+ *   `pexcel12` variable defined in `unix/xlcall_cpp.h` binds to the
+ *   `SetExcel12EntryPt` call made in step 4.
+ *
+ * @see impl::Excel12Server
+ * @see Registration
+ */
 #pragma once
 
 #include "Excel12Server.hpp"
-#include "XloperResult.hpp"
 #include "fxt/monads/Tap.hpp"
 #include "fxt/monads/Tee.hpp"
 
@@ -30,18 +62,73 @@ namespace MockXL
 
     namespace fs = std::filesystem;
 
+    /**
+     * @brief Scoped owner of one loaded XLL add-in.
+     *
+     * ## Lifetime
+     * Constructing a `Session` drives the full Excel add-in load sequence
+     * (`xlAutoOpen`).  The destructor drives `xlAutoClose` and releases the
+     * shared library.  All intermediate state (registered functions, the
+     * `Excel12Server` singleton, the auto-free callback) is owned by this object
+     * for its lifetime.
+     *
+     * ## Thread safety
+     * `Session` is **not** thread-safe.  Only one `Session` may exist at a time;
+     * the constructor enforces this with an atomic instance counter.
+     *
+     * ## Calling registered functions
+     * After construction, functions registered by `xlAutoOpen` can be called via
+     * the templated `call()` overloads.  Arguments must be derived from `XLOPER12`
+     * (e.g. `xll::Number`, `xll::String`, `xll::Bool`).  The return value is an
+     * owning `xll::Any`.
+     *
+     * @code
+     * MockXL::Session session{ "path/to/addin.xll" };
+     * xll::Number a{ 3.0 }, b{ 4.0 };
+     * xll::Any result = session.call<"ADD.NUMBERS">(a, b);
+     * @endcode
+     */
     class Session
     {
         // ----------------------------------------------------------------
         // Private nested loader — implementation detail, not part of the
         // public API.
         // ----------------------------------------------------------------
+
+        /**
+         * @brief RAII wrapper around a Boost.DLL shared library handle.
+         *
+         * `AddInLoader` is a private implementation detail of `Session`.  It
+         * encapsulates everything needed to load an XLL, resolve exported symbols
+         * by name, and look up raw function pointers for the `xlfRegister` proc
+         * resolver.
+         *
+         * The class is non-copyable and non-movable; ownership is tied to the
+         * enclosing `Session` object.
+         */
         class AddInLoader
         {
-            boost::dll::shared_library m_lib;
-            fs::path                   m_path;
+            boost::dll::shared_library m_lib;  ///< Boost.DLL handle owning the loaded shared library.
+            fs::path                   m_path; ///< Absolute path to the XLL, resolved at construction.
 
         public:
+            /**
+             * @brief Loads the XLL at @p path.
+             *
+             * On Windows, `SetDllDirectoryA` is called with the XLL's parent
+             * directory before loading, so MinGW runtime dependencies
+             * (`libstdc++`, `libgcc`, etc.) are found automatically.
+             *
+             * On all platforms the library is loaded with `RTLD_NOW |
+             * RTLD_GLOBAL` (Boost.DLL translates these to the correct OS flags).
+             * `RTLD_GLOBAL` is required on Linux so that the hidden `pexcel12`
+             * symbol in the XLL can be written by the `SetExcel12EntryPt` call
+             * made immediately after loading.
+             *
+             * @param path Path to the XLL file.  Relative paths are resolved to
+             *             an absolute path via `std::filesystem::absolute`.
+             * @throws boost::system::system_error if the library cannot be loaded.
+             */
             explicit AddInLoader(const fs::path& path) : m_path(fs::absolute(path))
             {
 #ifdef _WIN32
@@ -52,13 +139,28 @@ namespace MockXL
                            boost::dll::load_mode::rtld_global);
             }
 
+            /// @cond – compiler-generated special members are suppressed from docs.
             ~AddInLoader() = default;
-
             AddInLoader(const AddInLoader&)            = delete;
             AddInLoader& operator=(const AddInLoader&) = delete;
             AddInLoader(AddInLoader&&)                 = delete;
             AddInLoader& operator=(AddInLoader&&)      = delete;
+            /// @endcond
 
+            /**
+             * @brief Resolves a named export and wraps it in a `std::function`.
+             *
+             * The function-pointer type is deduced from @p FnPtr: if `FnPtr` is
+             * `void(*)(int)` then the returned `std::function` has signature
+             * `void(int)`.
+             *
+             * @tparam FnPtr  Function-pointer type whose pointee signature matches
+             *                the exported symbol.
+             * @param  name   Null-terminated symbol name to look up.
+             * @return `fxt::expected` containing the wrapped function on success,
+             *         or an `fxt::failure` with a human-readable message if the
+             *         symbol is not found.
+             */
             template<typename FnPtr>
             auto resolve(const char* name) const
                 -> fxt::expected<std::function<std::remove_pointer_t<FnPtr>>, fxt::failure>
@@ -75,6 +177,16 @@ namespace MockXL
                 }};
             }
 
+            /**
+             * @brief Returns the raw function pointer for @p name, or `nullptr`.
+             *
+             * Unlike `resolve()`, no `std::function` wrapper is created.  Used by
+             * the `xlfRegister` proc resolver in `Excel12Server` to cache typed
+             * function pointers for later dispatch.
+             *
+             * @param name Symbol name to look up.
+             * @return Raw `void*` pointer to the symbol, or `nullptr` if not found.
+             */
             [[nodiscard]] void* resolve_raw(const std::string& name) const noexcept
             {
                 if (!m_lib.has(name))
@@ -87,6 +199,9 @@ namespace MockXL
 #endif
             }
 
+            /**
+             * @brief Returns the absolute path to the loaded XLL.
+             */
             [[nodiscard]] const fs::path& path() const noexcept { return m_path; }
         };
 
@@ -94,16 +209,37 @@ namespace MockXL
         // Session state
         // ----------------------------------------------------------------
 
-        using xlAutoOpen  = decltype(+[]{ return 0; });
-        using xlAutoClose = decltype(+[]{ return 0; });
-        using xlAutoFree  = decltype(+[](const XLOPER12*){ });
+        using xlAutoOpen  = decltype(+[]{ return 0; });           ///< Function-pointer type for `xlAutoOpen`  (returns `int`, no parameters).
+        using xlAutoClose = decltype(+[]{ return 0; });           ///< Function-pointer type for `xlAutoClose` (returns `int`, no parameters).
+        using xlAutoFree  = decltype(+[](const XLOPER12*){ });    ///< Function-pointer type for `xlAutoFree12` (returns `void`, takes `const XLOPER12*`).
 
-        inline static std::atomic<int> s_instance_count { 0 };
+        inline static std::atomic<int> s_instance_count { 0 };   ///< Global instance counter; enforces the "at most one Session" invariant.
 
-        AddInLoader m_loader;
-        FAutoFree   m_xlAutoFree {};
+        AddInLoader m_loader;        ///< Owns the shared-library handle and symbol resolution.
+        FAutoFree   m_xlAutoFree {}; ///< Cached `xlAutoFree12` callback, or an empty function if not exported.
 
     public:
+        /**
+         * @brief Loads the XLL and drives `xlAutoOpen`.
+         *
+         * Performs the full add-in initialisation sequence:
+         * 1. Enforces the single-instance invariant (throws if another `Session`
+         *    already exists).
+         * 2. Loads the shared library via `AddInLoader`.
+         * 3. Resolves `xlAutoFree12` and stores it in `m_xlAutoFree`.
+         * 4. Configures `impl::Excel12Server` with the free callback, XLL name,
+         *    and a proc resolver lambda for `xlfRegister`.
+         * 5. Calls the XLL's exported `SetExcel12EntryPt` to inject the
+         *    `Excel12Server::dispatch` callback.  This is the mechanism by which
+         *    `Excel12` / `Excel12v` calls from inside the XLL reach MockXL on
+         *    both Windows and Linux.
+         * 6. Calls `xlAutoOpen`; throws `std::runtime_error` if the symbol is
+         *    not exported.
+         *
+         * @param xllPath Path to the `.xll` / `.dll` / `.so` file.
+         * @throws std::runtime_error if a `Session` already exists, if the XLL
+         *         cannot be loaded, or if `xlAutoOpen` is not found.
+         */
         explicit Session(const fs::path& xllPath) : m_loader(xllPath)
         {
             if (s_instance_count.fetch_add(1) != 0) {
@@ -146,7 +282,12 @@ namespace MockXL
         }
 
         /**
-         * @brief Calls xlAutoClose and unloads the XLL.
+         * @brief Calls `xlAutoClose` and unloads the XLL.
+         *
+         * Drives `xlAutoClose` exactly as Excel does when an add-in is unloaded.
+         * If the symbol is not exported, the error is printed to `std::cerr` and
+         * destruction continues.  The instance counter is decremented so a new
+         * `Session` may be created afterwards.
          */
         ~Session()
         {
@@ -158,45 +299,65 @@ namespace MockXL
                 | fxt::tap_error([](const fxt::failure& err) { std::cerr << err.message() << std::endl; });
         }
 
+        /// @cond
         Session(const Session&)            = delete;
         Session& operator=(const Session&) = delete;
         Session(Session&&)                 = delete;
         Session& operator=(Session&&)      = delete;
+        /// @endcond
 
+        /**
+         * @brief Returns the absolute path to the loaded XLL.
+         */
         [[nodiscard]] const fs::path& path() const noexcept { return m_loader.path(); }
 
         /**
-         * @brief Resolves exportName, calls it with args, and returns the result.
+         * @brief Registers a custom handler for an Excel function/command code.
          *
-         * Returns an fxt::expected containing the XloperResult on success, or an
-         * fxt::failure if the symbol could not be resolved.  The caller decides
-         * whether to treat a missing export as fatal (.value()) or optional
-         * (.value_or(XloperResult{})).
+         * Forwards to `impl::Excel12Server::register_handler`.  The handler is
+         * invoked by `dispatch()` for any `xlfn` not handled internally
+         * (`xlFree`, `xlGetName`, `xlfRegister`, `xlCoerce`).  Registering a
+         * handler for a code that already has one silently replaces it.
          *
-         * Each argument must be of a type derived from XLOPER12 (e.g. xll::Number,
-         * xll::String).  The cast to const XLOPER12* is performed internally.
+         * @param xlfn    The Excel function/command code (e.g. `xlcAlert`).
+         * @param handler Callable matching `impl::Excel12Server::HandlerFn`.
          */
-        template<typename FnPtr, typename... Args>
-            requires(std::is_base_of_v<XLOPER12, std::remove_cvref_t<Args>> && ...)
-        auto call(const char* exportName, Args&&... args) const -> fxt::expected<XloperResult, fxt::failure>
+        void register_handler(int xlfn, impl::Excel12Server::HandlerFn handler)
         {
-            auto fn = m_loader.resolve<FnPtr>(exportName);
-            if (!fn.has_value())
-                return fxt::unexpected(fn.error());
-            auto* raw = (*fn)(static_cast<const XLOPER12*>(&args)...);
-            return XloperResult { raw, m_xlAutoFree };
+            impl::Excel12Server::instance().register_handler(xlfn, std::move(handler));
+        }
+
+        /**
+         * @brief Removes the custom handler for @p xlfn, if one exists.
+         *
+         * After this call `dispatch()` reverts to the silent-default behaviour
+         * for that code (`xlretSuccess` with `xll::Nil`).
+         *
+         * @param xlfn The Excel function/command code whose handler to remove.
+         */
+        void unregister_handler(int xlfn)
+        {
+            impl::Excel12Server::instance().unregister_handler(xlfn);
         }
 
         /**
          * @brief Calls a registered XLL function by its compile-time Excel name.
          *
-         * The name is baked in as a non-type template parameter, e.g.:
-         * @code
-         * xll::Number a{3.0}, b{4.0};
-         * auto result = session.call<"ADD.NUMBERS">(a, b);
-         * @endcode
+         * The Excel name is baked in as a non-type template parameter and
+         * resolved at compile time to a `std::string_view`, avoiding a runtime
+         * string lookup.  Each argument is wrapped in an `xll::Any` (deep copy)
+         * and forwarded to `impl::Excel12Server::call_by_excel_name`.
          *
-         * Each argument must be derived from XLOPER12.  Returns xll::Any.
+         * @tparam Name      Compile-time Excel function name, e.g. `"ADD.NUMBERS"`.
+         * @tparam Args      Argument types; each must be derived from `XLOPER12`.
+         * @param  args      Arguments to pass to the XLL function.
+         * @return An owning `xll::Any` containing the return value, or `xll::Nil`
+         *         if the function name is not registered or has no resolved symbol.
+         *
+         * @code
+         * xll::Number a{ 3.0 }, b{ 4.0 };
+         * xll::Any result = session.call<"ADD.NUMBERS">(a, b);
+         * @endcode
          */
         template<fixstr::fixed_string Name, typename... Args>
             requires(std::is_base_of_v<XLOPER12, std::remove_cvref_t<Args>> && ...)
@@ -210,8 +371,20 @@ namespace MockXL
         /**
          * @brief Calls a registered XLL function by its runtime Excel name.
          *
+         * Identical to the compile-time overload except that the Excel name is
+         * supplied as a `std::string_view` at runtime.  Use this overload when
+         * the function name is not known at compile time.
+         *
+         * @tparam Args      Argument types; each must be derived from `XLOPER12`.
+         * @param  excelName Excel-visible name under which the function was
+         *                   registered (case-sensitive).
+         * @param  args      Arguments to pass to the XLL function.
+         * @return An owning `xll::Any` containing the return value, or `xll::Nil`
+         *         if the function name is not registered or has no resolved symbol.
+         *
          * @code
-         * auto result = session.call("ADD.NUMBERS", a, b);
+         * xll::Number a{ 3.0 }, b{ 4.0 };
+         * xll::Any result = session.call("ADD.NUMBERS", a, b);
          * @endcode
          */
         template<typename... Args>
