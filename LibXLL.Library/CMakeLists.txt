@@ -3,7 +3,8 @@ if (NOT WIN32)
     target_include_directories(LinuxUtils INTERFACE Utils/linux)
 endif (NOT WIN32)
 
-add_library(CommonUtils INTERFACE)
+add_library(CommonUtils INTERFACE
+        Types/Native.hpp)
 target_include_directories(CommonUtils INTERFACE Utils/common)
 
 add_library(ExcelSDK INTERFACE)

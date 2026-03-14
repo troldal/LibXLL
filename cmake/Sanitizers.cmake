@@ -144,8 +144,7 @@ function(target_enable_sanitizer target sanitizer)
         # Link the dynamic ASan runtime
         target_link_directories(${target} PRIVATE "${_lib_dir}")
         target_link_libraries(${target} PRIVATE clang_rt.asan_dynamic-x86_64.lib)
-        target_link_options(${target} PRIVATE
-                /wholearchive:clang_rt.asan_dynamic_runtime_thunk-x86_64.lib)
+        target_link_options(${target} PRIVATE /wholearchive:clang_rt.asan_dynamic_runtime_thunk-x86_64.lib)
 
         # Copy the runtime DLL next to the executable so it can be found without
         # modifying PATH

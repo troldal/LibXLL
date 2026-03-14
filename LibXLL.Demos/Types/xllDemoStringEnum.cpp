@@ -161,3 +161,29 @@ XLL_FUNCTION xll::Expected<xll::Number>* XLLAPI DirectionIndex(const xll::Any* a
     result = xll::Expected<xll::Number>(xll::Number(static_cast<double>(dir->index())));
     return &result;
 }
+
+auto inverseBool =
+    xll::Function("PRINT.ARRAY")
+    | xll::Result<xll::MatrixView>()
+    | xll::Procedure("PrintArray")
+    | xll::Parameter<xll::MatrixView>("Boolean",
+        "The boolean to be inversed")
+    | xll::Category("StringEnum Examples")
+    | xll::Description(
+        "Returns the zero-based index of the direction "
+        "(0=North, 1=South, 2=East, 3=West). "
+        "Returns #VALUE! for unrecognised input.");
+XLL_REGISTER(inverseBool);
+
+XLL_FUNCTION const xll::MatrixView* XLLAPI PrintArray(const xll::MatrixView* arg)
+{
+    // static xll::Bool result;
+    thread_local xll::MatrixView::UniquePtr res;
+
+    const xll::Matrix m = *arg;
+    res = m.make_view();
+
+    // result = xll::Bool(true);
+    // return &result;
+    return res.get();
+}

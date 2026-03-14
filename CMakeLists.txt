@@ -43,7 +43,7 @@ CPMAddPackage(
         URL_HASH SHA256=aca59f889f0f32028ad88ba6764582b63c916ce5f77b31289ad19421a96c555f
         SYSTEM YES  # Marks Boost include directories as SYSTEM to suppress warnings from Boost headers.
         OPTIONS "BOOST_ENABLE_CMAKE ON" "BOOST_SKIP_INSTALL_RULES ON" # Set `OFF` for installation
-        "BUILD_SHARED_LIBS OFF" "BOOST_INCLUDE_LIBRARIES dll" # Note the escapes!
+        "BUILD_SHARED_LIBS OFF" "BOOST_INCLUDE_LIBRARIES dll\\\;nowide" # Note the escapes!
 )
 
 add_subdirectory(LibXLL.Library)

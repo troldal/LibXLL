@@ -6,6 +6,8 @@
 
 #include "../Types/Array.hpp"
 #include "../Types/StringEnum.hpp"
+#include "Types/MatrixView.hpp"
+#include "Types/Native.hpp"
 
 namespace xll
 {
@@ -23,84 +25,53 @@ namespace xll::traits
     struct arg_traits;
 
     template<>
-    struct arg_traits<bool>
+    struct arg_traits<xll::NativeBool>
     {
         static constexpr std::string_view excel_type = "A";
     };
 
     template<>
-    struct arg_traits<double>
+    struct arg_traits<xll::NativeDouble>
     {
         static constexpr std::string_view excel_type = "B";
     };
 
     template<>
-    struct arg_traits<std::string>
+    struct arg_traits<xll::NativeString>
     {
         static constexpr std::string_view excel_type = "C";
     };
 
     template<>
-    struct arg_traits<std::string_view>
+    struct arg_traits<xll::NativeWString>
     {
-        static constexpr std::string_view excel_type = "C";
+        static constexpr std::string_view excel_type = "C%";
     };
 
     template<>
-    struct arg_traits<String>
+    struct arg_traits<xll::NativeUInt16>
     {
-        static constexpr std::string_view excel_type = "Q";
+        static constexpr std::string_view excel_type = "H";
     };
 
     template<>
-    struct arg_traits<Number>
+    struct arg_traits<xll::NativeInt16>
     {
-        static constexpr std::string_view excel_type = "Q";
-    };
-
-    template<typename T>
-    struct arg_traits<Array<T>>
-    {
-        static constexpr std::string_view excel_type = "Q";
-    };
-
-    template<typename T>
-    struct arg_traits<Variant<T>>
-    {
-        static constexpr std::string_view excel_type = "Q";
-    };
-
-    template<typename T>
-    struct arg_traits<Expected<T, xll::Error>>
-    {
-        static constexpr std::string_view excel_type = "Q";
-    };
-
-    template<typename T>
-    struct arg_traits<Optional<T>>
-    {
-        static constexpr std::string_view excel_type = "Q";
+        static constexpr std::string_view excel_type = "I";
     };
 
     template<>
-    struct arg_traits<Any>
+    struct arg_traits<xll::NativeInt32>
     {
-        static constexpr std::string_view excel_type = "Q";
+        static constexpr std::string_view excel_type = "J";
     };
 
-    template<fixstr::basic_fixed_string... Strings>
-    struct arg_traits<StringEnum<Strings...>>
+    template<>
+    struct arg_traits<xll::MatrixView>
     {
-        // StringEnum inherits from xll::String — same XLOPER12 layout, same type code.
-        static constexpr std::string_view excel_type = "Q";
+        static constexpr std::string_view excel_type = "K%";
     };
 
-    // Catch-all for any xll type not otherwise explicitly specialised above.
-    // Covers Bool, Int, Error, Missing, Nil, and any future xll types added
-    // to the library.  All are XLOPER12-based and share the same "Q" type code.
-    // Explicit full specialisations (String, Number, Any, …) always take
-    // precedence over this partial specialisation in the C++ template
-    // partial-ordering rules.
     template<typename T>
         requires is_xll_type<T>
     struct arg_traits<T>
