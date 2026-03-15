@@ -73,32 +73,12 @@ namespace xll
 
         inline static std::vector<impl::FunctionArgs> functionArgs {};
 
-        // std::string m_text {};
-
-    public:
-        // enum Visibility { Hidden = 0, Visible = 1 };
-
         Function() = default;
-        // Function() : m_text {"Hello, World!"} {}
 
         explicit Function(const xll::String& funcName)
         {
             args.functionName = funcName;
         }
-
-
-
-
-        xll::String join(const std::vector<xll::String>& strings, const xll::String& delimiter)
-        {
-            if (strings.empty()) return {};
-
-            return std::accumulate(std::next(strings.begin()),
-                                   strings.end(),
-                                   strings[0],
-                                   [&delimiter](const xll::String& a, const xll::String& b) { return a + delimiter + b; });
-        }
-
 
         template<typename TReturn>
         Function& Result()

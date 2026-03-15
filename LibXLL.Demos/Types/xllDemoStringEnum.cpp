@@ -164,15 +164,15 @@ XLL_FUNCTION xll::Expected<xll::Number>* XLLAPI DirectionIndex(const xll::Any* a
 
 auto inverseBool =
     xll::Function("PRINT.ARRAY")
-    | xll::Result<xll::MatrixBuffer>()
-    | xll::Procedure("PrintArray")
-    | xll::Parameter<xll::MatrixBuffer>("Boolean",
-        "The boolean to be inversed")
-    | xll::Category("StringEnum Examples")
-    | xll::Description(
-        "Returns the zero-based index of the direction "
-        "(0=North, 1=South, 2=East, 3=West). "
-        "Returns #VALUE! for unrecognised input.");
+        .Result<xll::MatrixBuffer>()
+        .Procedure("PrintArray")
+        .Parameter<xll::MatrixBuffer>("Boolean", "The boolean to be inversed")
+        .Category("StringEnum Examples")
+        .Hidden()
+        .Description(
+            "Returns the zero-based index of the direction "
+            "(0=North, 1=South, 2=East, 3=West). "
+            "Returns #VALUE! for unrecognised input.");
 XLL_REGISTER(inverseBool);
 
 XLL_FUNCTION const xll::MatrixBuffer* XLLAPI PrintArray(const xll::MatrixBuffer* arg)
@@ -182,3 +182,4 @@ XLL_FUNCTION const xll::MatrixBuffer* XLLAPI PrintArray(const xll::MatrixBuffer*
     std::ranges::transform(res, res.begin(), [](double x) { return x * 2.0; });
     return res.get();
 }
+

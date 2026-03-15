@@ -56,6 +56,7 @@
 #include <xlcall.hpp>
 #include <ranges>
 #include <algorithm>
+#include <numeric>
 
 #ifndef _WIN32
 #include <utf8.h>
@@ -799,6 +800,16 @@ namespace xll
         });
 
         return String(result); // NOLINT
+    }
+
+    inline xll::String join(const std::vector<xll::String>& strings, const xll::String& delimiter)
+    {
+        if (strings.empty()) return {};
+
+        return std::accumulate(std::next(strings.begin()),
+                               strings.end(),
+                               strings[0],
+                               [&delimiter](const xll::String& a, const xll::String& b) { return a + delimiter + b; });
     }
 
 }    // namespace xll
