@@ -6,7 +6,7 @@
 
 #include "../Types/Array.hpp"
 #include "../Types/StringEnum.hpp"
-#include "Types/MatrixView.hpp"
+#include "Types/MatrixBuffer.hpp"
 #include "Types/Native.hpp"
 
 namespace xll
@@ -67,7 +67,7 @@ namespace xll::traits
     };
 
     template<>
-    struct arg_traits<xll::MatrixView>
+    struct arg_traits<xll::MatrixBuffer>
     {
         static constexpr std::string_view excel_type = "K%";
     };

@@ -164,9 +164,9 @@ XLL_FUNCTION xll::Expected<xll::Number>* XLLAPI DirectionIndex(const xll::Any* a
 
 auto inverseBool =
     xll::Function("PRINT.ARRAY")
-    | xll::Result<xll::MatrixView>()
+    | xll::Result<xll::MatrixBuffer>()
     | xll::Procedure("PrintArray")
-    | xll::Parameter<xll::MatrixView>("Boolean",
+    | xll::Parameter<xll::MatrixBuffer>("Boolean",
         "The boolean to be inversed")
     | xll::Category("StringEnum Examples")
     | xll::Description(
@@ -175,15 +175,10 @@ auto inverseBool =
         "Returns #VALUE! for unrecognised input.");
 XLL_REGISTER(inverseBool);
 
-XLL_FUNCTION const xll::MatrixView* XLLAPI PrintArray(const xll::MatrixView* arg)
+XLL_FUNCTION const xll::MatrixBuffer* XLLAPI PrintArray(const xll::MatrixBuffer* arg)
 {
-    // static xll::Bool result;
-    thread_local xll::MatrixView::UniquePtr res;
-
-    const xll::Matrix m = *arg;
-    res = m.make_view();
-
-    // result = xll::Bool(true);
-    // return &result;
+    thread_local xll::Matrix res;
+    res = *arg;
+    std::ranges::transform(res, res.begin(), [](double x) { return x * 2.0; });
     return res.get();
 }

@@ -52,6 +52,10 @@ add_executable(DemoStringEnum Types/DemoStringEnum.cpp)
 target_link_libraries(DemoStringEnum PUBLIC LibXLL project_warnings project_hardening)
 target_compile_definitions(DemoStringEnum PRIVATE NOMINMAX)
 
+add_executable(DemoMatrix Types/DemoMatrix.cpp)
+target_link_libraries(DemoMatrix PUBLIC LibXLL project_warnings project_hardening)
+target_compile_definitions(DemoMatrix PRIVATE NOMINMAX)
+
 # Deliberate-leak demo used to verify ASan is wired up correctly.
 # The plain target runs without sanitizers; DemoAsanLeak.address enables ASan.
 add_executable(DemoAsanLeak Utils/DemoAsanLeak.cpp)
@@ -109,6 +113,11 @@ if (NOT WIN32)
         add_executable(exeDemo.${sanitizer} exeDemo.cpp)
         target_link_libraries(exeDemo.${sanitizer} PUBLIC LibXLL project_warnings project_hardening)
         target_enable_sanitizer(exeDemo.${sanitizer} ${sanitizer})
+
+        add_executable(DemoMatrix.${sanitizer} Types/DemoMatrix.cpp)
+        target_link_libraries(DemoMatrix.${sanitizer} PUBLIC LibXLL project_warnings project_hardening)
+        target_compile_definitions(DemoMatrix.${sanitizer} PRIVATE NOMINMAX)
+        target_enable_sanitizer(DemoMatrix.${sanitizer} ${sanitizer})
 
         add_library(xllDemoScalarValidation.${sanitizer} SHARED Types/xllDemoScalarValidation.cpp)
         target_link_libraries(xllDemoScalarValidation.${sanitizer} PUBLIC LibXLL)
