@@ -97,6 +97,21 @@ set_target_properties(xllDemoScalarValidation PROPERTIES OUTPUT_NAME "scalar_val
 target_compile_definitions(xllDemoScalarValidation PRIVATE NOMINMAX)
 
 if (WIN32)
+    add_library(xllDemoWxDialog SHARED Types/xllDemoWxDialog.cpp)
+    target_link_libraries(xllDemoWxDialog PUBLIC LibXLL project_warnings project_hardening wx::core wx::base)
+    set_target_properties(xllDemoWxDialog PROPERTIES OUTPUT_NAME "wx_dialog_demo" SUFFIX ".xll")
+    target_compile_definitions(xllDemoWxDialog PRIVATE NOMINMAX
+        # /sdl (from project_hardening) promotes C4996 "deprecated function" to
+        # an error AFTER /wd4996 has suppressed it, because /sdl is processed
+        # later on the command line and overrides /wd flags.  The only fix that
+        # wins against /sdl is _CRT_SECURE_NO_WARNINGS, which tells the CRT
+        # headers to omit the deprecation markup entirely at the preprocessor
+        # level - the warning is never emitted so /sdl has nothing to promote.
+        $<$<CXX_COMPILER_ID:MSVC>:_CRT_SECURE_NO_WARNINGS>
+    )
+    # No post-build DLL copy needed: wxWidgets is statically linked
+    # (BUILD_SHARED_LIBS OFF), so TARGET_RUNTIME_DLLS is empty.
+
     add_executable(wxDemo WIN32 wxDemo.cpp wxDemo.rc)
     target_link_libraries(wxDemo PRIVATE wx::core wx::base)
     target_compile_definitions(wxDemo PRIVATE NOMINMAX)
@@ -106,13 +121,7 @@ if (WIN32)
     if (MSVC)
         target_link_options(wxDemo PRIVATE /MANIFEST:NO)
     endif()
-    # Automatically copy wxWidgets DLLs next to the executable after each build.
-    add_custom_command(TARGET wxDemo POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            $<TARGET_RUNTIME_DLLS:wxDemo>
-            $<TARGET_FILE_DIR:wxDemo>
-        COMMAND_EXPAND_LISTS
-    )
+    # No post-build DLL copy needed: wxWidgets is statically linked.
 endif()
 
 add_executable(DemoMockExcelScalar Types/DemoMockExcelScalar.cpp)

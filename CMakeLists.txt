@@ -64,6 +64,16 @@ if (WIN32)
                 # requires the complete type via std::default_delete. Disabling the
                 # grid prevents the offending translation unit from being compiled.
                 "wxUSE_GRID OFF"
+                # Build wxWidgets as static libraries so that targets linking wx
+                # (wxDemo.exe, xllDemoWxDialog.xll) are self-contained.
+                # XLLs MUST be statically linked to wx: when Excel calls
+                # LoadLibrary on an XLL, Windows resolves the XLL's DLL imports
+                # using the standard search order (exe dir, PATH, system dirs) –
+                # the XLL's own directory is NOT searched.  Any missing wx DLLs
+                # cause LoadLibrary to fail, which Excel reports as "file format
+                # and extension don't match".  Static linking eliminates the
+                # external DLL dependency entirely.
+                "BUILD_SHARED_LIBS OFF"
     )
 endif()
 
