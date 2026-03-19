@@ -10,6 +10,7 @@
 #include "Types/Bool.hpp"
 #include "Types/Error.hpp"
 #include "Types/Expected.hpp"
+#include "Types/Handle.hpp"
 #include "Types/Int.hpp"
 #include "Types/Matrix.hpp"
 #include "Types/MatrixBuffer.hpp"
@@ -23,3 +24,6 @@
 #include "Types/String.hpp"
 #include "Types/Tuple.hpp"
 #include "Types/Variant.hpp"
+
+#include "xlFunctions/GetHwnd.hpp"
+#include "xlFunctions/GetInst.hpp"

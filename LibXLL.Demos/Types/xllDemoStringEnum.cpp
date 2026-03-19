@@ -24,6 +24,7 @@
 // Optional value and are therefore guaranteed to succeed.
 
 #include <Auto.hpp>
+#include <Commands.hpp>
 #include <Functions.hpp>
 #include <Register.hpp>
 #include <Types.hpp>
@@ -181,5 +182,52 @@ XLL_FUNCTION const xll::MatrixBuffer* XLLAPI PrintArray(const xll::MatrixBuffer*
     res = *arg;
     std::ranges::transform(res, res.begin(), [](double x) { return x * 2.0; });
     return res.get();
+}
+
+// ============================================================================
+// Command: HELLO.CONSOLE
+// ============================================================================
+
+auto helloConsoleCmd =
+    xll::Command("HELLO.CONSOLE")
+    | xll::Procedure("HelloConsole")
+    | xll::ShortcutKey("H")
+    | xll::Category("StringEnum Examples")
+    | xll::Help("https://kinetiq.dev")
+    | xll::Description("Writes a greeting message to the console.");
+XLL_REGISTER(helloConsoleCmd);
+
+XLL_FUNCTION void XLLAPI HelloConsole()
+{
+    //std::cerr << "[HELLO.CONSOLE] Hello from the StringEnum demo!\n";
+    //xll::alert("Hello from the StringEnum demo!", xll::Alert::Question);
+
+    // xll::Array<xll::Any> arr{
+    //     xll::Nil{}, xll::Nil{}, xll::Nil{}, xll::Number{372}, xll::Number{200}, "Logon"_xs, xll::Nil{},
+    //     xll::Number{1}, xll::Number{50}, xll::Number{170}, xll::Number{90}, xll::Nil{}, "OK"_xs, xll::Nil{},
+    //     xll::Number{2}, xll::Number{150}, xll::Number{170}, xll::Number{90}, xll::Nil{}, "Cancel"_xs, xll::Nil{},
+    //     xll::Number{24}, xll::Number{250}, xll::Number{170}, xll::Number{90}, xll::Nil{}, "Help"_xs, "https://kinetiq.dev!0"_xs,
+    //     xll::Number{5}, xll::Number{40}, xll::Number{10}, xll::Nil{}, xll::Nil{}, "Please enter your username and password"_xs, xll::Nil{},
+    //     xll::Number{14}, xll::Number{40}, xll::Number{35}, xll::Number{290}, xll::Number{100}, xll::Nil{}, xll::Nil{},
+    //     xll::Number{5}, xll::Number{50}, xll::Number{53}, xll::Nil{}, xll::Nil{}, "Username"_xs, xll::Nil{},
+    //     xll::Number{6}, xll::Number{150}, xll::Number{50}, xll::Nil{}, xll::Nil{}, xll::Nil{}, "MyName"_xs,
+    //     xll::Number{5}, xll::Number{50}, xll::Number{73}, xll::Nil{}, xll::Nil{}, "Password"_xs, xll::Nil{},
+    //     xll::Number{6}, xll::Number{150}, xll::Number{70}, xll::Nil{}, xll::Nil{}, xll::Nil{}, "**********"_xs,
+    //     xll::Number{13}, xll::Number{50}, xll::Number{110}, xll::Nil{}, xll::Nil{}, "Remember username and password"_xs, xll::Bool{true}
+    // };
+    // arr.val.array.columns = 7;
+    // arr.val.array.rows = 11;
+    //
+    // xll::Array<xll::Any> res;
+    // Excel12(xlfDialogBox, &res, 1, &arr);
+
+    auto result = xll::dialog::Dialog("Logon")
+        .Size(372, 200)
+        .Add(xll::dialog::OkButton("OK").At(50, 140).Size(90, 10))
+        .Add(xll::dialog::TextBox("MyName").At(150, 50))
+        .show();
+
+    auto hwnd = xll::get_hwnd();
+    std::cout << "Excel window handle: " << hwnd << std::endl;
 }
 

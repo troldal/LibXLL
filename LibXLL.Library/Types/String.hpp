@@ -49,9 +49,10 @@
 
 #include "Base.hpp"
 #include <memory>
-#include <optional>
+#include <numeric>
 #include <stdexcept>
 #include <string>
+#include <vector>
 #include <string_view>
 #include <xlcall.hpp>
 #include <ranges>

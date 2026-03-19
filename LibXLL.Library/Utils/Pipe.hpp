@@ -54,8 +54,13 @@ namespace xll
     //     return std::invoke(std::forward<TFunc>(f), std::forward<xll::Function>(t));
     // }
 
+    /// Satisfied by any type that can be used as the left-hand side of a
+    /// registration pipeline (`xll::Function` or `xll::Command`).
+    template<typename T>
+    concept XllBuilder = std::same_as<T, xll::Function> || std::same_as<T, xll::Command>;
+
     template<typename TFunc, typename TCallable>
-        requires std::same_as<TFunc, xll::Function> && std::invocable<TCallable, TFunc>
+        requires XllBuilder<TFunc> && std::invocable<TCallable, TFunc>
     constexpr auto operator|(TFunc&& f, TCallable&& callable) -> std::invoke_result_t<TCallable, TFunc>
     {
         return std::invoke(std::forward<TCallable>(callable), std::forward<TFunc>(f));

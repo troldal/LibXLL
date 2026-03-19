@@ -6,3 +6,4 @@
 
 #include "Macros/Defines.hpp"
 #include "xlCommands/Alert.hpp"
+#include "xlCommands/Dialog.hpp"

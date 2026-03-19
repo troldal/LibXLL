@@ -1,0 +1,8 @@
+// wxDemo.rc
+// Embeds the application manifest so that Common Controls Library v6 is
+// activated at runtime.  Numeric IDs are used (CREATEPROCESS_MANIFEST_RESOURCE_ID
+// = 1, RT_MANIFEST = 24) so that no Windows headers are needed during the
+// resource-compiler pass – compatible with both windres (MinGW/Clang) and
+// rc.exe (MSVC).
+1 24 "wxDemo.manifest"
+

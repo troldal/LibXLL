@@ -24,7 +24,7 @@ namespace xll
 
     namespace impl
     {
-        struct FunctionArgs
+        struct ProcedureArgs
         {
             xll::String modulePath;
             xll::String returnType;
@@ -43,36 +43,82 @@ namespace xll
             std::vector<xll::String> argumentHelp;
         };
 
-        xll::String ProcedureName(const impl::FunctionArgs&);
-        xll::String FunctionSignature(const impl::FunctionArgs&);
-        xll::String FunctionName(const impl::FunctionArgs&);
-        xll::String FunctionArguments(const impl::FunctionArgs&);
-        xll::Int    FunctionVisibility(const impl::FunctionArgs&);
-        xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number> FunctionCategory(const impl::FunctionArgs&);
-        xll::String FunctionDescription(const impl::FunctionArgs&);
-        xll::String FunctionHelp(const impl::FunctionArgs&);
-        std::vector<xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number>> All(const impl::FunctionArgs&);
+        xll::String ProcedureName(const impl::ProcedureArgs&);
+        xll::String FunctionSignature(const impl::ProcedureArgs&);
+        xll::String FunctionName(const impl::ProcedureArgs&);
+        xll::String FunctionArguments(const impl::ProcedureArgs&);
+        xll::Int    FunctionVisibility(const impl::ProcedureArgs&);
+        xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number> FunctionCategory(const impl::ProcedureArgs&);
+        xll::String FunctionDescription(const impl::ProcedureArgs&);
+        xll::String FunctionHelp(const impl::ProcedureArgs&);
+        xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number> ShortcutKey(const impl::ProcedureArgs&);
+        std::vector<xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number>> All(const impl::ProcedureArgs&);
     }
 
-    // template<typename TReturn>
-    class Function
+    // -----------------------------------------------------------------------
+    // FunctionBase — common data and builder methods shared by Function and
+    // Command.  The deducing-this pattern lets each method return a reference
+    // to the most-derived type, keeping builder chains well-typed.
+    // -----------------------------------------------------------------------
+    class FunctionBase
     {
-        friend xll::String impl::ProcedureName(const impl::FunctionArgs&);
-        friend xll::String impl::FunctionSignature(const impl::FunctionArgs&);
-        friend xll::String impl::FunctionName(const impl::FunctionArgs&);
-        friend xll::String impl::FunctionArguments(const impl::FunctionArgs&);
-        friend xll::Int    impl::FunctionVisibility(const impl::FunctionArgs&);
-        friend xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number> FunctionCategory(const impl::FunctionArgs&);
-        friend xll::String FunctionDescription(const impl::FunctionArgs&);
-        friend xll::String FunctionHelp(const impl::FunctionArgs&);
-        friend std::vector<xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number>> All(const impl::FunctionArgs&);
+    public:
+        impl::ProcedureArgs args {};
+
+        inline static std::vector<impl::ProcedureArgs> functionArgs {};
+
+        /// Sets the name of the exported C/C++ procedure in the DLL.
+        template<typename Self>
+        auto& Procedure(this Self& self, const xll::String& procedureName)
+        {
+            self.args.procedureName = procedureName;
+            return self;
+        }
+
+        /// Sets the function-wizard / Macro-dialog category.
+        template<typename Self>
+        auto& Category(this Self& self, const xll::String& category)
+        {
+            self.args.functionCategory = category;
+            return self;
+        }
+
+        /// Sets the description shown in the Function Wizard / Macro dialog.
+        template<typename Self>
+        auto& Description(this Self& self, const xll::String& description)
+        {
+            self.args.functionDescription = description;
+            return self;
+        }
+
+        /**
+         * @brief Sets the help topic URL.
+         * @param help  URL of the help page (without the `!0` suffix —
+         *              that is appended automatically by the free `Help()`
+         *              pipeline wrapper).
+         */
+        template<typename Self>
+        auto& Help(this Self& self, const xll::String& help)
+        {
+            self.args.functionHelpTopic = help;
+            return self;
+        }
+    };
+
+    // template<typename TReturn>
+    class Function : public FunctionBase
+    {
+        friend xll::String impl::ProcedureName(const impl::ProcedureArgs&);
+        friend xll::String impl::FunctionSignature(const impl::ProcedureArgs&);
+        friend xll::String impl::FunctionName(const impl::ProcedureArgs&);
+        friend xll::String impl::FunctionArguments(const impl::ProcedureArgs&);
+        friend xll::Int    impl::FunctionVisibility(const impl::ProcedureArgs&);
+        friend xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number> FunctionCategory(const impl::ProcedureArgs&);
+        friend xll::String FunctionDescription(const impl::ProcedureArgs&);
+        friend xll::String FunctionHelp(const impl::ProcedureArgs&);
+        friend std::vector<xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number>> All(const impl::ProcedureArgs&);
 
     public:
-
-        impl::FunctionArgs args {};
-
-        inline static std::vector<impl::FunctionArgs> functionArgs {};
-
         Function() = default;
 
         explicit Function(const xll::String& funcName)
@@ -84,12 +130,6 @@ namespace xll
         Function& Result()
         {
             args.returnType = xll::String(traits::arg_traits<TReturn>::excel_type);
-            return *this;
-        }
-
-        Function& Procedure(const xll::String& procedureName)
-        {
-            args.procedureName = procedureName;
             return *this;
         }
 
@@ -111,24 +151,6 @@ namespace xll
         Function& Hidden()
         {
             args.visibility = 0;
-            return *this;
-        }
-
-        Function& Category(const xll::String& category)
-        {
-            args.functionCategory = category;
-            return *this;
-        }
-
-        Function& Description(const xll::String& functionDescription)
-        {
-            args.functionDescription = functionDescription;
-            return *this;
-        }
-
-        Function& Help(const xll::String& functionHelp)
-        {
-            args.functionHelpTopic = functionHelp;
             return *this;
         }
 
@@ -155,13 +177,13 @@ namespace xll
 
     inline auto Procedure(const xll::String& procedureName)
     {
-        return [procedureName](Function&& lhs) { return lhs.Procedure(procedureName); };
+        return [procedureName](auto&& lhs) { return lhs.Procedure(procedureName); };
     }
 
     template<typename TArgument>
     auto Parameter(const xll::String& name, const xll::String& help)
     {
-        return [name,help](Function&& lhs) { return lhs.Parameter<TArgument>(name, help); };
+        return [name, help](Function&& lhs) { return lhs.Parameter<TArgument>(name, help); };
     }
 
     inline auto Hidden()
@@ -171,17 +193,17 @@ namespace xll
 
     inline auto Category(const xll::String& category)
     {
-        return [category](Function&& lhs) { return lhs.Category(category); };
+        return [category](auto&& lhs) { return lhs.Category(category); };
     }
 
     inline auto Description(const xll::String& functionDescription)
     {
-        return [functionDescription](Function&& lhs) { return lhs.Description(functionDescription); };
+        return [functionDescription](auto&& lhs) { return lhs.Description(functionDescription); };
     }
 
     inline auto Help(const xll::String& functionHelp)
     {
-        return [functionHelp](Function&& lhs) { return lhs.Help(functionHelp + "!0"); };
+        return [functionHelp](auto&& lhs) { return lhs.Help(functionHelp + "!0"); };
     }
 
     inline auto Register()
@@ -196,23 +218,29 @@ namespace xll
 
     namespace impl
     {
-        inline xll::String ProcedureName(const impl::FunctionArgs& args) { return args.procedureName; }
+        inline xll::String ProcedureName(const impl::ProcedureArgs& args) { return args.procedureName; }
 
-        inline xll::String FunctionSignature(const impl::FunctionArgs& args) { return args.returnType + args.argTypes + args.threadSafety; }
+        inline xll::String FunctionSignature(const impl::ProcedureArgs& args) { return args.returnType + args.argTypes + args.threadSafety; }
 
-        inline xll::String FunctionName(const impl::FunctionArgs& args) { return args.functionName; }
+        inline xll::String FunctionName(const impl::ProcedureArgs& args) { return args.functionName; }
 
-        inline xll::String FunctionArguments(const impl::FunctionArgs& args) { return args.argNames; }
+        inline xll::String FunctionArguments(const impl::ProcedureArgs& args) { return args.argNames; }
 
-        inline xll::Int FunctionVisibility(const impl::FunctionArgs& args) { return args.visibility; }
+        inline xll::Int FunctionVisibility(const impl::ProcedureArgs& args) { return args.visibility; }
 
-        inline xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number> FunctionCategory(const impl::FunctionArgs& args) { return args.functionCategory; }
+        inline xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number> FunctionCategory(const impl::ProcedureArgs& args) { return args.functionCategory; }
 
-        inline xll::String FunctionDescription(const impl::FunctionArgs& args) { return args.functionDescription; }
+        inline xll::String FunctionDescription(const impl::ProcedureArgs& args) { return args.functionDescription; }
 
-        inline xll::String FunctionHelp(const impl::FunctionArgs& args) { return args.functionHelpTopic; }
+        inline xll::String FunctionHelp(const impl::ProcedureArgs& args) { return args.functionHelpTopic; }
 
-        inline std::vector<xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number>> All(const impl::FunctionArgs& args)
+        inline xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number> ShortcutKey(const impl::ProcedureArgs& args)
+        {
+            if (args.shortcutKey.empty()) return xll::Nil();
+            return args.shortcutKey;
+        }
+
+        inline std::vector<xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number>> All(const impl::ProcedureArgs& args)
         {
             auto result = std::vector<xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number>> {};
             result.emplace_back(xll::get_name());
@@ -222,7 +250,7 @@ namespace xll
             result.emplace_back(FunctionArguments(args));
             result.emplace_back(FunctionVisibility(args));
             result.emplace_back(FunctionCategory(args));
-            result.emplace_back(xll::Nil());
+            result.emplace_back(ShortcutKey(args));
             result.emplace_back(FunctionHelp(args));
             result.emplace_back(FunctionDescription(args));
 
@@ -235,4 +263,76 @@ namespace xll
         }
     }    // namespace impl
 
+    // -----------------------------------------------------------------------
+    // Command — builder for Excel XLL command macros (macro type 2).
+    //
+    // Commands differ from Functions in three ways:
+    //   • visibility is 2 (command/macro) rather than 1 (worksheet function).
+    //   • shortcutKey is meaningful; returnType and argTypes are not used.
+    //   • There are no parameters — Excel does not pass arguments to commands.
+    // -----------------------------------------------------------------------
+    class Command : public FunctionBase
+    {
+    public:
+        Command() = default;
+
+        /**
+         * @brief Constructs a Command with the given name.
+         *
+         * Sets `visibility` to 2 (Excel macro type for commands) so that
+         * `xlfRegister` registers the procedure as a command rather than a
+         * worksheet function.
+         *
+         * @param commandName  The name Excel users use to run the command.
+         */
+        explicit Command(const xll::String& commandName)
+        {
+            args.functionName = commandName;
+            args.visibility   = 2;
+        }
+
+        /**
+         * @brief Sets the keyboard shortcut used to run this command.
+         *
+         * @param key  A single uppercase letter (e.g. `"A"`).  Excel runs the
+         *             command when the user presses Ctrl+Shift+<key>.
+         */
+        Command& ShortcutKey(const xll::String& key)
+        {
+            args.shortcutKey = key;
+            return *this;
+        }
+
+        /// Pushes the completed command description into the shared
+        /// registration queue so that `xlAutoOpen` can register it with Excel.
+        void Register()
+        {
+            functionArgs.emplace_back(args);
+        }
+    };
+
+    // -----------------------------------------------------------------------
+    // Free-function pipeline wrapper — ShortcutKey (Command only)
+    // -----------------------------------------------------------------------
+
+    /**
+     * @brief Pipeline wrapper that sets the keyboard shortcut of a `Command`.
+     *
+     * @param key  A single uppercase letter.  Excel runs the command when the
+     *             user presses Ctrl+Shift+<key>.
+     *
+     * Usage:
+     * @code
+     * auto cmd = xll::Command("MY.CMD")
+     *          | xll::Procedure("MyCmd")
+     *          | xll::ShortcutKey("M");
+     * XLL_REGISTER(cmd);
+     * @endcode
+     */
+    inline auto ShortcutKey(const xll::String& key)
+    {
+        return [key](Command&& lhs) { return lhs.ShortcutKey(key); };
+    }
+
 }    // namespace xll
+

@@ -81,6 +81,11 @@ target_link_libraries(xllDemoStringEnum PUBLIC LibXLL project_warnings project_h
 set_target_properties(xllDemoStringEnum PROPERTIES OUTPUT_NAME "string_enum_demo" SUFFIX ".xll")
 target_compile_definitions(xllDemoStringEnum PRIVATE NOMINMAX)
 
+add_library(xllDemoHandle SHARED Types/xllDemoHandle.cpp)
+target_link_libraries(xllDemoHandle PUBLIC LibXLL project_warnings project_hardening)
+set_target_properties(xllDemoHandle PROPERTIES OUTPUT_NAME "handle_demo" SUFFIX ".xll")
+target_compile_definitions(xllDemoHandle PRIVATE NOMINMAX)
+
 add_library(xllDemoTuple SHARED Types/xllDemoTuple.cpp)
 target_link_libraries(xllDemoTuple PUBLIC LibXLL project_warnings project_hardening)
 set_target_properties(xllDemoTuple PROPERTIES OUTPUT_NAME "tuple_demo" SUFFIX ".xll")
@@ -90,6 +95,25 @@ add_library(xllDemoScalarValidation SHARED Types/xllDemoScalarValidation.cpp)
 target_link_libraries(xllDemoScalarValidation PUBLIC LibXLL project_warnings project_hardening)
 set_target_properties(xllDemoScalarValidation PROPERTIES OUTPUT_NAME "scalar_validation" SUFFIX ".xll" PREFIX "")
 target_compile_definitions(xllDemoScalarValidation PRIVATE NOMINMAX)
+
+if (WIN32)
+    add_executable(wxDemo WIN32 wxDemo.cpp wxDemo.rc)
+    target_link_libraries(wxDemo PRIVATE wx::core wx::base)
+    target_compile_definitions(wxDemo PRIVATE NOMINMAX)
+    # MSVC (and clang-cl) auto-generate a manifest and embed it at link time.
+    # We embed our own via wxDemo.rc, so suppress the auto-generated one to
+    # avoid a duplicate RT_MANIFEST resource (CVT1100 / LNK1123).
+    if (MSVC)
+        target_link_options(wxDemo PRIVATE /MANIFEST:NO)
+    endif()
+    # Automatically copy wxWidgets DLLs next to the executable after each build.
+    add_custom_command(TARGET wxDemo POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_RUNTIME_DLLS:wxDemo>
+            $<TARGET_FILE_DIR:wxDemo>
+        COMMAND_EXPAND_LISTS
+    )
+endif()
 
 add_executable(DemoMockExcelScalar Types/DemoMockExcelScalar.cpp)
 target_link_libraries(DemoMockExcelScalar PUBLIC MockXL)

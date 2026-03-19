@@ -46,6 +46,27 @@ CPMAddPackage(
         "BUILD_SHARED_LIBS OFF" "BOOST_INCLUDE_LIBRARIES dll\\\;nowide" # Note the escapes!
 )
 
+if (WIN32)
+    CPMAddPackage(
+            NAME wxWidgets
+            GITHUB_REPOSITORY wxWidgets/wxWidgets
+            GIT_TAG v3.3.2
+            OPTIONS
+                # Avoid the WebView2 SDK download/extraction that fails on Windows
+                # with a "Can't restore time" tar error.
+                "wxUSE_WEBVIEW_EDGE OFF"
+                # Work around a bug in wxWidgets 3.3.2: gridsel.h declares
+                # wxGridSelection (a dllexport class) with a
+                # std::unique_ptr<wxGridPrivate::SelectionShape> member, where
+                # SelectionShape is only forward-declared. MSVC and GCC tolerate
+                # this; clang-cl correctly rejects it with a hard error because
+                # dllexport forces instantiation of the implicit destructor, which
+                # requires the complete type via std::default_delete. Disabling the
+                # grid prevents the offending translation unit from being compiled.
+                "wxUSE_GRID OFF"
+    )
+endif()
+
 add_subdirectory(LibXLL.Library)
 
 if(PROJECT_IS_TOP_LEVEL)
