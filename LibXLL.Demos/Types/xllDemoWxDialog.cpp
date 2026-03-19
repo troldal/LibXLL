@@ -67,15 +67,15 @@ class NativeOwnerSetup
 public:
     NativeOwnerSetup(HWND windowHwnd, HWND ownerHwnd)
     {
-        ::SetWindowLongPtr(windowHwnd, GWLP_HWNDPARENT,
+        SetWindowLongPtr(windowHwnd, GWLP_HWNDPARENT,
                            reinterpret_cast<LONG_PTR>(ownerHwnd));
 
         RECT ow{}, wd{};
-        ::GetWindowRect(ownerHwnd,  &ow);
-        ::GetWindowRect(windowHwnd, &wd);
+        GetWindowRect(ownerHwnd,  &ow);
+        GetWindowRect(windowHwnd, &wd);
         const int dw = wd.right  - wd.left;
         const int dh = wd.bottom - wd.top;
-        ::SetWindowPos(windowHwnd, nullptr,
+        SetWindowPos(windowHwnd, nullptr,
                        ow.left + (ow.right  - ow.left - dw) / 2,
                        ow.top  + (ow.bottom - ow.top  - dh) / 2,
                        0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
@@ -96,13 +96,13 @@ public:
     NativeOwnerModal(HWND dialogHwnd, HWND ownerHwnd)
         : m_setup(dialogHwnd, ownerHwnd), m_owner(ownerHwnd)
     {
-        ::EnableWindow(ownerHwnd, FALSE);
+        EnableWindow(ownerHwnd, FALSE);
     }
 
     ~NativeOwnerModal()
     {
-        ::EnableWindow(m_owner, TRUE);
-        ::SetForegroundWindow(m_owner);
+        EnableWindow(m_owner, TRUE);
+        SetForegroundWindow(m_owner);
     }
 
     NativeOwnerModal(const NativeOwnerModal&)            = delete;
