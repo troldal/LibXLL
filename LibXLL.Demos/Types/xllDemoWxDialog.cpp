@@ -41,9 +41,12 @@
 #include "xlFunctions/ActiveCell.hpp"
 #include "xlFunctions/AppTitle.hpp"
 #include "xlFunctions/Documents.hpp"
+#include "xlFunctions/FormulaConvert.hpp"
 #include "xlFunctions/RefText.hpp"
 #include "xlFunctions/SheetId.hpp"
 #include "xlFunctions/Stack.hpp"
+
+#include <iostream>
 
 #include <wx/wx.h>
 
@@ -249,11 +252,14 @@ XLL_FUNCTION void XLLAPI ShowWxGreeting()
     if (dlg.ShowModal() == wxID_OK)
         xll::alert(xll::String("Hello, " + dlg.GetInput() + "!"));
 
-    // Demonstrate xll::ref_text(): convert the active cell's reference to its
-    // text representation and print it via xll::alert.
-    if (auto cell = xll::active_cell())
-        if (auto addr = xll::ref_text(*cell))
-            std::cerr << *addr << std::endl;
+    // convert_formula demo: convert =A1+B1 from A1 notation to R1C1.
+    const auto converted = xll::convert_formula(xll::String("=A1+B1"),
+                                                 xll::Bool(true),   // from_a1
+                                                 xll::Bool(false));  // to R1C1
+    if (converted)
+        std::cout << "convert_formula: =A1+B1 -> " << converted->to_string() << "\n";
+    else
+        std::cout << "convert_formula: conversion failed\n";
 }
 
 // ============================================================================

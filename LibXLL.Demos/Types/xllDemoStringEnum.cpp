@@ -181,6 +181,9 @@ XLL_FUNCTION const xll::MatrixBuffer* XLLAPI PrintArray(const xll::MatrixBuffer*
     thread_local xll::Matrix res;
     res = *arg;
     std::ranges::transform(res, res.begin(), [](double x) { return x * 2.0; });
+
+    auto caller = xll::caller();
+
     return res.get();
 }
 

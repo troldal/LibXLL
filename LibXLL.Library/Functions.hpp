@@ -19,6 +19,8 @@
 #include "xlFunctions/Dialog.hpp"
 #include "xlFunctions/ActiveCell.hpp"
 #include "xlFunctions/Set.hpp"
+#include "xlFunctions/Caller.hpp"
+
 
 
 
