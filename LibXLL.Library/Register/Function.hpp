@@ -243,7 +243,7 @@ namespace xll
         inline std::vector<xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number>> All(const impl::ProcedureArgs& args)
         {
             auto result = std::vector<xll::Variant<xll::Nil, xll::String, xll::Int, xll::Number>> {};
-            result.emplace_back(xll::get_name());
+            result.emplace_back(*xll::get_name());
             result.emplace_back(ProcedureName(args));
             result.emplace_back(FunctionSignature(args));
             result.emplace_back(FunctionName(args));

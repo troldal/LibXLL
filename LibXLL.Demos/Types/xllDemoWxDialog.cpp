@@ -38,6 +38,13 @@
 // and the subsequent winsock2.h inclusion would produce hundreds of
 // redefinition errors.
 
+#include "xlFunctions/ActiveCell.hpp"
+#include "xlFunctions/AppTitle.hpp"
+#include "xlFunctions/Documents.hpp"
+#include "xlFunctions/RefText.hpp"
+#include "xlFunctions/SheetId.hpp"
+#include "xlFunctions/Stack.hpp"
+
 #include <wx/wx.h>
 
 #include <Auto.hpp>
@@ -241,6 +248,12 @@ XLL_FUNCTION void XLLAPI ShowWxGreeting()
 
     if (dlg.ShowModal() == wxID_OK)
         xll::alert(xll::String("Hello, " + dlg.GetInput() + "!"));
+
+    // Demonstrate xll::ref_text(): convert the active cell's reference to its
+    // text representation and print it via xll::alert.
+    if (auto cell = xll::active_cell())
+        if (auto addr = xll::ref_text(*cell))
+            std::cerr << *addr << std::endl;
 }
 
 // ============================================================================
@@ -295,7 +308,8 @@ auto wxStatusCmd =
     | xll::Category("wxWidgets Examples")
     | xll::Description(
         "Shows a non-modal wxWidgets frame owned by the Excel window. "
-        "Excel remains fully interactive while the frame is open.");
+        "Excel remains fully interactive while the frame is open. "
+        "If the frame is already open, it is brought to the front.");
 XLL_REGISTER(wxStatusCmd);
 
 XLL_FUNCTION void XLLAPI ShowWxStatus()
@@ -305,15 +319,28 @@ XLL_FUNCTION void XLLAPI ShowWxStatus()
     HWND excelHwnd = xll::get_hwnd();
     if (!excelHwnd) return;
 
-    // Heap-allocate: the frame must outlive this function.
-    // wxWidgets deletes it automatically when the user closes it.
-    auto* frame = new StatusFrame();
+    // Lazily created once; persists for the lifetime of the XLL.
+    static StatusFrame* frame = nullptr;
 
-    // NativeOwnerSetup: sets owner + centres, but does NOT disable Excel.
+    if (!frame) {
+        frame = new StatusFrame();
+
+        // Closing the frame only hides it; it is never destroyed.
+        // Omitting e.Skip() suppresses the default Destroy() behaviour.
+        frame->Bind(wxEVT_CLOSE_WINDOW, [](wxCloseEvent&) {
+            frame->Hide();
+        });
+    }
+
+    // (Re-)set the owner and centre on Excel every time the frame is shown,
+    // in case Excel has been moved since the last time.
     NativeOwnerSetup setup(static_cast<HWND>(frame->GetHWND()), excelHwnd);
 
     frame->Show();
+    frame->Raise();
     // Returns immediately — Excel's message loop keeps the frame alive.
+
+
 }
 
 

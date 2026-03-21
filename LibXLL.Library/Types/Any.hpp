@@ -437,7 +437,10 @@ namespace xll
 
             // Reset source to Nil so its destructor does not attempt to free
             // the heap allocation that has just been transferred to *this.
-            std::destroy_at(std::launder(reinterpret_cast<xll::Nil*>(&src)));
+            // destroy_current() dispatches to the correct destructor for the
+            // live type in src (e.g. ~String(), ~Array<Any>()) rather than
+            // blindly calling ~Nil() regardless of what is actually stored.
+            src.destroy_current();
             std::construct_at(reinterpret_cast<xll::Nil*>(&src));
         }
 
@@ -564,17 +567,111 @@ namespace xll
     // =========================================================================
 
     /**
+     * @brief Retrieves a typed array value stored in an `xll::Any` as `Array<TValue>`.
+     *
+     * Handles two cases that the generic reinterpret-cast path cannot deliver correctly:
+     *
+     * **Case 1 — scalar held as TValue (1×1 array semantics)**
+     * `holds<Array<TValue>>` returns `true` for a scalar whose `xltype` matches
+     * `TValue::excel_type`, reflecting Excel's own rule that a single cell value is
+     * a valid 1×1 array.  This overload constructs a proper `Array<TValue>` with
+     * `rows=1, cols=1` using `Array`'s public constructor, rather than relying on
+     * `Array<TValue>`'s copy constructor being invoked on non-Array memory (which
+     * would be technically undefined behaviour).
+     *
+     * **Case 2 — actual `xltypeMulti` array**
+     * Each element is cast individually via `cast<TValue>(elem_any)`.  This avoids
+     * the crash that occurred in the old generic path when `Array<TValue>`'s copy
+     * constructor called `ensure(is_valid())` on elements whose `xltype` did not
+     * match `TValue::excel_type` exactly (e.g. `xltypeInt` elements in an
+     * `Array<Number>`).  A type mismatch on any element returns `xll::None` cleanly.
+     *
+     * **`Array<Any>` special case**
+     * `holds<Array<Any>>` only fires for `xltypeMulti`, and the live object at `&any`
+     * is a real `Array<Any>` placed via `std::construct_at<Array<Any>>` in
+     * `copy_from`.  The reinterpret path is valid here; no scalar handling is needed.
+     *
+     * @tparam TValue   Element type of the target array (deduced).
+     * @param  any      The `Any` object to cast from.
+     * @return          `Optional<Array<TValue>>` — engaged on success, `None` on mismatch.
+     *
+     * @code
+     * // Scalar → 1×1 array
+     * xll::Any any = xll::Number(3.14);
+     * auto a = xll::cast<xll::Array<xll::Number>>(any);  // Optional<Array<Number>>{{{3.14}}}
+     *
+     * // Actual array
+     * xll::Any arr = xll::Array<xll::Number>({ 1.0, 2.0, 3.0 });
+     * auto b = xll::cast<xll::Array<xll::Number>>(arr);  // Optional<Array<Number>> engaged
+     * auto c = xll::cast<xll::Array<xll::String>>(arr);  // None — element type mismatch
+     * @endcode
+     */
+    template<typename TTarget>
+        requires is_typed_array<TTarget> && is_xll_type<TTarget>
+    [[nodiscard]]
+    Optional<TTarget> cast(const Any& any)
+    {
+        using TValue = typename TTarget::value_type;
+
+        if (!holds<TTarget>(any)) return xll::None;
+
+        if constexpr (std::same_as<TValue, Any>) {
+            // The live object at &any is a valid Array<Any> — the reinterpret path
+            // is correct here; std::launder is valid because copy_from places the
+            // object via std::construct_at<Array<Any>>.
+            return Optional<TTarget>(
+                *std::launder(reinterpret_cast<const TTarget*>(&any)));
+        }
+        else {
+            // ── Case 1: scalar → 1×1 Array<TValue> ──────────────────────────
+            // holds<Array<TValue>> returns true for a scalar whose xltype equals
+            // TValue::excel_type. Construct the array via its public constructor
+            // to avoid UB from calling Array<TValue>'s copy ctor on Number memory.
+            if (any.type() != xltypeMulti) {
+                auto elem = cast<TValue>(any);
+                if (!elem) return xll::None;
+                return TTarget({ std::move(*elem) });  // 1-element Horizontal
+            }
+
+            // ── Case 2: actual xltypeMulti array → element-by-element cast ──
+            // The live object at &any is Array<Any> (placed by copy_from via
+            // std::construct_at<Array<Any>>). Its lparray holds live Any objects
+            // placed by Array<Any>'s own copy constructor.
+            const auto& src = *std::launder(reinterpret_cast<const Array<Any>*>(&any));
+            const auto nRows = static_cast<size_t>(src.val.array.rows);
+            const auto nCols = static_cast<size_t>(src.val.array.columns);
+            const size_t n   = nRows * nCols;
+
+            if (n == 0) return TTarget{};
+
+            TTarget result(nRows, nCols);
+            for (size_t i = 0; i < n; ++i) {
+                const Any& elem_any =
+                    *std::launder(reinterpret_cast<const Any*>(&src.val.array.lparray[i]));
+                auto elem = cast<TValue>(elem_any);
+                if (!elem) return xll::None;  // element type mismatch — fail cleanly
+                result[i] = std::move(*elem);
+            }
+            return result;
+        }
+    }
+
+    /**
      * @brief Retrieves the value stored in an `xll::Any` as `TTarget`.
      *
      * The type check is delegated to `xll::holds<TTarget>(any)`:
      * - For plain xll types the check is a simple xltype equality comparison.
-     * - For `xll::Array<T>` (where `T` is not `Any`) every element is also
-     *   inspected, returning `None` unless all elements are convertible to `T`.
      *
      * On success, returns a deep copy of the value wrapped in `Optional<TTarget>`.
      * On type mismatch, returns the disengaged state (`xll::None`).
      *
-     * @tparam TTarget  The xll type to cast to (must satisfy `is_xll_type`).
+     * @note  For `Array<T>` types use the dedicated `cast<Array<T>>` overload, which
+     *        handles the scalar-as-1×1-array case and per-element type conversion.
+     *        This overload is excluded from matching typed arrays by the
+     *        `!is_typed_array<TTarget>` constraint.
+     *
+     * @tparam TTarget  The xll type to cast to (must satisfy `is_xll_type`,
+     *                  must not be a typed array, tuple, or string-enum type).
      * @param  any      The `Any` object to cast from.
      * @return          `Optional<TTarget>` — engaged on success, `None` on mismatch.
      *
@@ -582,14 +679,10 @@ namespace xll
      * xll::Any any = xll::Number(3.14);
      * auto n = xll::cast<xll::Number>(any);   // Optional<Number> = 3.14
      * auto s = xll::cast<xll::String>(any);   // Optional<String> = None
-     *
-     * xll::Any arr = xll::Array<xll::Number>({ 1.0, 2.0, 3.0 });
-     * auto a = xll::cast<xll::Array<xll::Number>>(arr);  // Optional<Array<Number>> engaged
-     * auto b = xll::cast<xll::Array<xll::String>>(arr);  // Optional<Array<String>> = None
      * @endcode
      */
     template<typename TTarget>
-        requires is_xll_type<TTarget> && (!is_tuple_type<TTarget>) && (!is_string_enum_type<TTarget>)
+        requires is_xll_type<TTarget> && (!is_tuple_type<TTarget>) && (!is_string_enum_type<TTarget>) && (!is_typed_array<TTarget>)
     [[nodiscard]]
     Optional<TTarget> cast(const Any& any)
     {

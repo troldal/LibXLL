@@ -25,7 +25,7 @@ typedef signed int BOOL;			/* Boolean */
 typedef wchar_t XCHAR;			/* Wide Character */
 typedef signed int RW;			/* XL 12 Row */
 typedef signed int COL;	 	      	/* XL 12 Column */
-typedef unsigned long long  IDSHEET;		/* XL12 Sheet ID */
+typedef unsigned long long IDSHEET;		/* XL12 Sheet ID */
 
 /*
 ** XLREF structure
