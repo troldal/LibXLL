@@ -27,9 +27,9 @@ target_compile_definitions(Catch2ForOpenXLL PRIVATE NOMINMAX)
 # Default (no sanitizers)
 # ---------------------------------------------------------------------------
 
-add_executable(LibXLL.Tests ${UNIT_TEST_SOURCES})
-target_compile_definitions(LibXLL.Tests PRIVATE NOMINMAX)
-target_link_libraries(LibXLL.Tests
+add_executable(LibXLL.Tests.default ${UNIT_TEST_SOURCES})
+target_compile_definitions(LibXLL.Tests.default PRIVATE NOMINMAX)
+target_link_libraries(LibXLL.Tests.default
         PRIVATE
             Catch2ForOpenXLL
             LibXLL

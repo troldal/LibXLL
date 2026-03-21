@@ -44,6 +44,10 @@ add_executable(DemoAny Types/DemoAny.cpp)
 target_link_libraries(DemoAny PUBLIC LibXLL project_warnings project_hardening)
 target_compile_definitions(DemoAny PRIVATE NOMINMAX)
 
+add_executable(DemoVariant Types/DemoVariant.cpp)
+target_link_libraries(DemoVariant PUBLIC LibXLL project_warnings project_hardening)
+target_compile_definitions(DemoVariant PRIVATE NOMINMAX)
+
 add_executable(DemoTuple Types/DemoTuple.cpp)
 target_link_libraries(DemoTuple PUBLIC LibXLL project_warnings project_hardening)
 target_compile_definitions(DemoTuple PRIVATE NOMINMAX)

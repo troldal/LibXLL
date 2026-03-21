@@ -121,8 +121,8 @@ namespace xll
         template<typename T>
         concept has_base_type = requires(const T* p) { impl::deduce_base(p); };
 
-        /// Detect whether T is a Variant<...> by checking for the Variant-specific
-        /// excel_type bitmask pattern (it uses xltypeMissing as a sentinel bit).
+        /// Detect whether T is a Variant<...> — satisfies is_xll_type but does not
+        /// inherit from impl::Base (so has_base_type is false).
         template<typename T>
         concept is_variant_type = is_xll_type<T> && !has_base_type<T>;
 
@@ -135,14 +135,12 @@ namespace xll
         }
 
         /// Overload for Variant<T,Ts...> types.
-        /// excel_type is the OR of all constituent xltypes plus xltypeMissing as a
-        /// sentinel.  Strip the sentinel and test membership via bitmask.
+        /// excel_type is the OR of all constituent xltypes; test membership via bitmask.
         template<typename T>
             requires is_variant_type<T>
         constexpr bool xltype_convertible_to(int xltype) noexcept
         {
-            constexpr size_t mask = T::excel_type & ~static_cast<size_t>(xltypeMissing);
-            return (static_cast<size_t>(xltype) & mask) != 0;
+            return (static_cast<size_t>(xltype) & T::excel_type) != 0;
         }
 
         /// Bit mask for Excel ownership flags that must be stripped from xltype
@@ -537,6 +535,11 @@ namespace xll
                 }
                 return true;
             }
+        }
+        else if constexpr (impl::is_variant_type<TTarget>) {
+            // Variant::excel_type is a composite bitmask — strip the xltypeMissing
+            // sentinel and test whether any.type() is one of the declared member types.
+            return impl::xltype_convertible_to<TTarget>(any.type());
         }
         else {
             return any.type() == static_cast<int>(TTarget::excel_type);
