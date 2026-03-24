@@ -102,7 +102,8 @@ target_compile_definitions(xllDemoScalarValidation PRIVATE NOMINMAX)
 
 if (WIN32)
     add_library(xllDemoWxDialog SHARED Types/xllDemoWxDialog.cpp)
-    target_link_libraries(xllDemoWxDialog PUBLIC LibXLL project_warnings project_hardening wx::core wx::base)
+    target_link_libraries(xllDemoWxDialog PUBLIC LibXLL project_warnings project_hardening wx::core wx::base
+        ole32 oleaut32)
     set_target_properties(xllDemoWxDialog PROPERTIES OUTPUT_NAME "wx_dialog_demo" SUFFIX ".xll")
     target_compile_definitions(xllDemoWxDialog PRIVATE NOMINMAX
         # /sdl (from project_hardening) promotes C4996 "deprecated function" to

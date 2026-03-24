@@ -29,15 +29,27 @@
 //
 // Include order note
 // ------------------
-// wx headers MUST come before any LibXLL / ExcelSDK headers.
-// wx/msw/wrapwin.h (pulled in early by wx/wx.h) defines WIN32_LEAN_AND_MEAN
-// and then includes <windows.h>. WIN32_LEAN_AND_MEAN prevents windows.h from
-// pulling in the old winsock.h; wxWidgets then includes winsock2.h safely.
-// If LibXLL headers (which also include windows.h) came first they would
-// include windows.h *without* WIN32_LEAN_AND_MEAN, dragging in winsock.h,
-// and the subsequent winsock2.h inclusion would produce hundreds of
-// redefinition errors.
+// WIN32_LEAN_AND_MEAN must be defined before any #include <windows.h>.
+// xlcall.hpp (pulled in by every xlFunctions header) contains a bare
+// #include <windows.h>; without WIN32_LEAN_AND_MEAN that drags in the old
+// winsock.h, which then conflicts with the winsock2.h that wx and oleauto
+// require.  Defining it here — before every other include — prevents that.
+//
+// wx headers must still come before LibXLL / ExcelSDK headers because
+// wx/msw/wrapwin.h also does setup work beyond just WIN32_LEAN_AND_MEAN
+// (e.g. it pulls in winsock2.h itself before the rest of windows.h).
+// Since xlFunctions headers are LibXLL headers they must follow wx.
 
+// Must be first — before any #include that transitively reaches <windows.h>.
+#define WIN32_LEAN_AND_MEAN
+
+#include <iostream>
+
+#include <wx/wx.h>
+#include <oleauto.h>    // GetActiveObject, SysAllocString, IDispatch
+
+// LibXLL / ExcelSDK headers — safe here because <windows.h> was already
+// pulled in (with WIN32_LEAN_AND_MEAN) by wx above.
 #include "xlFunctions/ActiveCell.hpp"
 #include "xlFunctions/AppTitle.hpp"
 #include "xlFunctions/Documents.hpp"
@@ -45,10 +57,6 @@
 #include "xlFunctions/RefText.hpp"
 #include "xlFunctions/SheetId.hpp"
 #include "xlFunctions/Stack.hpp"
-
-#include <iostream>
-
-#include <wx/wx.h>
 
 #include <Auto.hpp>
 #include <Commands.hpp>
@@ -253,50 +261,205 @@ XLL_FUNCTION void XLLAPI ShowWxGreeting()
         xll::alert(xll::String("Hello, " + dlg.GetInput() + "!"));
 
     // convert_formula demo: convert =A1+B1 from A1 notation to R1C1.
-    const auto converted = xll::convert_formula(xll::String("=A1+B1"),
-                                                 xll::Bool(true),   // from_a1
-                                                 xll::Bool(false));  // to R1C1
+    const auto converted =
+        xll::convert_formula<xll::From<xll::A1>>(xll::String("=A1+B1"), xll::RefStyle::Absolute);
     if (converted)
-        std::cout << "convert_formula: =A1+B1 -> " << converted->to_string() << "\n";
+        std::cout << "convert_formula: =A1+B1 -> " << *converted << "\n";
     else
         std::cout << "convert_formula: conversion failed\n";
 }
 
 // ============================================================================
+// COM automation helpers
+//
+// Since the XLL runs inside Excel's process on Excel's main thread, COM is
+// already initialised.  We attach to the running instance via GetActiveObject
+// and drive it through IDispatch — no CoInitialize/CoUninitialize needed.
+// ============================================================================
+
+namespace {
+
+// Retrieve a property from an IDispatch object by name.
+inline HRESULT com_get(IDispatch* pDisp, LPCOLESTR name, VARIANT& result)
+{
+    DISPID id;
+    LPOLESTR pName = const_cast<LPOLESTR>(name);
+    if (HRESULT hr = pDisp->GetIDsOfNames(IID_NULL, &pName, 1,
+                                           LOCALE_USER_DEFAULT, &id);
+        FAILED(hr))
+        return hr;
+
+    DISPPARAMS dp = { nullptr, nullptr, 0, 0 };
+    VariantInit(&result);
+    return pDisp->Invoke(id, IID_NULL, LOCALE_SYSTEM_DEFAULT,
+                          DISPATCH_PROPERTYGET, &dp, &result,
+                          nullptr, nullptr);
+}
+
+// Set a BSTR property on an IDispatch object by name.
+// The caller retains ownership of the BSTR; this function does not free it.
+inline HRESULT com_put_bstr(IDispatch* pDisp, LPCOLESTR name, BSTR value)
+{
+    DISPID id;
+    LPOLESTR pName = const_cast<LPOLESTR>(name);
+    if (HRESULT hr = pDisp->GetIDsOfNames(IID_NULL, &pName, 1,
+                                           LOCALE_USER_DEFAULT, &id);
+        FAILED(hr))
+        return hr;
+
+    VARIANT val;
+    VariantInit(&val);
+    val.vt      = VT_BSTR;
+    val.bstrVal = value;   // borrowed reference — caller owns it
+
+    DISPID namedArg = DISPID_PROPERTYPUT;
+    DISPPARAMS dp   = { &val, &namedArg, 1, 1 };
+    return pDisp->Invoke(id, IID_NULL, LOCALE_SYSTEM_DEFAULT,
+                          DISPATCH_PROPERTYPUT, &dp,
+                          nullptr, nullptr, nullptr);
+}
+
+// Write a string to the currently active Excel cell via COM automation.
+// Returns true on success.
+bool write_to_active_cell(const std::wstring& text)
+{
+    CLSID clsid;
+    if (FAILED(CLSIDFromProgID(L"Excel.Application", &clsid)))
+        return false;
+
+    IUnknown* pUnk = nullptr;
+    if (FAILED(GetActiveObject(clsid, nullptr, &pUnk)))
+        return false;
+
+    IDispatch* pApp = nullptr;
+    HRESULT hr = pUnk->QueryInterface(IID_IDispatch,
+                                       reinterpret_cast<void**>(&pApp));
+    pUnk->Release();
+    if (FAILED(hr)) return false;
+
+    VARIANT vCell;
+    hr = com_get(pApp, L"ActiveCell", vCell);
+    pApp->Release();
+    if (FAILED(hr) || vCell.vt != VT_DISPATCH) {
+        VariantClear(&vCell);
+        return false;
+    }
+
+    BSTR bstr = SysAllocString(text.c_str());
+    hr = com_put_bstr(vCell.pdispVal, L"Value", bstr);
+    SysFreeString(bstr);
+    VariantClear(&vCell);   // also releases vCell.pdispVal
+    return SUCCEEDED(hr);
+}
+
+} // namespace
+
+// ============================================================================
 // Non-modal frame (WX.STATUS)
 //
-// Demonstrates the non-modal case:
-//   • NativeOwnerSetup (not NativeOwnerModal) — no EnableWindow blocking,
-//     Excel remains fully interactive.
-//   • Heap-allocated with new; wxWidgets calls Destroy() when the user
-//     closes it, so no manual lifetime management is needed.
-//   • The command function returns immediately after Show(); Excel's own
-//     message loop dispatches events to the frame while it is open.
+// The "Greet Active Cell" button writes "Hello, <name>!" to the currently
+// selected Excel cell using COM automation (IDispatch / GetActiveObject).
+//
+// Keyboard isolation — WH_GETMESSAGE hook
+// ----------------------------------------
+// After ShowWxStatus() returns, Excel owns the thread's message loop and
+// intercepts keyboard messages before they reach our controls, routing them
+// to the active cell instead.
+//
+// A WH_GETMESSAGE hook is installed on the main thread for the lifetime of
+// the frame.  Because hooks are chained in LIFO order, ours runs before any
+// hook Excel has installed.  For every keyboard message (WM_KEYFIRST ..
+// WM_KEYLAST) whose target HWND belongs to our frame the hook:
+//   1. Calls TranslateMessage — generates WM_CHAR from WM_KEYDOWN as normal.
+//   2. Calls DispatchMessage  — delivers the message to the intended control.
+//   3. Sets msg.message = WM_NULL — the rest of the hook chain (including
+//      Excel's) and Excel's own TranslateMessage/DispatchMessage calls become
+//      harmless no-ops.
 // ============================================================================
+
+// File-scope state shared between the hook proc and StatusFrame.
+// wxFrame* avoids a forward-declaration problem: the hook proc is defined
+// before StatusFrame, but only calls wxWindow::GetHWND() — a wxFrame method.
+static wxFrame* s_statusFrame = nullptr;
+static HHOOK    s_getMsgHook  = nullptr;
+
+// WH_GETMESSAGE hook — installed on Excel's main thread.
+// Must be a plain function (HOOKPROC = __stdcall function pointer).
+static LRESULT CALLBACK StatusGetMsgHook(int nCode, WPARAM wParam, LPARAM lParam)
+{
+    if (nCode == HC_ACTION && wParam == PM_REMOVE && s_statusFrame) {
+        MSG* pMsg = reinterpret_cast<MSG*>(lParam);
+
+        // Only intercept keyboard messages with a valid target window.
+        if (pMsg->message >= WM_KEYFIRST && pMsg->message <= WM_KEYLAST
+            && pMsg->hwnd != nullptr)
+        {
+            const HWND frameHwnd = static_cast<HWND>(s_statusFrame->GetHWND());
+            if (pMsg->hwnd == frameHwnd || ::IsChild(frameHwnd, pMsg->hwnd)) {
+                // Translate (WM_KEYDOWN → posts WM_CHAR) then dispatch
+                // directly to the intended control.
+                ::TranslateMessage(pMsg);
+                ::DispatchMessage(pMsg);
+
+                // Nullify before calling the next hook so that Excel's
+                // TranslateMessage and DispatchMessage are both no-ops.
+                pMsg->message = WM_NULL;
+            }
+        }
+    }
+    return ::CallNextHookEx(s_getMsgHook, nCode, wParam, lParam);
+}
 
 class StatusFrame : public wxFrame
 {
 public:
     StatusFrame()
         : wxFrame(nullptr, wxID_ANY, "XLL Status",
-                  wxDefaultPosition, wxSize(320, 120))
+                  wxDefaultPosition, wxSize(340, 170))
     {
+        // Register with the hook proc before any child window is created.
+        s_statusFrame = this;
+        s_getMsgHook  = ::SetWindowsHookEx(WH_GETMESSAGE,
+                                            StatusGetMsgHook,
+                                            nullptr,
+                                            ::GetCurrentThreadId());
+
         auto* panel = new wxPanel(this);
         auto* vbox  = new wxBoxSizer(wxVERTICAL);
+        auto* hbox  = new wxBoxSizer(wxHORIZONTAL);
+
+        auto* nameLabel = new wxStaticText(panel, wxID_ANY, "Your name:");
+        m_name = new wxTextCtrl(panel, wxID_ANY, "World",
+                                wxDefaultPosition, wxSize(160, -1),
+                                wxTE_PROCESS_ENTER);
+        hbox->Add(nameLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+        hbox->Add(m_name,    1, wxEXPAND);
 
         m_label = new wxStaticText(panel, wxID_ANY,
-                                   "This window is non-modal.\n"
-                                   "Excel remains fully interactive.",
+                                   "Type a name and press the button\n"
+                                   "to greet the active Excel cell.",
                                    wxDefaultPosition, wxDefaultSize,
                                    wxALIGN_CENTRE_HORIZONTAL);
 
-        auto* btn = new wxButton(panel, wxID_ANY, "Update");
+        auto* btn = new wxButton(panel, wxID_ANY, "Greet Active Cell");
         btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-            m_label->SetLabel("Button clicked!");
+            const std::wstring greeting =
+                L"Hello, " + m_name->GetValue().ToStdWstring() + L"!";
+            if (write_to_active_cell(greeting))
+                m_label->SetLabel("Greeting written to active cell.");
+            else
+                m_label->SetLabel("Failed to write to active cell.");
             m_label->GetContainingSizer()->Layout();
         });
 
+        // Pressing Enter in the text box also triggers the button.
+        m_name->Bind(wxEVT_TEXT_ENTER, [btn](wxCommandEvent&) {
+            wxCommandEvent evt(wxEVT_BUTTON, btn->GetId());
+            btn->GetEventHandler()->ProcessEvent(evt);
+        });
+
         vbox->AddStretchSpacer();
+        vbox->Add(hbox,    0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
         vbox->Add(m_label, 0, wxALIGN_CENTER | wxALL, 8);
         vbox->Add(btn,     0, wxALIGN_CENTER | wxBOTTOM, 10);
         vbox->AddStretchSpacer();
@@ -304,8 +467,20 @@ public:
         panel->SetSizer(vbox);
     }
 
+    ~StatusFrame() override
+    {
+        // Nullify first so the hook proc cannot use 'this' while we are
+        // mid-destruction (e.g. if a message is processed during teardown).
+        s_statusFrame = nullptr;
+        if (s_getMsgHook) {
+            ::UnhookWindowsHookEx(s_getMsgHook);
+            s_getMsgHook = nullptr;
+        }
+    }
+
 private:
     wxStaticText* m_label = nullptr;
+    wxTextCtrl*   m_name  = nullptr;
 };
 
 auto wxStatusCmd =
@@ -325,27 +500,25 @@ XLL_FUNCTION void XLLAPI ShowWxStatus()
     HWND excelHwnd = xll::get_hwnd();
     if (!excelHwnd) return;
 
-    // Lazily created once; persists for the lifetime of the XLL.
-    static StatusFrame* frame = nullptr;
+    // Lazily created once; persists (hidden when closed) for the XLL lifetime.
+    // The constructor installs the WH_GETMESSAGE hook; the destructor removes it.
+    if (!s_statusFrame) {
+        new StatusFrame();   // sets s_statusFrame and installs hook
 
-    if (!frame) {
-        frame = new StatusFrame();
-
-        // Closing the frame only hides it; it is never destroyed.
-        // Omitting e.Skip() suppresses the default Destroy() behaviour.
-        frame->Bind(wxEVT_CLOSE_WINDOW, [](wxCloseEvent&) {
-            frame->Hide();
+        // Hide on close rather than destroy — keeps the hook alive and avoids
+        // re-creating the window on subsequent WX.STATUS invocations.
+        s_statusFrame->Bind(wxEVT_CLOSE_WINDOW, [](wxCloseEvent&) {
+            s_statusFrame->Hide();
         });
     }
 
-    // (Re-)set the owner and centre on Excel every time the frame is shown,
-    // in case Excel has been moved since the last time.
-    NativeOwnerSetup setup(static_cast<HWND>(frame->GetHWND()), excelHwnd);
+    // (Re-)centre on Excel every time the frame is shown in case Excel moved.
+    NativeOwnerSetup setup(static_cast<HWND>(s_statusFrame->GetHWND()),
+                            excelHwnd);
 
-    frame->Show();
-    frame->Raise();
+    s_statusFrame->Show();
+    s_statusFrame->Raise();
     // Returns immediately — Excel's message loop keeps the frame alive.
-
 
 }
 
