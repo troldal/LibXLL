@@ -1,28 +1,29 @@
 // xllDemoWxDialog.cpp
 //
-// Demonstrates hosting wxWidgets windows inside an XLL add-in.
+// Demonstrates hosting wxWidgets windows inside an XLL add-in using a
+// signals/slots architecture (palacaze/sigslot) for cross-thread
+// communication.
 //
 // Architecture
 // ------------
 // wxWidgets needs a dedicated "main" thread (wxThread::IsMain() is stamped at
 // wxEntryStart time).  A lightweight UiThread manages that thread's lifecycle
-// with a ready/failed handshake so that XLL commands can lazily start it.
+// with a ready/failed handshake.
 //
-// Cross-thread communication uses two asymmetric mechanisms:
+// Cross-thread communication is implemented via sigslot signals with
+// thread-marshaling centralized in the wiring.  Call sites just emit signals.
 //
-//   Excel thread → UI thread : wxTheApp->CallAfter()   (built into wx)
-//   UI thread → Excel thread : MessageWindow            (hidden HWND task queue)
+//   Excel thread → UI thread : signals wired through wxTheApp->CallAfter()
+//   UI thread → Excel thread : signals wired through MessageWindow::post()
 //
-// Only one MessageWindow is needed (on Excel's thread).  There is no
-// dispatcher on the UI thread — wx already provides CallAfter for that.
+// Signal groups:
+//   msg::ToUi         — emitted on Excel thread, delivered on UI thread
+//   msg::ToExcel      — emitted on UI thread, delivered on Excel thread
+//   msg::ToUiResponse — emitted on Excel thread (in response), delivered on UI thread
 //
-// The StatusFrame (non-modal) and GreetingDialog (modal) are always created
-// and manipulated on the UI thread.  The frame pointer is only accessed on
-// the UI thread, so no mutex is needed.
-//
-// Modal dialogs use run_on_ui_thread() which posts a lambda via CallAfter,
-// blocks the calling thread with a promise/future, and pumps Win32 messages
-// to avoid cross-thread SendMessage deadlocks.
+// Modal dialogs bypass signals and use run_on_ui_thread() which posts a
+// callable via CallAfter, blocks the Excel thread with a promise/future,
+// and pumps Win32 messages to avoid cross-thread SendMessage deadlocks.
 //
 // Include order note
 // ------------------
@@ -34,10 +35,11 @@
 #define WIN32_LEAN_AND_MEAN
 
 #include <future>
-#include <iostream>
 #include <string>
 
 #include <wx/wx.h>
+
+#include <sigslot/signal.hpp>
 
 #include <Excel/Automation.hpp>
 #include <Win32/MessageWindow.hpp>
@@ -217,6 +219,33 @@ private:
 namespace {
 
 // ============================================================================
+// Signal groups
+//
+// Signals are grouped by direction.  Each signal is emitted on one thread
+// and delivered on the other via thread-marshaling wired during xlAutoOpen.
+// ============================================================================
+
+namespace msg {
+
+    // Emitted on Excel thread, delivered on UI thread.
+    struct ToUi {
+        sigslot::signal<HWND>  show_status;      // fire-and-forget
+        sigslot::signal<>      shutdown;
+    };
+
+    // Emitted on UI thread, delivered on Excel thread.
+    struct ToExcel {
+        sigslot::signal<std::wstring>  write_to_cell;
+    };
+
+    // Emitted on Excel thread, delivered on UI thread (responses).
+    struct ToUiResponse {
+        sigslot::signal<bool>  cell_write_result;
+    };
+
+} // namespace msg
+
+// ============================================================================
 // COM automation helpers
 // ============================================================================
 
@@ -232,61 +261,6 @@ bool write_to_active_cell(const std::wstring& text)
 
     return SUCCEEDED(activeCell.put(L"Value", text));
 }
-
-// ============================================================================
-// Application singleton
-//
-// Owns the Excel-thread dispatcher (UI→Excel task queue), the UI thread
-// lifecycle, and the StatusFrame pointer.
-//
-// Cross-thread communication:
-//   Excel → UI : wxTheApp->CallAfter()   (built into wx, no wrapper needed)
-//   UI → Excel : m_excelDispatcher        (MessageWindow on Excel's thread)
-//
-// m_frame is only accessed on the UI thread — no mutex required.
-// ============================================================================
-
-class StatusFrame;
-
-class AddIn
-{
-public:
-    static AddIn& instance()
-    {
-        static AddIn s;
-        return s;
-    }
-
-    bool initialize()
-    {
-        if (!m_excelDispatcher.create()) return false;
-        return m_uiThread.start([](xll::win32::UiThread& ut) {
-            ui_thread_body(ut);
-        });
-    }
-
-    void shutdown();
-
-    [[nodiscard]] xll::win32::MessageWindow& excel_dispatcher()
-    {
-        return m_excelDispatcher;
-    }
-
-    // UI-thread only — no synchronization needed.
-    void set_frame(StatusFrame* f) { m_frame = f; }
-    [[nodiscard]] StatusFrame* frame() const { return m_frame; }
-
-    void show_frame(HWND excelHwnd);
-
-private:
-    AddIn() = default;
-
-    static void ui_thread_body(xll::win32::UiThread& uiThread);
-
-    xll::win32::MessageWindow  m_excelDispatcher;
-    xll::win32::UiThread       m_uiThread;
-    StatusFrame*               m_frame = nullptr;   // UI-thread only
-};
 
 // ============================================================================
 // wx bootstrap
@@ -311,15 +285,19 @@ wxIMPLEMENT_APP_NO_MAIN(XllStatusApp);
 
 // ============================================================================
 // Non-modal frame (WX.STATUS)
+//
+// The frame is created on the UI thread and only accessed there.
+// It communicates with Excel by emitting signals (no direct post/CallAfter).
 // ============================================================================
 
 class StatusFrame : public wxFrame
 {
 public:
-    StatusFrame(HWND excelHwnd)
+    StatusFrame(HWND excelHwnd, msg::ToExcel& toExcel)
         : wxFrame(nullptr, wxID_ANY, "XLL Status",
                   wxDefaultPosition, wxSize(340, 170)),
-          m_excelHwnd(excelHwnd)
+          m_excelHwnd(excelHwnd),
+          m_toExcel(toExcel)
     {
         auto* panel = new wxPanel(this);
         auto* vbox  = new wxBoxSizer(wxVERTICAL);
@@ -389,23 +367,10 @@ public:
 private:
     void SendGreetingRequest()
     {
-        const std::wstring greeting = L"Hello, " + m_name->GetValue().ToStdWstring() + L"!";
+        std::wstring greeting = L"Hello, " + m_name->GetValue().ToStdWstring() + L"!";
 
-        // Post the COM write to Excel's thread via the MessageWindow.
-        // The result callback uses CallAfter to return to the UI thread.
-        if (!AddIn::instance().excel_dispatcher().post([text = greeting]() {
-                const bool ok = write_to_active_cell(text);
-                if (wxTheApp) {
-                    wxTheApp->CallAfter([ok]() {
-                        StatusFrame* f = AddIn::instance().frame();
-                        if (f) f->UpdateResult(ok);
-                    });
-                }
-            })) {
-            m_label->SetLabel("Failed to post request to Excel thread.");
-            Layout();
-            return;
-        }
+        // Just emit the signal — the wiring takes care of thread marshaling.
+        m_toExcel.write_to_cell(greeting);
 
         m_label->SetLabel("Writing greeting...");
         Layout();
@@ -414,72 +379,145 @@ private:
     wxStaticText* m_label     = nullptr;
     wxTextCtrl*   m_name      = nullptr;
     HWND          m_excelHwnd = nullptr;
+    msg::ToExcel& m_toExcel;
 };
 
 // ============================================================================
-// AddIn — out-of-line definitions (depend on complete StatusFrame)
+// Application singleton
+//
+// Owns the signal groups, the Excel-thread dispatcher (MessageWindow), the
+// UI thread lifecycle, and the StatusFrame pointer.
+//
+// Signal wiring is done once in wire_signals(), called from initialize()
+// after the UI thread is ready.
+//
+// m_frame is only accessed on the UI thread — no mutex required.
 // ============================================================================
 
-void AddIn::shutdown()
+class AddIn
 {
-    if (m_uiThread.is_running() && wxTheApp) {
-        wxTheApp->CallAfter([this]() {
-            if (m_frame) {
-                m_frame->Destroy();
-                m_frame = nullptr;
+public:
+    static AddIn& instance()
+    {
+        static AddIn s;
+        return s;
+    }
+
+    bool initialize()
+    {
+        if (!m_excelDispatcher.create()) return false;
+        if (!m_uiThread.start([](xll::win32::UiThread& ut) {
+            ui_thread_body(ut);
+        })) return false;
+
+        wire_signals();
+        return true;
+    }
+
+    void shutdown()
+    {
+        // Emit shutdown → marshaled to UI thread → exits event loop.
+        m_toUi.shutdown();
+
+        m_uiThread.join();
+        m_excelDispatcher.shutdown();
+    }
+
+    // Signal groups — accessible for command handlers.
+    msg::ToUi& to_ui() { return m_toUi; }
+
+    // UI-thread only — no synchronization needed.
+    void set_frame(StatusFrame* f) { m_frame = f; }
+    [[nodiscard]] StatusFrame* frame() const { return m_frame; }
+
+private:
+    AddIn() = default;
+
+    static void ui_thread_body(xll::win32::UiThread& uiThread)
+    {
+        int argc = 0;
+        char** argv = nullptr;
+
+        wxApp::SetInstance(new XllStatusApp());
+
+        if (!wxEntryStart(argc, argv)) {
+            uiThread.signal_failed();
+            return;
+        }
+
+        if (!wxTheApp || !wxTheApp->CallOnInit()) {
+            wxEntryCleanup();
+            uiThread.signal_failed();
+            return;
+        }
+
+        uiThread.signal_ready();
+
+        wxTheApp->OnRun();
+
+        // Event loop exited (shutdown signal called ExitMainLoop).
+        AddIn::instance().set_frame(nullptr);
+
+        if (wxTheApp) wxTheApp->OnExit();
+        wxEntryCleanup();
+    }
+
+    // -----------------------------------------------------------------
+    // Wiring — centralized thread marshaling, done once during init
+    // -----------------------------------------------------------------
+
+    void wire_signals()
+    {
+        // Excel → UI: show_status
+        m_toUi.show_status.connect([this](HWND excelHwnd) {
+            wxTheApp->CallAfter([this, excelHwnd]() {
+                if (!m_frame) {
+                    m_frame = new StatusFrame(excelHwnd, m_toExcel);
+                }
+                m_frame->BringUpNearExcel();
+            });
+        });
+
+        // Excel → UI: shutdown
+        m_toUi.shutdown.connect([this]() {
+            if (m_uiThread.is_running() && wxTheApp) {
+                wxTheApp->CallAfter([this]() {
+                    if (m_frame) {
+                        m_frame->Destroy();
+                        m_frame = nullptr;
+                    }
+                    if (wxTheApp) wxTheApp->ExitMainLoop();
+                });
             }
-            if (wxTheApp) wxTheApp->ExitMainLoop();
+        });
+
+        // UI → Excel: write_to_cell
+        m_toExcel.write_to_cell.connect([this](const std::wstring& text) {
+            auto _ = m_excelDispatcher.post([this, text]() {
+                bool ok = write_to_active_cell(text);
+                // Response signal → marshaled back to UI thread.
+                m_toUiResponse.cell_write_result(ok);
+            });
+        });
+
+        // Excel → UI (response): cell_write_result
+        m_toUiResponse.cell_write_result.connect([this](bool ok) {
+            if (wxTheApp) {
+                wxTheApp->CallAfter([this, ok]() {
+                    if (m_frame) m_frame->UpdateResult(ok);
+                });
+            }
         });
     }
 
-    m_uiThread.join();
-    m_excelDispatcher.shutdown();
-}
+    xll::win32::MessageWindow  m_excelDispatcher;
+    xll::win32::UiThread       m_uiThread;
+    StatusFrame*               m_frame = nullptr;   // UI-thread only
 
-void AddIn::ui_thread_body(xll::win32::UiThread& uiThread)
-{
-
-    // wx must be initialized on this thread — wxEntryStart() stamps it
-    // as the wx "main" thread, and OnRun() asserts wxThread::IsMain().
-    int argc = 0;
-    char** argv = nullptr;
-
-    wxApp::SetInstance(new XllStatusApp());
-
-    if (!wxEntryStart(argc, argv)) {
-        uiThread.signal_failed();
-        return;
-    }
-
-    if (!wxTheApp || !wxTheApp->CallOnInit()) {
-        wxEntryCleanup();
-        uiThread.signal_failed();
-        return;
-    }
-
-    // Unblock ensure_ui_started() — wx is ready, CallAfter() is safe.
-    uiThread.signal_ready();
-
-    wxTheApp->OnRun();
-
-    // Event loop exited (shutdown() called ExitMainLoop).
-    AddIn::instance().set_frame(nullptr);
-
-    if (wxTheApp) wxTheApp->OnExit();
-    wxEntryCleanup();
-}
-
-void AddIn::show_frame(HWND excelHwnd)
-{
-    if (!wxTheApp) return;
-
-    wxTheApp->CallAfter([this, excelHwnd]() {
-        if (!m_frame) {
-            m_frame = new StatusFrame(excelHwnd);
-        }
-        m_frame->BringUpNearExcel();
-    });
-}
+    msg::ToUi          m_toUi;
+    msg::ToExcel       m_toExcel;
+    msg::ToUiResponse  m_toUiResponse;
+};
 
 } // anonymous namespace
 
@@ -502,7 +540,7 @@ auto onClose =
 XLL_REGISTER(onClose);
 
 // ============================================================================
-// Command: WX.GREETING  (modal dialog)
+// Command: WX.GREETING  (modal dialog — exception to the signal pattern)
 // ============================================================================
 
 auto wxGreetingCmd =
@@ -531,7 +569,7 @@ XLL_FUNCTION void XLLAPI ShowWxGreeting()
 }
 
 // ============================================================================
-// Command: WX.STATUS  (non-modal frame)
+// Command: WX.STATUS  (non-modal frame — uses signals, no threading code)
 // ============================================================================
 
 auto wxStatusCmd =
@@ -549,6 +587,7 @@ XLL_FUNCTION void XLLAPI ShowWxStatus()
     HWND excelHwnd = xll::get_hwnd();
     if (!excelHwnd) return;
 
-    AddIn::instance().show_frame(excelHwnd);
+    // Just emit the signal — the wiring takes care of thread marshaling.
+    AddIn::instance().to_ui().show_status(excelHwnd);
 }
 

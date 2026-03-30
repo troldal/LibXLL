@@ -1,7 +1,8 @@
 // xllDemoFltkDialog.cpp
 //
-// Demonstrates hosting FLTK windows inside an XLL add-in.
-// This is the FLTK counterpart of xllDemoWxDialog.cpp.
+// Demonstrates hosting FLTK windows inside an XLL add-in using a
+// signals/slots architecture (palacaze/sigslot) for cross-thread
+// communication.  This is the FLTK counterpart of xllDemoWxDialog.cpp.
 //
 // Architecture
 // ------------
@@ -9,21 +10,20 @@
 // multi-threading support, and Fl::awake() provides thread-safe cross-thread
 // posting — the FLTK equivalent of wxTheApp->CallAfter().
 //
-// Cross-thread communication uses two asymmetric mechanisms:
+// Cross-thread communication is implemented via sigslot signals with
+// thread-marshaling centralized in the wiring.  Call sites just emit signals.
 //
-//   Excel thread → UI thread : Fl::awake()    (built into FLTK)
-//   UI thread → Excel thread : MessageWindow  (hidden HWND task queue)
+//   Excel thread → UI thread : signals wired through post_to_fltk()
+//   UI thread → Excel thread : signals wired through MessageWindow::post()
 //
-// Only one MessageWindow is needed (on Excel's thread).  There is no
-// dispatcher on the UI thread — FLTK already provides Fl::awake() for that.
+// Signal groups:
+//   msg::ToUi         — emitted on Excel thread, delivered on UI thread
+//   msg::ToExcel      — emitted on UI thread, delivered on Excel thread
+//   msg::ToUiResponse — emitted on Excel thread (in response), delivered on UI thread
 //
-// The StatusFrame (non-modal) and GreetingDialog (modal) are always created
-// and manipulated on the UI thread.  The frame pointer is only accessed on
-// the UI thread, so no mutex is needed.
-//
-// Modal dialogs use run_on_fltk_thread() which posts a callable via
-// Fl::awake(), blocks the calling thread with a promise/future, and pumps
-// Win32 messages to avoid cross-thread SendMessage deadlocks.
+// Modal dialogs bypass signals and use run_on_fltk_thread() which posts a
+// callable via Fl::awake(), blocks the calling thread with a promise/future,
+// and pumps Win32 messages to avoid cross-thread SendMessage deadlocks.
 //
 // Unlike wxWidgets, FLTK does not need a wxApp subclass, wxEntryStart, or
 // wxEntryCleanup.  Calling Fl::lock() once on the UI thread is sufficient
@@ -49,6 +49,8 @@
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Box.H>
 #include <FL/platform.H>          // fl_xid()
+
+#include <sigslot/signal.hpp>
 
 #include <Excel/Automation.hpp>
 #include <Win32/MessageWindow.hpp>
@@ -246,6 +248,33 @@ static std::wstring utf8_to_wide(const char* utf8)
 namespace {
 
 // ============================================================================
+// Signal groups
+//
+// Signals are grouped by direction.  Each signal is emitted on one thread
+// and delivered on the other via thread-marshaling wired during xlAutoOpen.
+// ============================================================================
+
+namespace msg {
+
+    // Emitted on Excel thread, delivered on UI thread.
+    struct ToUi {
+        sigslot::signal<HWND>  show_status;      // fire-and-forget
+        sigslot::signal<>      shutdown;
+    };
+
+    // Emitted on UI thread, delivered on Excel thread.
+    struct ToExcel {
+        sigslot::signal<std::wstring>  write_to_cell;
+    };
+
+    // Emitted on Excel thread, delivered on UI thread (responses).
+    struct ToUiResponse {
+        sigslot::signal<bool>  cell_write_result;
+    };
+
+} // namespace msg
+
+// ============================================================================
 // COM automation helpers
 // ============================================================================
 
@@ -263,77 +292,22 @@ bool write_to_active_cell(const std::wstring& text)
 }
 
 // ============================================================================
-// Application singleton
-//
-// Owns the Excel-thread dispatcher (UI→Excel task queue), the UI thread
-// lifecycle, and the StatusFrame pointer.
-//
-// Cross-thread communication:
-//   Excel → UI : Fl::awake() via post_to_fltk()  (built into FLTK)
-//   UI → Excel : m_excelDispatcher                (MessageWindow on Excel's thread)
-//
-// m_frame is only accessed on the UI thread — no mutex required.
-// ============================================================================
-
-class StatusFrame;
-
-class AddIn
-{
-public:
-    static AddIn& instance()
-    {
-        static AddIn s;
-        return s;
-    }
-
-    bool initialize()
-    {
-        if (!m_excelDispatcher.create()) return false;
-        return m_uiThread.start([](xll::win32::UiThread& ut) {
-            ui_thread_body(ut);
-        });
-    }
-
-    void shutdown();
-
-    [[nodiscard]] xll::win32::MessageWindow& excel_dispatcher()
-    {
-        return m_excelDispatcher;
-    }
-
-    // UI-thread only — no synchronization needed.
-    void set_frame(StatusFrame* f) { m_frame = f; }
-    [[nodiscard]] StatusFrame* frame() const { return m_frame; }
-
-    [[nodiscard]] bool exit_requested() const noexcept { return m_exitLoop.load(); }
-
-    void show_frame(HWND excelHwnd);
-
-private:
-    AddIn() = default;
-
-    static void ui_thread_body(xll::win32::UiThread& uiThread);
-
-    xll::win32::MessageWindow  m_excelDispatcher;
-    xll::win32::UiThread       m_uiThread;
-    StatusFrame*               m_frame = nullptr;        // UI-thread only
-    std::atomic<bool>          m_exitLoop{ false };
-};
-
-// ============================================================================
 // Non-modal frame (FLTK.STATUS)
 //
 // FLTK's default close behaviour calls hide(), which is exactly what we
 // want — the frame is hidden but not destroyed, and can be shown again.
 // The manual event loop (Fl::wait in a while-loop) keeps running even
 // when no windows are visible.
+//
+// The frame communicates with Excel by emitting signals (no direct post).
 // ============================================================================
 
 class StatusFrame : public Fl_Window
 {
 public:
-    explicit StatusFrame(HWND /*excelHwnd*/)
-        : Fl_Window(340, 160, "XLL Status (FLTK)")
+    explicit StatusFrame(HWND /*excelHwnd*/, msg::ToExcel& toExcel)
+        : Fl_Window(340, 160, "XLL Status (FLTK)"),
+          m_toExcel(toExcel)
     {
         begin();
         new Fl_Box(10, 15, 110, 25, "Your name:");
@@ -383,82 +357,148 @@ private:
 
     void SendGreetingRequest()
     {
-        const std::wstring greeting =
+        std::wstring greeting =
             L"Hello, " + utf8_to_wide(m_name->value()) + L"!";
 
-        // Post the COM write to Excel's thread via the MessageWindow.
-        // The result callback uses post_to_fltk to return to the UI thread.
-        if (!AddIn::instance().excel_dispatcher().post([text = greeting]() {
-                const bool ok = write_to_active_cell(text);
-                post_to_fltk([ok]() {
-                    StatusFrame* f = AddIn::instance().frame();
-                    if (f) f->UpdateResult(ok);
-                });
-            })) {
-            copy_label_text("Failed to post request to Excel thread.");
-            return;
-        }
+        // Just emit the signal — the wiring takes care of thread marshaling.
+        m_toExcel.write_to_cell(greeting);
 
         copy_label_text("Writing greeting...");
     }
 
-    Fl_Input* m_name  = nullptr;
-    Fl_Box*   m_label = nullptr;
+    Fl_Input*     m_name  = nullptr;
+    Fl_Box*       m_label = nullptr;
+    msg::ToExcel& m_toExcel;
 };
 
 // ============================================================================
-// AddIn — out-of-line definitions (depend on complete StatusFrame)
+// Application singleton
+//
+// Owns the signal groups, the Excel-thread dispatcher (MessageWindow), the
+// UI thread lifecycle, and the StatusFrame pointer.
+//
+// Signal wiring is done once in wire_signals(), called from initialize()
+// after the UI thread is ready.
+//
+// m_frame is only accessed on the UI thread — no mutex required.
 // ============================================================================
 
-void AddIn::shutdown()
+class AddIn
 {
-    if (m_uiThread.is_running()) {
-        m_exitLoop.store(true);
-        // Wake up Fl::wait() so it sees the exit flag promptly.
-        post_to_fltk([]() {});
+public:
+    static AddIn& instance()
+    {
+        static AddIn s;
+        return s;
     }
 
-    m_uiThread.join();
-    m_exitLoop.store(false);
-    m_excelDispatcher.shutdown();
-}
+    bool initialize()
+    {
+        if (!m_excelDispatcher.create()) return false;
+        if (!m_uiThread.start([](xll::win32::UiThread& ut) {
+            ui_thread_body(ut);
+        })) return false;
 
-void AddIn::ui_thread_body(xll::win32::UiThread& uiThread)
-{
-    // Fl::lock() enables FLTK's multi-threading support.  After this call,
-    // other threads can use Fl::awake() to post work to this thread.
-    Fl::lock();
-
-    // Unblock ensure_ui_started() — FLTK is ready, Fl::awake() is safe.
-    uiThread.signal_ready();
-
-    // Manual event loop: Fl::wait(timeout) processes events and awake
-    // callbacks.  Unlike Fl::run(), this keeps looping even when no windows
-    // are visible, allowing the frame to be re-shown later.
-    auto& app = AddIn::instance();
-    while (!app.exit_requested()) {
-        Fl::wait(0.1);
+        wire_signals();
+        return true;
     }
 
-    // Clean up the frame on the FLTK thread before exiting.
-    if (app.frame()) {
-        delete app.frame();
-        app.set_frame(nullptr);
+    void shutdown()
+    {
+        // Emit shutdown → marshaled to UI thread → exits event loop.
+        m_toUi.shutdown();
+
+        m_uiThread.join();
+        m_excelDispatcher.shutdown();
     }
 
-    Fl::unlock();
-}
+    // Signal groups — accessible for command handlers.
+    msg::ToUi& to_ui() { return m_toUi; }
 
-void AddIn::show_frame(HWND excelHwnd)
-{
-    post_to_fltk([excelHwnd]() {
+    // UI-thread only — no synchronization needed.
+    void set_frame(StatusFrame* f) { m_frame = f; }
+    [[nodiscard]] StatusFrame* frame() const { return m_frame; }
+
+    [[nodiscard]] bool exit_requested() const noexcept { return m_exitLoop.load(); }
+
+private:
+    AddIn() = default;
+
+    static void ui_thread_body(xll::win32::UiThread& uiThread)
+    {
+        // Fl::lock() enables FLTK's multi-threading support.  After this call,
+        // other threads can use Fl::awake() to post work to this thread.
+        Fl::lock();
+
+        // Unblock start() — FLTK is ready, Fl::awake() is safe.
+        uiThread.signal_ready();
+
+        // Manual event loop: Fl::wait(timeout) processes events and awake
+        // callbacks.  Unlike Fl::run(), this keeps looping even when no windows
+        // are visible, allowing the frame to be re-shown later.
         auto& app = AddIn::instance();
-        if (!app.frame()) {
-            app.set_frame(new StatusFrame(excelHwnd));
+        while (!app.exit_requested()) {
+            Fl::wait(0.1);
         }
-        app.frame()->BringUpNearExcel();
-    });
-}
+
+        // Clean up the frame on the FLTK thread before exiting.
+        if (app.frame()) {
+            delete app.frame();
+            app.set_frame(nullptr);
+        }
+
+        Fl::unlock();
+    }
+
+    // -----------------------------------------------------------------
+    // Wiring — centralized thread marshaling, done once during init
+    // -----------------------------------------------------------------
+
+    void wire_signals()
+    {
+        // Excel → UI: show_status
+        m_toUi.show_status.connect([this](HWND excelHwnd) {
+            post_to_fltk([this, excelHwnd]() {
+                if (!m_frame) {
+                    m_frame = new StatusFrame(excelHwnd, m_toExcel);
+                }
+                m_frame->BringUpNearExcel();
+            });
+        });
+
+        // Excel → UI: shutdown
+        m_toUi.shutdown.connect([this]() {
+            m_exitLoop.store(true);
+            // Wake up Fl::wait() so it sees the exit flag promptly.
+            post_to_fltk([]() {});
+        });
+
+        // UI → Excel: write_to_cell
+        m_toExcel.write_to_cell.connect([this](const std::wstring& text) {
+            (void)m_excelDispatcher.post([this, text]() {
+                bool ok = write_to_active_cell(text);
+                // Response signal → marshaled back to UI thread.
+                m_toUiResponse.cell_write_result(ok);
+            });
+        });
+
+        // Excel → UI (response): cell_write_result
+        m_toUiResponse.cell_write_result.connect([this](bool ok) {
+            post_to_fltk([this, ok]() {
+                if (m_frame) m_frame->UpdateResult(ok);
+            });
+        });
+    }
+
+    xll::win32::MessageWindow  m_excelDispatcher;
+    xll::win32::UiThread       m_uiThread;
+    StatusFrame*               m_frame = nullptr;        // UI-thread only
+    std::atomic<bool>          m_exitLoop{ false };
+
+    msg::ToUi          m_toUi;
+    msg::ToExcel       m_toExcel;
+    msg::ToUiResponse  m_toUiResponse;
+};
 
 } // anonymous namespace
 
@@ -481,7 +521,7 @@ auto fltkOnClose =
 XLL_REGISTER(fltkOnClose);
 
 // ============================================================================
-// Command: FLTK.GREETING  (modal dialog)
+// Command: FLTK.GREETING  (modal dialog — exception to the signal pattern)
 // ============================================================================
 
 auto fltkGreetingCmd =
@@ -509,7 +549,7 @@ XLL_FUNCTION void XLLAPI ShowFltkGreeting()
 }
 
 // ============================================================================
-// Command: FLTK.STATUS  (non-modal frame)
+// Command: FLTK.STATUS  (non-modal frame — uses signals, no threading code)
 // ============================================================================
 
 auto fltkStatusCmd =
@@ -527,7 +567,8 @@ XLL_FUNCTION void XLLAPI ShowFltkStatus()
     HWND excelHwnd = xll::get_hwnd();
     if (!excelHwnd) return;
 
-    AddIn::instance().show_frame(excelHwnd);
+    // Just emit the signal — the wiring takes care of thread marshaling.
+    AddIn::instance().to_ui().show_status(excelHwnd);
 }
 
 
