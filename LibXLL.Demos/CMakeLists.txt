@@ -101,7 +101,7 @@ set_target_properties(xllDemoScalarValidation PROPERTIES OUTPUT_NAME "scalar_val
 target_compile_definitions(xllDemoScalarValidation PRIVATE NOMINMAX)
 
 if (WIN32)
-    add_library(xllDemoWxDialog SHARED Types/xllDemoWxDialog.cpp)
+    add_library(xllDemoWxDialog SHARED GUI/xllDemoWxDialog.cpp)
     target_link_libraries(xllDemoWxDialog PUBLIC LibXLL project_warnings project_hardening wx::core wx::base
         ole32 oleaut32)
     set_target_properties(xllDemoWxDialog PROPERTIES OUTPUT_NAME "wx_dialog_demo" SUFFIX ".xll")
@@ -116,6 +116,28 @@ if (WIN32)
     )
     # No post-build DLL copy needed: wxWidgets is statically linked
     # (BUILD_SHARED_LIBS OFF), so TARGET_RUNTIME_DLLS is empty.
+
+    add_library(xllDemoFltkModalDialog SHARED GUI/xllDemoFltkModalDialog.cpp)
+    target_link_libraries(xllDemoFltkModalDialog PUBLIC LibXLL project_warnings project_hardening fltk::fltk)
+    set_target_properties(xllDemoFltkModalDialog PROPERTIES OUTPUT_NAME "fltk_modal_dialog_demo" SUFFIX ".xll" PREFIX "")
+    target_compile_definitions(xllDemoFltkModalDialog PRIVATE NOMINMAX)
+
+    add_library(xllDemoFltkDialog SHARED GUI/xllDemoFltkDialog.cpp)
+    target_link_libraries(xllDemoFltkDialog PUBLIC LibXLL project_warnings project_hardening fltk::fltk
+        ole32 oleaut32)
+    set_target_properties(xllDemoFltkDialog PROPERTIES OUTPUT_NAME "fltk_dialog_demo" SUFFIX ".xll" PREFIX "")
+    target_compile_definitions(xllDemoFltkDialog PRIVATE NOMINMAX)
+
+    add_library(xllDemoWxModalDialog SHARED GUI/xllDemoWxModalDialog.cpp)
+    target_link_libraries(xllDemoWxModalDialog PUBLIC LibXLL project_warnings project_hardening wx::core wx::base)
+    set_target_properties(xllDemoWxModalDialog PROPERTIES OUTPUT_NAME "wx_modal_dialog_demo" SUFFIX ".xll" PREFIX "")
+    target_compile_definitions(xllDemoWxModalDialog PRIVATE NOMINMAX
+        $<$<CXX_COMPILER_ID:MSVC>:_CRT_SECURE_NO_WARNINGS>
+    )
+
+    add_executable(fltkDemo WIN32 fltkDemo.cpp)
+    target_link_libraries(fltkDemo PRIVATE fltk::fltk)
+    target_compile_definitions(fltkDemo PRIVATE NOMINMAX)
 
     add_executable(wxDemo WIN32 wxDemo.cpp wxDemo.rc)
     target_link_libraries(wxDemo PRIVATE wx::core wx::base)

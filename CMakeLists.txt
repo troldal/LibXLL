@@ -46,7 +46,24 @@ CPMAddPackage(
         "BUILD_SHARED_LIBS OFF" "BOOST_INCLUDE_LIBRARIES dll\\\;nowide" # Note the escapes!
 )
 
+CPMAddPackage(
+        NAME sigslot
+        GITHUB_REPOSITORY palacaze/sigslot
+        GIT_TAG v1.2.3
+)
+
+
 if (WIN32)
+    CPMAddPackage(
+            NAME fltk
+            GITHUB_REPOSITORY fltk/fltk
+            GIT_TAG release-1.4.4
+            OPTIONS
+            "FLTK_BUILD_TEST OFF"
+            "FLTK_BUILD_EXAMPLES OFF"
+            "FLTK_BUILD_HTML_DOCS OFF"
+    )
+
     CPMAddPackage(
             NAME wxWidgets
             GITHUB_REPOSITORY wxWidgets/wxWidgets

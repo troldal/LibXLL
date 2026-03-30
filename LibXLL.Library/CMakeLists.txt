@@ -4,6 +4,9 @@ if (NOT WIN32)
 endif (NOT WIN32)
 
 add_library(CommonUtils INTERFACE
+        Excel/Automation.hpp
+        Win32/MessageWindow.hpp
+        Win32/UiThread.hpp
         Types/Native.hpp
         xlFunctions/GetInst.hpp)
 target_include_directories(CommonUtils INTERFACE Utils/common)
