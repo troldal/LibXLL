@@ -341,14 +341,12 @@ public:
         });
     }
 
-    void BringUpNearExcel()
+    void BringUpNearExcel(HWND excelHwnd)
     {
-        HWND excelHwnd = xll::get_hwnd();
-
         if (excelHwnd && ::IsWindow(excelHwnd)) {
             RECT rc{};
             if (::GetWindowRect(excelHwnd, &rc)) {
-                SetPosition(wxPoint(rc.right + 60, rc.top + 60));
+                SetPosition(wxPoint(rc.left + 60, rc.top + 60));
             }
         }
 
@@ -474,7 +472,7 @@ private:
                 if (!m_frame) {
                     m_frame = new StatusFrame(excelHwnd, m_toExcel);
                 }
-                m_frame->BringUpNearExcel();
+                m_frame->BringUpNearExcel(excelHwnd);
             });
         });
 

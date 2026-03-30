@@ -1,19 +1,19 @@
-// xllDemoFltkDialog.cpp
+// xllDemoQtDialog.cpp
 //
-// Demonstrates hosting FLTK windows inside an XLL add-in using a
+// Demonstrates hosting Qt widgets inside an XLL add-in using a
 // signals/slots architecture (palacaze/sigslot) for cross-thread
-// communication.  This is the FLTK counterpart of xllDemoWxDialog.cpp.
+// communication.  This is the Qt counterpart of xllDemoWxDialog.cpp.
 //
 // Architecture
 // ------------
-// FLTK is initialized on a dedicated thread.  Fl::lock() enables FLTK's
-// multi-threading support, and Fl::awake() provides thread-safe cross-thread
-// posting — the FLTK equivalent of wxTheApp->CallAfter().
+// Qt's QApplication must live on the thread that creates it (Qt's "GUI
+// thread").  A lightweight UiThread manages that thread's lifecycle with a
+// ready/failed handshake.
 //
 // Cross-thread communication is implemented via sigslot signals with
 // thread-marshaling centralized in the wiring.  Call sites just emit signals.
 //
-//   Excel thread → UI thread : signals wired through post_to_fltk()
+//   Excel thread → UI thread : signals wired through QMetaObject::invokeMethod
 //   UI thread → Excel thread : signals wired through MessageWindow::post()
 //
 // Signal groups:
@@ -21,18 +21,15 @@
 //   msg::ToExcel      — emitted on UI thread, delivered on Excel thread
 //   msg::ToUiResponse — emitted on Excel thread (in response), delivered on UI thread
 //
-// Modal dialogs bypass signals and use run_on_fltk_thread() which posts a
-// callable via Fl::awake(), blocks the calling thread with a promise/future,
-// and pumps Win32 messages to avoid cross-thread SendMessage deadlocks.
-//
-// Unlike wxWidgets, FLTK does not need a wxApp subclass, wxEntryStart, or
-// wxEntryCleanup.  Calling Fl::lock() once on the UI thread is sufficient
-// to enable multi-threaded operation.
+// Modal dialogs bypass signals and use run_on_qt_thread() which posts a
+// callable via QMetaObject::invokeMethod with QueuedConnection, blocks the
+// Excel thread with a promise/future, and pumps Win32 messages to avoid
+// cross-thread SendMessage deadlocks.
 //
 // Include order note
 // ------------------
 // WIN32_LEAN_AND_MEAN must be defined before any #include <windows.h>.
-// FLTK headers must come before LibXLL / ExcelSDK headers because
+// Qt headers must come before LibXLL / ExcelSDK headers because
 // xlcall.hpp contains a bare #include <windows.h> that, without
 // WIN32_LEAN_AND_MEAN, drags in winsock.h and causes conflicts.
 
@@ -43,12 +40,17 @@
 #include <future>
 #include <string>
 
-#include <FL/Fl.H>
-#include <FL/Fl_Window.H>
-#include <FL/Fl_Input.H>
-#include <FL/Fl_Button.H>
-#include <FL/Fl_Box.H>
-#include <FL/platform.H>          // fl_xid()
+#include <QApplication>
+#include <QCloseEvent>
+#include <QDialog>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QLineEdit>
+#include <QMessageBox>
+#include <QPushButton>
+#include <QTimer>
+#include <QVBoxLayout>
+#include <QWidget>
 
 #include <sigslot/signal.hpp>
 
@@ -62,42 +64,38 @@
 #include <Types.hpp>
 
 // ============================================================================
-// post_to_fltk
+// post_to_qt
 //
-// Thread-safe helper: posts a std::function to the FLTK event loop via
-// Fl::awake().  The callable runs on the FLTK thread during Fl::wait().
-// This is the FLTK equivalent of wxTheApp->CallAfter().
+// Thread-safe helper: posts a std::function to the Qt event loop via
+// QMetaObject::invokeMethod with QueuedConnection.  The callable runs on
+// the Qt GUI thread.  This is the Qt equivalent of wxTheApp->CallAfter().
 // ============================================================================
 
-inline void post_to_fltk(std::function<void()> fn)
+inline void post_to_qt(std::function<void()> fn)
 {
-    auto* task = new std::function<void()>(std::move(fn));
-    Fl::awake([](void* data) {
-        auto* t = static_cast<std::function<void()>*>(data);
-        (*t)();
-        delete t;
-    }, task);
+    // QTimer::singleShot with 0ms and a context object (qApp) ensures the
+    // lambda runs on the context object's thread — the Qt GUI thread.
+    QTimer::singleShot(0, qApp, std::move(fn));
 }
 
 // ============================================================================
-// run_on_fltk_thread
+// run_on_qt_thread
 //
-// Posts a callable to the FLTK event loop via Fl::awake() and blocks the
-// calling thread until it completes, pumping Win32 messages to avoid
-// deadlock from cross-thread SendMessage calls (e.g. EnableWindow in
-// NativeOwnerModal).
+// Posts a callable to the Qt event loop and blocks the calling thread until
+// it completes, pumping Win32 messages to avoid deadlock from cross-thread
+// SendMessage calls (e.g. EnableWindow in NativeOwnerModal).
 //
 // Returns the value produced by the callable.
 // ============================================================================
 
 template <typename F>
-auto run_on_fltk_thread(F&& fn) -> std::invoke_result_t<F>
+auto run_on_qt_thread(F&& fn) -> std::invoke_result_t<F>
 {
     using R = std::invoke_result_t<F>;
     std::promise<R> promise;
     auto future = promise.get_future();
 
-    post_to_fltk([&promise, &fn]() {
+    post_to_qt([&promise, &fn]() {
         try {
             if constexpr (std::is_void_v<R>) {
                 fn();
@@ -126,6 +124,13 @@ auto run_on_fltk_thread(F&& fn) -> std::invoke_result_t<F>
 // NativeOwnerSetup
 //
 // Low-level Win32 helper: wires a window to a foreign owner and centres it.
+// Framework-agnostic — pass any HWND regardless of GUI toolkit:
+//
+//   Qt : reinterpret_cast<HWND>(widget->winId())
+//
+// This is the common foundation for both modal and non-modal windows.
+// Use it directly for non-modal windows; use NativeOwnerModal (below) for
+// modal dialogs.
 // ============================================================================
 
 class NativeOwnerSetup
@@ -179,71 +184,55 @@ private:
 };
 
 // ============================================================================
-// GreetingDialog  (modal — used by FLTK.GREETING)
+// Modal dialog (QT.GREETING)
 // ============================================================================
 
-class GreetingDialog : public Fl_Window
+class GreetingDialog : public QDialog
 {
 public:
-    GreetingDialog()
-        : Fl_Window(360, 120, "FLTK inside an XLL")
+    explicit GreetingDialog(QWidget* parent = nullptr)
+        : QDialog(parent)
     {
-        begin();
-        new Fl_Box(10, 10, 120, 25, "Enter your name:");
-        m_input  = new Fl_Input(130, 10, 210, 25);
-        m_ok     = new Fl_Button(170, 70, 80, 30, "OK");
-        m_cancel = new Fl_Button(260, 70, 80, 30, "Cancel");
-        end();
+        setWindowTitle("Qt inside an XLL");
+        resize(360, 150);
 
-        m_ok->callback(on_ok, this);
-        m_cancel->callback(on_cancel, this);
-        m_input->when(FL_WHEN_ENTER_KEY);
-        m_input->callback(on_ok, this);
-        set_modal();
+        auto* vbox = new QVBoxLayout(this);
+        auto* hbox = new QHBoxLayout();
+        auto* btns = new QHBoxLayout();
+
+        auto* label = new QLabel("Enter your name:");
+        m_input     = new QLineEdit();
+        m_input->setMinimumWidth(200);
+
+        hbox->addWidget(label);
+        hbox->addWidget(m_input, 1);
+
+        auto* btnOk     = new QPushButton("OK");
+        auto* btnCancel = new QPushButton("Cancel");
+        btns->addStretch();
+        btns->addWidget(btnOk);
+        btns->addWidget(btnCancel);
+        btns->addStretch();
+
+        vbox->addStretch();
+        vbox->addLayout(hbox);
+        vbox->addSpacing(10);
+        vbox->addLayout(btns);
+        vbox->addStretch();
+
+        connect(btnOk,     &QPushButton::clicked, this, &QDialog::accept);
+        connect(btnCancel, &QPushButton::clicked, this, &QDialog::reject);
+        connect(m_input, &QLineEdit::returnPressed, this, &QDialog::accept);
     }
 
-    [[nodiscard]] std::string run(HWND excelHwnd)
+    [[nodiscard]] std::string GetInput() const
     {
-        show();
-        NativeOwnerModal modal(fl_xid(this), excelHwnd);
-        while (shown()) Fl::wait();
-        return m_confirmed ? m_input->value() : std::string{};
+        return m_input->text().toStdString();
     }
 
 private:
-    static void on_ok(Fl_Widget*, void* data)
-    {
-        auto* self = static_cast<GreetingDialog*>(data);
-        self->m_confirmed = true;
-        self->hide();
-    }
-
-    static void on_cancel(Fl_Widget*, void* data)
-    {
-        auto* self = static_cast<GreetingDialog*>(data);
-        self->m_confirmed = false;
-        self->hide();
-    }
-
-    Fl_Input*  m_input   = nullptr;
-    Fl_Button* m_ok      = nullptr;
-    Fl_Button* m_cancel  = nullptr;
-    bool       m_confirmed = false;
+    QLineEdit* m_input = nullptr;
 };
-
-// ============================================================================
-// UTF-8 → wide-string helper (for COM automation)
-// ============================================================================
-
-static std::wstring utf8_to_wide(const char* utf8)
-{
-    if (!utf8 || !*utf8) return {};
-    int len = MultiByteToWideChar(CP_UTF8, 0, utf8, -1, nullptr, 0);
-    if (len <= 0) return {};
-    std::wstring result(len - 1, L'\0');
-    MultiByteToWideChar(CP_UTF8, 0, utf8, -1, result.data(), len);
-    return result;
-}
 
 namespace {
 
@@ -292,37 +281,46 @@ bool write_to_active_cell(const std::wstring& text)
 }
 
 // ============================================================================
-// Non-modal frame (FLTK.STATUS)
+// Non-modal frame (QT.STATUS)
 //
-// FLTK's default close behaviour calls hide(), which is exactly what we
-// want — the frame is hidden but not destroyed, and can be shown again.
-// The manual event loop (Fl::wait in a while-loop) keeps running even
-// when no windows are visible.
-//
-// The frame communicates with Excel by emitting signals (no direct post).
+// The frame is created on the UI thread and only accessed there.
+// It communicates with Excel by emitting signals (no direct post).
 // ============================================================================
 
-class StatusFrame : public Fl_Window
+class StatusFrame : public QWidget
 {
 public:
-    explicit StatusFrame(HWND /*excelHwnd*/, msg::ToExcel& toExcel)
-        : Fl_Window(340, 160, "XLL Status (FLTK)"),
+    StatusFrame(HWND /*excelHwnd*/, msg::ToExcel& toExcel)
+        : QWidget(nullptr),
           m_toExcel(toExcel)
     {
-        begin();
-        new Fl_Box(10, 15, 110, 25, "Your name:");
-        m_name   = new Fl_Input(120, 15, 200, 25);
-        m_name->value("World");
-        m_label  = new Fl_Box(10, 55, 320, 40,
-                              "Type a name and press the button\n"
-                              "to greet the active Excel cell.");
-        m_label->align(FL_ALIGN_CENTER | FL_ALIGN_INSIDE | FL_ALIGN_WRAP);
-        auto* btn = new Fl_Button(95, 110, 150, 30, "Greet Active Cell");
-        end();
+        setWindowTitle("XLL Status (Qt)");
+        resize(340, 170);
 
-        btn->callback(on_greet, this);
-        m_name->when(FL_WHEN_ENTER_KEY);
-        m_name->callback(on_greet, this);
+        auto* vbox = new QVBoxLayout(this);
+        auto* hbox = new QHBoxLayout();
+
+        auto* nameLabel = new QLabel("Your name:");
+        m_name = new QLineEdit("World");
+        m_name->setMinimumWidth(160);
+
+        hbox->addWidget(nameLabel);
+        hbox->addWidget(m_name, 1);
+
+        m_label = new QLabel("Type a name and press the button\n"
+                             "to greet the active Excel cell.");
+        m_label->setAlignment(Qt::AlignCenter);
+
+        auto* btn = new QPushButton("Greet Active Cell");
+
+        vbox->addStretch();
+        vbox->addLayout(hbox);
+        vbox->addWidget(m_label);
+        vbox->addWidget(btn, 0, Qt::AlignCenter);
+        vbox->addStretch();
+
+        connect(btn, &QPushButton::clicked, this, &StatusFrame::SendGreetingRequest);
+        connect(m_name, &QLineEdit::returnPressed, this, &StatusFrame::SendGreetingRequest);
     }
 
     void BringUpNearExcel(HWND excelHwnd)
@@ -330,43 +328,44 @@ public:
         if (excelHwnd && ::IsWindow(excelHwnd)) {
             RECT rc{};
             if (::GetWindowRect(excelHwnd, &rc)) {
-                position(rc.left + 60, rc.top + 60);
+                move(rc.left + 60, rc.top + 60);
             }
         }
+
         show();
+        raise();
+        activateWindow();
     }
 
     void UpdateResult(bool ok)
     {
-        copy_label_text(ok ? "Greeting written to active cell."
-                           : "Failed to write to active cell.");
+        m_label->setText(ok
+            ? "Greeting written to active cell."
+            : "Failed to write to active cell.");
+    }
+
+protected:
+    // Hide instead of destroy when the user closes the window.
+    void closeEvent(QCloseEvent* event) override
+    {
+        hide();
+        event->ignore();
     }
 
 private:
-    void copy_label_text(const char* text)
-    {
-        m_label->copy_label(text);
-        m_label->redraw();
-    }
-
-    static void on_greet(Fl_Widget*, void* data)
-    {
-        static_cast<StatusFrame*>(data)->SendGreetingRequest();
-    }
-
     void SendGreetingRequest()
     {
         std::wstring greeting =
-            L"Hello, " + utf8_to_wide(m_name->value()) + L"!";
+            L"Hello, " + m_name->text().toStdWString() + L"!";
 
         // Just emit the signal — the wiring takes care of thread marshaling.
         m_toExcel.write_to_cell(greeting);
 
-        copy_label_text("Writing greeting...");
+        m_label->setText("Writing greeting...");
     }
 
-    Fl_Input*     m_name  = nullptr;
-    Fl_Box*       m_label = nullptr;
+    QLabel*       m_label     = nullptr;
+    QLineEdit*    m_name      = nullptr;
     msg::ToExcel& m_toExcel;
 };
 
@@ -418,35 +417,37 @@ public:
     void set_frame(StatusFrame* f) { m_frame = f; }
     [[nodiscard]] StatusFrame* frame() const { return m_frame; }
 
-    [[nodiscard]] bool exit_requested() const noexcept { return m_exitLoop.load(); }
-
 private:
     AddIn() = default;
 
     static void ui_thread_body(xll::win32::UiThread& uiThread)
     {
-        // Fl::lock() enables FLTK's multi-threading support.  After this call,
-        // other threads can use Fl::awake() to post work to this thread.
-        Fl::lock();
+        // QApplication must be created on the thread that will run the event
+        // loop — this becomes Qt's "GUI thread".
+        int argc = 0;
+        char* argv[] = { nullptr };
+        QApplication app(argc, argv);
 
-        // Unblock start() — FLTK is ready, Fl::awake() is safe.
+        // Prevent Qt from quitting when the last window is closed.
+        // Without this, closing the StatusFrame (or dismissing a modal
+        // dialog before any persistent window exists) causes
+        // QApplication::exec() to return, tearing down the Qt runtime.
+        app.setQuitOnLastWindowClosed(false);
+
+        // Qt is ready — QApplication exists and the event loop is about to
+        // start.  Unblock the caller of UiThread::start().
         uiThread.signal_ready();
 
-        // Manual event loop: Fl::wait(timeout) processes events and awake
-        // callbacks.  Unlike Fl::run(), this keeps looping even when no windows
-        // are visible, allowing the frame to be re-shown later.
-        auto& app = AddIn::instance();
-        while (!app.exit_requested()) {
-            Fl::wait(0.1);
-        }
+        // Run the Qt event loop.  This blocks until QApplication::quit() is
+        // called (from the shutdown signal handler).
+        app.exec();
 
-        // Clean up the frame on the FLTK thread before exiting.
-        if (app.frame()) {
-            delete app.frame();
-            app.set_frame(nullptr);
+        // Event loop exited — clean up the frame on the Qt thread.
+        auto& addIn = AddIn::instance();
+        if (addIn.frame()) {
+            delete addIn.frame();
+            addIn.set_frame(nullptr);
         }
-
-        Fl::unlock();
     }
 
     // -----------------------------------------------------------------
@@ -457,7 +458,7 @@ private:
     {
         // Excel → UI: show_status
         m_toUi.show_status.connect([this](HWND excelHwnd) {
-            post_to_fltk([this, excelHwnd]() {
+            post_to_qt([this, excelHwnd]() {
                 if (!m_frame) {
                     m_frame = new StatusFrame(excelHwnd, m_toExcel);
                 }
@@ -467,14 +468,20 @@ private:
 
         // Excel → UI: shutdown
         m_toUi.shutdown.connect([this]() {
-            m_exitLoop.store(true);
-            // Wake up Fl::wait() so it sees the exit flag promptly.
-            post_to_fltk([]() {});
+            if (m_uiThread.is_running()) {
+                post_to_qt([this]() {
+                    if (m_frame) {
+                        delete m_frame;
+                        m_frame = nullptr;
+                    }
+                    QApplication::quit();
+                });
+            }
         });
 
         // UI → Excel: write_to_cell
         m_toExcel.write_to_cell.connect([this](const std::wstring& text) {
-            (void)m_excelDispatcher.post([this, text]() {
+            auto _ = m_excelDispatcher.post([this, text]() {
                 bool ok = write_to_active_cell(text);
                 // Response signal → marshaled back to UI thread.
                 m_toUiResponse.cell_write_result(ok);
@@ -483,7 +490,7 @@ private:
 
         // Excel → UI (response): cell_write_result
         m_toUiResponse.cell_write_result.connect([this](bool ok) {
-            post_to_fltk([this, ok]() {
+            post_to_qt([this, ok]() {
                 if (m_frame) m_frame->UpdateResult(ok);
             });
         });
@@ -491,8 +498,7 @@ private:
 
     xll::win32::MessageWindow  m_excelDispatcher;
     xll::win32::UiThread       m_uiThread;
-    StatusFrame*               m_frame = nullptr;        // UI-thread only
-    std::atomic<bool>          m_exitLoop{ false };
+    StatusFrame*               m_frame = nullptr;   // UI-thread only
 
     msg::ToUi          m_toUi;
     msg::ToExcel       m_toExcel;
@@ -505,41 +511,46 @@ private:
 // Lifecycle
 // ============================================================================
 
-auto fltkOnOpen =
+auto qtOnOpen =
     xll::OnOpen()
     | xll::Before([] {
         AddIn::instance().initialize();
     });
-XLL_REGISTER(fltkOnOpen);
+XLL_REGISTER(qtOnOpen);
 
-auto fltkOnClose =
+auto qtOnClose =
     xll::OnClose()
     | xll::Before([] {
         AddIn::instance().shutdown();
     });
-XLL_REGISTER(fltkOnClose);
+XLL_REGISTER(qtOnClose);
 
 // ============================================================================
-// Command: FLTK.GREETING  (modal dialog — exception to the signal pattern)
+// Command: QT.GREETING  (modal dialog — exception to the signal pattern)
 // ============================================================================
 
-auto fltkGreetingCmd =
-    xll::Command("FLTK.GREETING")
-    | xll::Procedure("ShowFltkGreeting")
-    | xll::Category("FLTK Examples")
+auto qtGreetingCmd =
+    xll::Command("QT.GREETING")
+    | xll::Procedure("ShowQtGreeting")
+    | xll::Category("Qt Examples")
     | xll::Description(
-        "Shows a modal FLTK dialog parented to the Excel window, "
+        "Shows a modal Qt dialog parented to the Excel window, "
         "then greets the user with xll::alert.");
-XLL_REGISTER(fltkGreetingCmd);
+XLL_REGISTER(qtGreetingCmd);
 
-XLL_FUNCTION void XLLAPI ShowFltkGreeting()
+XLL_FUNCTION void XLLAPI ShowQtGreeting()
 {
     HWND excelHwnd = xll::get_hwnd();
     if (!excelHwnd) return;
 
-    auto input = run_on_fltk_thread([excelHwnd]() -> std::string {
+    auto input = run_on_qt_thread([excelHwnd]() -> std::string {
         GreetingDialog dlg;
-        return dlg.run(excelHwnd);
+        dlg.show();
+        NativeOwnerModal modal(
+            reinterpret_cast<HWND>(dlg.winId()), excelHwnd);
+        dlg.exec();
+        return (dlg.result() == QDialog::Accepted)
+            ? dlg.GetInput() : std::string{};
     });
 
     if (!input.empty()) {
@@ -548,20 +559,20 @@ XLL_FUNCTION void XLLAPI ShowFltkGreeting()
 }
 
 // ============================================================================
-// Command: FLTK.STATUS  (non-modal frame — uses signals, no threading code)
+// Command: QT.STATUS  (non-modal frame — uses signals, no threading code)
 // ============================================================================
 
-auto fltkStatusCmd =
-    xll::Command("FLTK.STATUS")
-    | xll::Procedure("ShowFltkStatus")
-    | xll::Category("FLTK Examples")
+auto qtStatusCmd =
+    xll::Command("QT.STATUS")
+    | xll::Procedure("ShowQtStatus")
+    | xll::Category("Qt Examples")
     | xll::Description(
-        "Shows a non-modal FLTK frame on a dedicated UI thread. "
+        "Shows a non-modal Qt frame on a dedicated UI thread. "
         "Excel remains interactive while the frame is open. "
         "If the frame is already open, it is brought to the front.");
-XLL_REGISTER(fltkStatusCmd);
+XLL_REGISTER(qtStatusCmd);
 
-XLL_FUNCTION void XLLAPI ShowFltkStatus()
+XLL_FUNCTION void XLLAPI ShowQtStatus()
 {
     HWND excelHwnd = xll::get_hwnd();
     if (!excelHwnd) return;
@@ -569,5 +580,8 @@ XLL_FUNCTION void XLLAPI ShowFltkStatus()
     // Just emit the signal — the wiring takes care of thread marshaling.
     AddIn::instance().to_ui().show_status(excelHwnd);
 }
+
+
+
 
 

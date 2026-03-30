@@ -149,6 +149,27 @@ if (WIN32)
         target_link_options(wxDemo PRIVATE /MANIFEST:NO)
     endif()
     # No post-build DLL copy needed: wxWidgets is statically linked.
+
+    if (Qt6_FOUND)
+        add_executable(qtDemo WIN32 qtDemo.cpp)
+        target_link_libraries(qtDemo PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets)
+        target_compile_definitions(qtDemo PRIVATE NOMINMAX)
+
+        add_library(xllDemoQtDialog SHARED GUI/xllDemoQtDialog.cpp)
+        target_link_libraries(xllDemoQtDialog PUBLIC LibXLL project_warnings project_hardening
+            Qt6::Core Qt6::Gui Qt6::Widgets Pal::Sigslot ole32 oleaut32)
+        set_target_properties(xllDemoQtDialog PROPERTIES OUTPUT_NAME "qt_dialog_demo" SUFFIX ".xll" PREFIX "")
+        target_compile_definitions(xllDemoQtDialog PRIVATE NOMINMAX)
+
+        add_library(xllDemoQtModalDialog SHARED GUI/xllDemoQtModalDialog.cpp)
+        target_link_libraries(xllDemoQtModalDialog PUBLIC LibXLL project_warnings project_hardening
+            Qt6::Core Qt6::Gui Qt6::Widgets)
+        set_target_properties(xllDemoQtModalDialog PROPERTIES OUTPUT_NAME "qt_modal_dialog_demo" SUFFIX ".xll" PREFIX "")
+        target_compile_definitions(xllDemoQtModalDialog PRIVATE NOMINMAX)
+
+        # Copy Qt DLLs next to the built targets so they can be loaded at runtime.
+        qt_generate_deploy_app_script(TARGET qtDemo OUTPUT_SCRIPT QT_DEPLOY_SCRIPT NO_UNSUPPORTED_PLATFORM_ERROR)
+    endif()
 endif()
 
 add_executable(DemoMockExcelScalar Types/DemoMockExcelScalar.cpp)

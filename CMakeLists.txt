@@ -54,6 +54,20 @@ CPMAddPackage(
 
 
 if (WIN32)
+    # Qt is installed externally — use find_package rather than CPM.
+    # Select the correct Qt variant for the compiler in use:
+    #   MSVC / clang-cl → msvc2022_64
+    #   GCC  (MinGW)    → mingw_64
+    if (MSVC OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC"))
+        set(_QT_ROOT "C:/Frameworks/Qt/6.10.1/msvc2022_64")
+    else ()
+        set(_QT_ROOT "C:/Frameworks/Qt/6.10.1/mingw_64")
+    endif ()
+    if (EXISTS "${_QT_ROOT}")
+        list(APPEND CMAKE_PREFIX_PATH "${_QT_ROOT}")
+    endif ()
+    find_package(Qt6 COMPONENTS Core Gui Widgets QUIET)
+
     CPMAddPackage(
             NAME fltk
             GITHUB_REPOSITORY fltk/fltk
