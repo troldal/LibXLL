@@ -1,0 +1,10 @@
+Windows Registry Editor Version 5.00
+
+; -----------------------------------------------------------------------
+; xlCOM development UN-registration
+; Double-click to remove all entries added by register_dev.reg
+; -----------------------------------------------------------------------
+
+[-HKEY_CURRENT_USER\Software\Classes\CLSID\{1E0739E0-A1B5-4AB4-953C-2D8959196A13}]
+[-HKEY_CURRENT_USER\Software\Classes\xlCOM.Connect]
+[-HKEY_CURRENT_USER\Software\Microsoft\Office\Excel\Addins\xlCOM.Connect]

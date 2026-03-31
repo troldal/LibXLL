@@ -167,6 +167,24 @@ if (WIN32)
         set_target_properties(xllDemoQtModalDialog PROPERTIES OUTPUT_NAME "qt_modal_dialog_demo" SUFFIX ".xll" PREFIX "")
         target_compile_definitions(xllDemoQtModalDialog PRIVATE NOMINMAX)
 
+        if (TARGET Qt6::Quick AND TARGET Qt6::Qml AND TARGET Qt6::QuickControls2)
+            add_library(xllDemoQmlDialog SHARED GUI/xllDemoQmlDialog.cpp)
+            target_link_libraries(xllDemoQmlDialog PUBLIC LibXLL project_warnings project_hardening
+                Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::QuickControls2
+                Pal::Sigslot ole32 oleaut32)
+            set_target_properties(xllDemoQmlDialog PROPERTIES
+                AUTOMOC ON
+                OUTPUT_NAME "qml_dialog_demo" SUFFIX ".xll" PREFIX "")
+            target_compile_definitions(xllDemoQmlDialog PRIVATE NOMINMAX)
+
+            add_library(xllDemoQmlModalDialog SHARED GUI/xllDemoQmlModalDialog.cpp)
+            target_link_libraries(xllDemoQmlModalDialog PUBLIC LibXLL project_warnings project_hardening
+                Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::QuickControls2)
+            set_target_properties(xllDemoQmlModalDialog PROPERTIES
+                OUTPUT_NAME "qml_modal_dialog_demo" SUFFIX ".xll" PREFIX "")
+            target_compile_definitions(xllDemoQmlModalDialog PRIVATE NOMINMAX)
+        endif()
+
         # Copy Qt DLLs next to the built targets so they can be loaded at runtime.
         qt_generate_deploy_app_script(TARGET qtDemo OUTPUT_SCRIPT QT_DEPLOY_SCRIPT NO_UNSUPPORTED_PLATFORM_ERROR)
     endif()

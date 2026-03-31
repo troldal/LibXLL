@@ -66,7 +66,9 @@ if (WIN32)
     if (EXISTS "${_QT_ROOT}")
         list(APPEND CMAKE_PREFIX_PATH "${_QT_ROOT}")
     endif ()
-    find_package(Qt6 COMPONENTS Core Gui Widgets QUIET)
+    find_package(Qt6 COMPONENTS Core Gui Widgets
+                    OPTIONAL_COMPONENTS Quick Qml QuickControls2
+                    QUIET)
 
     CPMAddPackage(
             NAME fltk
@@ -109,6 +111,7 @@ if (WIN32)
 endif()
 
 add_subdirectory(LibXLL.Library)
+add_subdirectory(LibXLL.COM)
 
 if(PROJECT_IS_TOP_LEVEL)
     add_subdirectory(LibXLL.MockXL)

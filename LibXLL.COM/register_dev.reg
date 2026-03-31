@@ -1,0 +1,36 @@
+Windows Registry Editor Version 5.00
+
+; -----------------------------------------------------------------------
+; xlCOM development registration
+; Double-click to import.  No administrator rights required.
+; Uses HKCU\Software\Classes instead of HKCR so the entries are
+; per-user and Windows merges them transparently into HKCR at runtime.
+; -----------------------------------------------------------------------
+
+; --- COM class (InprocServer32) -----------------------------------------
+
+[HKEY_CURRENT_USER\Software\Classes\CLSID\{1E0739E0-A1B5-4AB4-953C-2D8959196A13}]
+@="xlCOM Connect"
+
+[HKEY_CURRENT_USER\Software\Classes\CLSID\{1E0739E0-A1B5-4AB4-953C-2D8959196A13}\InprocServer32]
+@="C:\\Users\\kenne\\CLionProjects\\xlCOM\\cmake-build-debug-clang-cl\\xlCOM.dll"
+"ThreadingModel"="Apartment"
+
+[HKEY_CURRENT_USER\Software\Classes\CLSID\{1E0739E0-A1B5-4AB4-953C-2D8959196A13}\ProgID]
+@="xlCOM.Connect"
+
+; --- ProgID → CLSID mapping ---------------------------------------------
+
+[HKEY_CURRENT_USER\Software\Classes\xlCOM.Connect]
+@="xlCOM Connect"
+
+[HKEY_CURRENT_USER\Software\Classes\xlCOM.Connect\CLSID]
+@="{1E0739E0-A1B5-4AB4-953C-2D8959196A13}"
+
+; --- Excel COM Add-in entry ---------------------------------------------
+; LoadBehavior 3 = Connected + Load at Startup
+
+[HKEY_CURRENT_USER\Software\Microsoft\Office\Excel\Addins\xlCOM.Connect]
+"FriendlyName"="xlCOM"
+"Description"="xlCOM Excel COM Add-in sample"
+"LoadBehavior"=dword:00000003
