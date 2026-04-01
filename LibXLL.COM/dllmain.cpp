@@ -1,4 +1,4 @@
-#include "Connect.h"
+#include "Connect.hpp"
 #include <stdio.h>
 
 // ---------------------------------------------------------------------------
@@ -7,8 +7,8 @@
 
 // Tracks all live objects and IClassFactory::LockServer calls.
 // DllCanUnloadNow returns S_OK only when this reaches zero.
-LONG     g_lockCount = 0;
-HMODULE  g_hModule   = nullptr;
+LONG    g_lockCount = 0;
+HMODULE g_hModule   = nullptr;
 
 // ---------------------------------------------------------------------------
 // IClassFactory for Connect

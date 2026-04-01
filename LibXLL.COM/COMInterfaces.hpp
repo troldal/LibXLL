@@ -1,7 +1,5 @@
 #pragma once
 
-// Precompiled header — compiled once by MSVC (/Yc), then reused (/Yu) by all TUs.
-
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <objbase.h>
@@ -59,5 +57,21 @@ public:
     virtual HRESULT STDMETHODCALLTYPE GetCustomUI(
         BSTR RibbonID,
         BSTR *RibbonXml) = 0;
+};
+
+// {000C03A7-0000-0000-C000-000000000046}
+static constexpr IID IID_IRibbonUI =
+    {0x000C03A7, 0x0000, 0x0000, {0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46}};
+
+// IRibbonUI — passed to the onLoad callback; used to invalidate ribbon controls.
+// Vtable layout matches the Office 2007+ type library definition.
+struct IRibbonUI : public IDispatch // NOLINT
+{
+    virtual HRESULT STDMETHODCALLTYPE Invalidate() = 0;
+    virtual HRESULT STDMETHODCALLTYPE InvalidateControl(BSTR controlID) = 0;
+    virtual HRESULT STDMETHODCALLTYPE InvalidateControlMso(BSTR controlID) = 0;
+    virtual HRESULT STDMETHODCALLTYPE ActivateTab(BSTR controlID) = 0;
+    virtual HRESULT STDMETHODCALLTYPE ActivateTabMso(BSTR controlID) = 0;
+    virtual HRESULT STDMETHODCALLTYPE ActivateTabQ(BSTR controlID, BSTR ribbonID) = 0;
 };
 

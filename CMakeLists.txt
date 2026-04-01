@@ -3,6 +3,7 @@ project(LibXLL)
 
 set(CMAKE_CXX_STANDARD 23)
 
+include(cmake/CMakeRC.cmake)
 
 #==============================================================================
 # Fetch dependency manager
@@ -51,6 +52,19 @@ CPMAddPackage(
         GITHUB_REPOSITORY palacaze/sigslot
         GIT_TAG v1.2.3
 )
+
+CPMAddPackage(
+        NAME stb
+        GITHUB_REPOSITORY nothings/stb
+        GIT_TAG master
+)
+
+# stb ships no CMakeLists.txt — wrap it in an INTERFACE target manually.
+if(stb_ADDED)
+    add_library(stb INTERFACE)
+    add_library(stb::stb ALIAS stb)
+    target_include_directories(stb INTERFACE "${stb_SOURCE_DIR}")
+endif()
 
 
 if (WIN32)

@@ -1,0 +1,17 @@
+<customUI xmlns="http://schemas.microsoft.com/office/2006/01/customui"
+          onLoad="OnRibbonLoad">
+  <ribbon>
+    <tabs>
+      <tab id="xlCOMTab" label="xlCOM">
+        <group id="xlCOMGroup" label="xlCOM">
+          <button id="xlCOMButton"
+                  label="Click Me"
+                  size="large"
+                  getImage="GetButtonImage"
+                  onAction="OnButtonClicked" />
+        </group>
+      </tab>
+    </tabs>
+  </ribbon>
+</customUI>
+

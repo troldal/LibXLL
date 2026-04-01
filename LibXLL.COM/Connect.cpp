@@ -1,14 +1,37 @@
-#include "Connect.h"
+#include "Connect.hpp"
 #include <algorithm>
 #include <string>
 #include <unordered_map>
+#include <iostream>
+#include "Utils/ImageFromPNGBytes.hpp"
+#include "Utils/IsDarkMode.hpp"
+#include <cmrc/cmrc.hpp>
+// stb_image — header-only PNG decoder. STB_IMAGE_IMPLEMENTATION must be
+// defined in exactly one translation unit before the header is included.
+
+
+CMRC_DECLARE(foo);
 
 // Defined in dllmain.cpp — tracks live objects to support DllCanUnloadNow.
 extern LONG g_lockCount;
 
+// ---------------------------------------------------------------------------
+// Theme helpers
+// ---------------------------------------------------------------------------
+
+
 Connect::Connect() : m_refCount(1)
 {
     InterlockedIncrement(&g_lockCount);
+}
+
+Connect::~Connect()
+{
+    if (m_ribbonUI)
+    {
+        m_ribbonUI->Release();
+        m_ribbonUI = nullptr;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -82,6 +105,8 @@ using DispatchMap = std::unordered_map<std::wstring, DISPID, WStrIHash, WStrIEqu
 static const DispatchMap kDispatchMap =
 {
     { L"OnButtonClicked", 1 },
+    { L"OnRibbonLoad",    2 },
+    { L"GetButtonImage",  3 },
 };
 
 STDMETHODIMP Connect::GetTypeInfoCount(UINT* pctinfo)
@@ -119,7 +144,8 @@ STDMETHODIMP Connect::GetIDsOfNames(REFIID, LPOLESTR* rgszNames, UINT cNames,
 }
 
 STDMETHODIMP Connect::Invoke(DISPID dispIdMember, REFIID, LCID, WORD,
-                              DISPPARAMS*, VARIANT*, EXCEPINFO*, UINT*)
+                              DISPPARAMS* pDispParams, VARIANT* pVarResult,
+                              EXCEPINFO*, UINT*)
 {
     if (dispIdMember == kDispatchMap.at(L"OnButtonClicked"))
     {
@@ -129,6 +155,41 @@ STDMETHODIMP Connect::Invoke(DISPID dispIdMember, REFIID, LCID, WORD,
                     MB_OK | MB_ICONINFORMATION);
         return S_OK;
     }
+
+    if (dispIdMember == kDispatchMap.at(L"OnRibbonLoad"))
+    {
+        // Office passes the IRibbonUI pointer as the first (and only) argument.
+        if (pDispParams && pDispParams->cArgs >= 1 &&
+            pDispParams->rgvarg[0].vt == VT_DISPATCH &&
+            pDispParams->rgvarg[0].pdispVal)
+        {
+            if (m_ribbonUI) m_ribbonUI->Release();
+            pDispParams->rgvarg[0].pdispVal->QueryInterface(IID_IRibbonUI,
+                reinterpret_cast<void**>(&m_ribbonUI));
+        }
+        return S_OK;
+    }
+
+    if (dispIdMember == kDispatchMap.at(L"GetButtonImage"))
+    {
+        if (!pVarResult) return E_POINTER;
+
+        const char* resource = isDarkMode()
+            ? "button-help_dark48px.png"
+            : "button-help_light48px.png";
+
+        auto fs   = cmrc::foo::get_filesystem();
+        auto file = fs.open(resource);
+
+        IPictureDisp* pPicture = ImageFromPNGBytes(file);
+        if (!pPicture) return E_FAIL;
+
+        VariantInit(pVarResult);
+        pVarResult->vt       = VT_DISPATCH;
+        pVarResult->pdispVal = pPicture;   // caller releases via VARIANT clear
+        return S_OK;
+    }
+
     return DISP_E_MEMBERNOTFOUND;
 }
 
@@ -173,24 +234,21 @@ STDMETHODIMP Connect::GetCustomUI(BSTR /*RibbonID*/, BSTR* RibbonXml)
 {
     if (!RibbonXml) return E_POINTER;
 
-    static const wchar_t* xml =
-        L"<customUI xmlns=\"http://schemas.microsoft.com/office/2006/01/customui\">"
-        L"  <ribbon>"
-        L"    <tabs>"
-        L"      <tab id=\"xlCOMTab\" label=\"xlCOM\">"
-        L"        <group id=\"xlCOMGroup\" label=\"xlCOM\">"
-        L"          <button id=\"xlCOMButton\""
-        L"                  label=\"Click Me\""
-        L"                  size=\"large\""
-        L"                  imageMso=\"HappyFace\""
-        L"                  onAction=\"OnButtonClicked\" />"
-        L"        </group>"
-        L"      </tab>"
-        L"    </tabs>"
-        L"  </ribbon>"
-        L"</customUI>";
+    auto fs   = cmrc::foo::get_filesystem();
+    auto file = fs.open("ribbon.xml");
 
-    *RibbonXml = SysAllocString(xml);
+    const std::string utf8(file.begin(), file.end());
+    const int wlen = MultiByteToWideChar(CP_UTF8, 0,
+                                         utf8.c_str(), static_cast<int>(utf8.size()),
+                                         nullptr, 0);
+    if (wlen <= 0) return E_FAIL;
+
+    std::wstring wide(wlen, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0,
+                        utf8.c_str(), static_cast<int>(utf8.size()),
+                        wide.data(), wlen);
+
+    *RibbonXml = SysAllocString(wide.c_str());
     return *RibbonXml ? S_OK : E_OUTOFMEMORY;
 }
 
