@@ -21,7 +21,6 @@ cmrc_add_resource_library(foo-resources ALIAS foo::rc NAMESPACE foo
 # xlCOM.dll — the Excel COM add-in
 # ---------------------------------------------------------------------------
 add_library(xlCOM SHARED
-    #COMServer.cpp
     Handlers.cpp
 )
 

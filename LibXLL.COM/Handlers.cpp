@@ -7,15 +7,28 @@
 CMRC_DECLARE(foo);
 
 // ---------------------------------------------------------------------------
+// Excel Application pointer — captured on connection, released on disconnect.
+// Used to call Application.Run("MacroName") from ribbon callbacks.
+// ---------------------------------------------------------------------------
+
+static IDispatch* g_excelApp = nullptr;
+
+// ---------------------------------------------------------------------------
 // OnConnection — fires when Excel loads and connects the add-in.
 // ---------------------------------------------------------------------------
 
 auto onConnection = com::OnConnection(
-    [](IDispatch* /*application*/, ext_ConnectMode connectMode,
-       IDispatch* /*addInInst*/,   SAFEARRAY** /*custom*/)
+    [](IDispatch* application, ext_ConnectMode connectMode,
+       IDispatch* /*addInInst*/, SAFEARRAY** /*custom*/)
     {
         std::cerr << "[xlCOM] OnConnection fired. "
                      "ConnectMode = " << static_cast<int>(connectMode) << '\n';
+
+        if (application)
+        {
+            application->AddRef();
+            g_excelApp = application;
+        }
     });
 XLL_COM_REGISTER(onConnection);
 
@@ -28,6 +41,12 @@ auto onDisconnection = com::OnDisconnection(
     {
         std::cerr << "[xlCOM] OnDisconnection fired. "
                      "DisconnectMode = " << static_cast<int>(disconnectMode) << '\n';
+
+        if (g_excelApp)
+        {
+            g_excelApp->Release();
+            g_excelApp = nullptr;
+        }
     });
 XLL_COM_REGISTER(onDisconnection);
 
@@ -53,11 +72,28 @@ XLL_COM_REGISTER(onGetCustomUI);
 auto onButtonClicked = com::DispatchCallback<"OnButtonClicked">(
     [](DISPPARAMS*, VARIANT*) -> HRESULT
     {
-        MessageBoxW(nullptr,
-                    L"Hello from xlCOM!",
-                    L"xlCOM",
-                    MB_OK | MB_ICONINFORMATION);
-        return S_OK;
+        if (!g_excelApp) return E_FAIL;
+
+        // Resolve "Run" on the Excel Application object.
+        LPOLESTR methodName = const_cast<LPOLESTR>(L"Run");
+        DISPID   dispId     = 0;
+        HRESULT  hr = g_excelApp->GetIDsOfNames(IID_NULL, &methodName, 1,
+                                                  LOCALE_USER_DEFAULT, &dispId);
+        if (FAILED(hr)) return hr;
+
+        // Build the argument: the XLL command name to execute.
+        com::String macroName(L"QML.STATUS");
+        VARIANT arg  = {};
+        arg.vt       = VT_BSTR;
+        arg.bstrVal  = macroName.get();   // non-owning — com::String still owns it
+
+        DISPPARAMS params = {};
+        params.rgvarg      = &arg;
+        params.cArgs       = 1;
+
+        // Application.Run("WX.MODAL.GREETING")
+        return g_excelApp->Invoke(dispId, IID_NULL, LOCALE_USER_DEFAULT,
+                                   DISPATCH_METHOD, &params, nullptr, nullptr, nullptr);
     });
 XLL_COM_REGISTER(onButtonClicked);
 
