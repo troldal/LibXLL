@@ -3,11 +3,42 @@
 //
 // OVERVIEW
 // --------
-// This header implements a single COM class, TaskPaneControl, which is the
-// ActiveX control that Office hosts inside a custom task pane (CTP).  When a
-// COM add-in creates a CTP and passes this control's ProgID/CLSID as the
+// This header implements a class template, TaskPaneControl<Content>, which is
+// the ActiveX control that Office hosts inside a custom task pane (CTP).  When
+// a COM add-in creates a CTP and passes this control's ProgID/CLSID as the
 // content object, Excel instantiates the class via its IClassFactory, then
 // calls DoVerb(OLEIVERB_INPLACEACTIVATE) to embed it visually inside the pane.
+//
+// The template parameter Content decouples the COM/ActiveX boilerplate from
+// the GUI framework that provides the task pane's visual content.  Content can
+// be any class that satisfies the following contract:
+//
+//   - Constructible with (HWND parent, int width, int height):
+//       Creates the GUI content as children of the given Win32 window.
+//   - void resize(int width, int height):
+//       Called when the container resizes the task pane (SetObjectRects).
+//   - Destructor handles framework-appropriate cleanup:
+//       May destroy windows, abandon pointers, etc. as required.
+//
+// Example content implementations:
+//   - WxTaskPane   (wxWidgets, see ActiveX/WxTaskPane.hpp)
+//   - A raw Win32 implementation, an FLTK panel, an ImGui backend, etc.
+//
+// USAGE
+// -----
+// Because TaskPaneControl is a class template, it must be explicitly
+// instantiated in exactly one translation unit so that the COM server hooks
+// are registered at DLL load time.  The canonical pattern is:
+//
+//   #include "ActiveX/TaskPaneControl.hpp"
+//   #include "ActiveX/WxTaskPane.hpp"            // or your Content type
+//
+//   // Explicit instantiation of the COM class and its factory:
+//   template class TaskPaneControl<WxTaskPane>;
+//
+//   // Install the COM server hooks (runs at DLL load):
+//   static const bool s_tpHooked =
+//       detail::registerTaskPaneHooks<WxTaskPane>();
 //
 // INTERFACE CHAIN
 // ---------------
@@ -30,16 +61,8 @@
 // THREADING MODEL
 // ---------------
 // Excel is an STA application.  All methods are called on Excel's main thread.
-// There is no secondary thread, no wx event loop, and no message pump owned by
-// this DLL — Excel's own pump processes WM_* messages for the child HWND.
-//
-// WXWIDGETS USAGE
-// ---------------
-// wxWidgets is initialised lazily the first time the control is activated.
-// wxNativeContainerWindow wraps the pre-existing Win32 HWND so that ordinary
-// wxPanel / wxButton children can be parented to it.  Because there is no wx
-// message loop, wx teardown APIs (wxApp::OnExit, wxEntryCleanup) are NOT safe
-// to call while windows still exist; see deactivate() for the workaround.
+// There is no secondary thread and no message pump owned by this DLL — Excel's
+// own pump processes WM_* messages for the child HWND.
 //
 // MUST be included AFTER COM/Macros.hpp (which brings in COMServer.hpp and
 // its global variables: g_lockCount, g_hModule, detail:: helpers).
@@ -47,13 +70,6 @@
 
 #pragma once
 
-// wx headers first — they include <windows.h> internally.
-#include <wx/app.h>
-#include <wx/button.h>
-#include <wx/msgdlg.h>
-#include <wx/panel.h>
-#include <wx/sizer.h>
-#include <wx/nativewin.h>
 
 // OLE / ActiveX interfaces (from Windows SDK).
 #include <oleidl.h>     // IOleObject, IOleInPlaceObject, IOleInPlaceSite …
@@ -82,82 +98,12 @@ inline constexpr CLSID CLSID_TaskPaneControl =
 inline constexpr wchar_t kProgID_TaskPane[] = L"xlCOM.TaskPaneCtrl";
 
 // ---------------------------------------------------------------------------
-// detail namespace — internal helpers for wx initialisation and Win32 window
-// class registration.  Not part of the public API.
+// detail namespace — internal helpers for Win32 window class registration.
+// Not part of the public API.
 // ---------------------------------------------------------------------------
 
 namespace detail {
 
-// ---------------------------------------------------------------------------
-// wxReadyFlag()
-//
-// Returns a reference to a process-wide boolean that tracks whether
-// wxEntryStart() has been called successfully.  Using a function-local static
-// makes initialisation order well-defined and avoids the static-initialisation
-// order fiasco across translation units.
-// ---------------------------------------------------------------------------
-inline bool& wxReadyFlag()
-{
-    static bool ready = false;
-    return ready;
-}
-
-// ---------------------------------------------------------------------------
-// ensureWxInit()
-//
-// Lazily initialises the wxWidgets subsystem the first time it is called.
-// Safe to call multiple times — subsequent calls are no-ops.
-//
-// Steps:
-//   1. If already initialised (flag set), return immediately.
-//   2. If wxTheApp already exists (someone else initialised wx), adopt it and
-//      set the flag.
-//   3. Otherwise allocate a bare wxApp, call wxEntryStart() to set up the
-//      Win32 message infrastructure, and call CallOnInit() so that any
-//      wxApp::OnInit override runs.
-//
-// SetExitOnFrameDelete(false) is critical: without it, wx would call
-// wxExit() when the first top-level window closes, killing the host process.
-//
-// Returns true on success, false if wxEntryStart() fails.
-// ---------------------------------------------------------------------------
-inline bool ensureWxInit()
-{
-    if (wxReadyFlag()) return true;
-    if (wxTheApp) { wxReadyFlag() = true; return true; }
-
-    int argc = 0;
-    wxApp::SetInstance(new wxApp());
-    if (!wxEntryStart(argc, static_cast<char**>(nullptr)))
-        return false;
-
-    if (wxTheApp)
-    {
-        wxTheApp->SetExitOnFrameDelete(false);
-        wxTheApp->CallOnInit();
-    }
-    wxReadyFlag() = true;
-    return true;
-}
-
-// ---------------------------------------------------------------------------
-// shutdownWx()
-//
-// Tears down the wxWidgets subsystem.  Should be called from DllMain on
-// DLL_PROCESS_DETACH (or equivalent) after all controls have been destroyed.
-//
-// NOTE: It is NOT safe to call this while any wxWindow objects still exist,
-// because wxEntryCleanup() calls DestroyAllWindows() and similar routines that
-// require a consistent wx object graph.  See deactivate() for why the control
-// intentionally abandons (rather than destroys) its wx objects.
-// ---------------------------------------------------------------------------
-inline void shutdownWx()
-{
-    if (!wxReadyFlag()) return;
-    if (wxTheApp) wxTheApp->OnExit();
-    wxEntryCleanup();
-    wxReadyFlag() = false;
-}
 
 // ---------------------------------------------------------------------------
 // controlWindowClass()
@@ -193,9 +139,15 @@ inline const wchar_t* controlWindowClass()
 } // namespace detail
 
 // ===========================================================================
-// TaskPaneControl
+// TaskPaneControl<Content>
 //
-// The concrete COM class that Office hosts in a custom task pane.
+// The concrete COM class that Office hosts in a custom task pane, templated
+// on a Content type that provides the visual GUI layer.
+//
+// Content requirements:
+//   - Content(HWND parent, int w, int h)  — construct GUI inside parent HWND
+//   - void resize(int w, int h)           — handle task-pane resize
+//   - destructor                          — framework-appropriate cleanup
 //
 // Lifetime management
 // -------------------
@@ -212,11 +164,12 @@ inline const wchar_t* controlWindowClass()
 // ----------------------------------
 //   1. Excel calls SetClientSite() — stores a back-pointer to the host site.
 //   2. Excel calls DoVerb(OLEIVERB_INPLACEACTIVATE) — triggers activateInPlace(),
-//      which creates the Win32 child window and builds the wxWidgets content.
+//      which creates the Win32 child window and constructs the Content object.
 //   3. Excel may call SetObjectRects() repeatedly as the task pane is resized.
 //   4. Excel calls Close() or InPlaceDeactivate() to tear down the control.
 // ===========================================================================
 
+template<typename Content>
 class TaskPaneControl
     : public IOleObject              // core OLE embedding interface
     , public IOleInPlaceObject       // in-place window management
@@ -541,8 +494,30 @@ public:
     // clipRect is the visible portion after clipping (ignored here; we trust
     // WS_CLIPCHILDREN on the parent to handle overdraw).
     //
-    // We move the Win32 HWND to the new position, then tell the wxPanel to
-    // resize itself so that its sizer re-lays out the child widgets.
+    // Zero-size rects (Excel calls this during early layout) are ignored so
+    // that the HWND is never collapsed to 0×0 and Content is never constructed
+    // or resized to a degenerate size.
+    //
+    // Deferred content construction
+    // --------------------------------
+    // When activateInPlace received a zero initial rect it skipped constructing
+    // Content.  The first SetObjectRects call with valid dimensions constructs
+    // Content (and its D3D11 swap chain) at the correct size so no immediate
+    // ResizeBuffers is needed.
+    //
+    // Resize strategy (flicker-free)
+    // ------------------------------
+    // A naïve MoveWindow(…, TRUE) would repaint the container's background
+    // (white, from the window class brush) immediately — before the Content
+    // child has been resized.  The exposed strip between the old and new
+    // child edges is briefly visible as a white flash / artifact.
+    //
+    // To avoid this we:
+    //   1. Resize the container HWND with SWP_NOREDRAW so no painting occurs.
+    //   2. Create or resize the Content (it updates its own child windows).
+    //   3. Trigger a single, synchronous repaint of the whole tree with
+    //      RedrawWindow(RDW_UPDATENOW | RDW_ALLCHILDREN), so both the
+    //      container and its children paint at their correct, final sizes.
     STDMETHODIMP SetObjectRects(LPCRECT posRect, LPCRECT /*clipRect*/) override
     {
         if (!posRect) return E_POINTER;
@@ -550,12 +525,36 @@ public:
         {
             const int w = posRect->right  - posRect->left;
             const int h = posRect->bottom - posRect->top;
-            MoveWindow(m_hwnd, posRect->left, posRect->top, w, h, TRUE);
-            if (m_wxPanel)
+
+            // Ignore degenerate rects — Excel sends these during early layout
+            // before it knows the real pane dimensions.
+            if (w <= 0 || h <= 0) return S_OK;
+
+            // 1. Resize without repainting.
+            SetWindowPos(m_hwnd, nullptr,
+                         posRect->left, posRect->top, w, h,
+                         SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOREDRAW);
+
+            // 2. Construct Content now if activation deferred it (zero initial
+            //    rect), otherwise resize the existing instance.
+            if (!m_content)
             {
-                m_wxPanel->SetSize(0, 0, w, h);
-                m_wxPanel->Layout();
+                std::cerr << "[xlCOM] SetObjectRects: deferred Content construction ("
+                          << w << 'x' << h << ")\n";
+                m_content = new Content(m_hwnd, w, h);
             }
+            else
+            {
+                m_content->resize(w, h);
+            }
+
+            // 3. Invalidate without forcing a synchronous repaint.
+            // RDW_UPDATENOW is omitted deliberately: firing one repaint per
+            // SetObjectRects call during a live drag causes flicker.
+            // Timer-driven content (ImGui) repaints within ≤16 ms; other
+            // content repaints when the message queue is next idle.
+            RedrawWindow(m_hwnd, nullptr, nullptr,
+                         RDW_INVALIDATE | RDW_ALLCHILDREN);
         }
         return S_OK;
     }
@@ -776,7 +775,7 @@ private:
 
     // The Win32 child window created during in-place activation.  This is the
     // HWND that the container embeds in its task pane.  It is the parent of all
-    // wxWidgets windows created in createWxContent().
+    // child windows created by the Content object.
     HWND              m_hwnd        = nullptr;
 
     // Guard flag: true while the control is in-place active.
@@ -787,14 +786,11 @@ private:
     // Default 5000×5000 ≈ 5 cm × 5 cm.  Echoed back by GetExtent().
     SIZEL             m_extent      = { 5000, 5000 };
 
-    // wxNativeContainerWindow wraps the pre-existing Win32 HWND (m_hwnd) so
-    // that wxWidgets child windows can be parented to it normally.  Ownership
-    // is via the raw pointer; see deactivate() for why we do NOT call Destroy().
-    wxNativeContainerWindow* m_wxContainer = nullptr;
-
-    // The top-level wxPanel inside m_wxContainer.  All UI widgets are children
-    // of this panel.  Same ownership caveat as m_wxContainer.
-    wxPanel*                 m_wxPanel     = nullptr;
+    // The Content object that provides the visual GUI layer inside m_hwnd.
+    // Created during in-place activation; destroyed during deactivate().
+    // The Content destructor is responsible for framework-appropriate cleanup
+    // (e.g. wxWidgets may "abandon" pointers, Win32 may DestroyWindow, etc.).
+    Content*          m_content     = nullptr;
 
     // -------------------------------------------------------------------------
     // activateInPlace
@@ -814,7 +810,7 @@ private:
     //      window from painting over the control's wx children.
     //   6. Optionally call OnUIActivate() if the caller requested full UI
     //      activation (focus + menu merging).
-    //   7. Build the wxWidgets content tree inside the new HWND.
+    //   7. Construct the Content object inside the new HWND.
     //
     // uiActivate — when true, call OnUIActivate() after creating the window.
     //              This signals to the host that the control has keyboard focus
@@ -822,7 +818,13 @@ private:
     // -------------------------------------------------------------------------
     HRESULT activateInPlace(HWND hwndParent, LPCRECT posRect, bool uiActivate)
     {
-        if (m_active) return S_OK;
+        if (m_active)
+        {
+            // Already active — the HWND may have been hidden by a previous
+            // OLEIVERB_HIDE.  Make sure it is visible again and return.
+            if (m_hwnd) ShowWindow(m_hwnd, SW_SHOW);
+            return S_OK;
+        }
 
         std::cerr << "[xlCOM] TaskPaneControl::activateInPlace"
                   << (uiActivate ? " (UI)" : " (in-place only)") << '\n';
@@ -886,6 +888,7 @@ private:
         // reports a zero-size rect before layout has completed.
         int w = posRect2.right  - posRect2.left;
         int h = posRect2.bottom - posRect2.top;
+        const bool deferContent = (w <= 0 || h <= 0);  // zero rect — layout not done yet
         if (w <= 0) w = 1;
         if (h <= 0) h = 1;
 
@@ -912,70 +915,21 @@ private:
         if (uiActivate)
             m_inPlaceSite->OnUIActivate();
 
-        // Build the wxWidgets content tree inside m_hwnd.
-        createWxContent(w, h);
+        // Build the GUI content tree inside m_hwnd — but only when the
+        // container supplied a real (non-zero) position rect.  When Excel
+        // calls DoVerb before it has completed layout the rect is (0,0,0,0);
+        // in that case we defer construction to the first SetObjectRects call
+        // that carries valid dimensions, ensuring the Content (and its D3D11
+        // swap chain) are always created at the correct size.
+        if (!deferContent)
+            m_content = new Content(m_hwnd, w, h);
 
         ShowWindow(m_hwnd, SW_SHOW);
-        std::cerr << "[xlCOM]   TaskPaneControl activated OK\n";
+        std::cerr << "[xlCOM]   TaskPaneControl activated OK"
+                  << (deferContent ? " (content deferred)" : "") << '\n';
         return S_OK;
     }
 
-    // -------------------------------------------------------------------------
-    // createWxContent
-    //
-    // Builds the wxWidgets window hierarchy inside the already-created m_hwnd.
-    // Called once from activateInPlace().
-    //
-    // wxNativeContainerWindow adopts m_hwnd: it does not create a new Win32
-    // window but instead wraps the existing HWND so that wx can treat it as a
-    // top-level window and parent ordinary wx child windows to it.
-    //
-    // Layout:
-    //   wxNativeContainerWindow (wraps m_hwnd)
-    //     └─ wxPanel (m_wxPanel, full size, no border)
-    //          └─ wxBoxSizer (vertical)
-    //               ├─ stretch spacer
-    //               ├─ wxButton ("Click me!", centred)
-    //               └─ stretch spacer
-    //
-    // The button's wxEVT_BUTTON handler shows a wxMessageBox.  Excel's Win32
-    // message pump dispatches WM_COMMAND to the button, which wx translates
-    // into a wxCommandEvent that fires the bound lambda.
-    // -------------------------------------------------------------------------
-    void createWxContent(int w, int h)
-    {
-        if (!detail::ensureWxInit())
-        {
-            std::cerr << "[xlCOM]   wx initialisation failed\n";
-            return;
-        }
-
-        // Wrap the existing HWND as a wx top-level container.
-        m_wxContainer = new wxNativeContainerWindow(m_hwnd);
-        // Full-size panel with no border so it fills the container exactly.
-        m_wxPanel = new wxPanel(m_wxContainer, wxID_ANY,
-                                wxDefaultPosition, wxSize(w, h),
-                                wxNO_BORDER);
-
-        auto* sizer  = new wxBoxSizer(wxVERTICAL);
-        auto* button = new wxButton(m_wxPanel, wxID_ANY, "Click me!");
-
-        // Lambda bound directly to the button; no event table entry needed.
-        button->Bind(wxEVT_BUTTON, [](wxCommandEvent&)
-        {
-            wxMessageBox("Hello from the Task Pane!", "Task Pane",
-                         wxOK | wxICON_INFORMATION);
-        });
-
-        // Equal stretch spacers above and below the button centre it vertically.
-        sizer->AddStretchSpacer();
-        sizer->Add(button, 0, wxALIGN_CENTER);
-        sizer->AddStretchSpacer();
-
-        m_wxPanel->SetSizer(sizer);
-        m_wxPanel->Layout();
-        std::cerr << "[xlCOM]   wx content created\n";
-    }
 
     // -------------------------------------------------------------------------
     // deactivate
@@ -983,26 +937,23 @@ private:
     // Tears down the in-place active state.  Idempotent — safe to call multiple
     // times.
     //
-    // wx object abandonment strategy
-    // --------------------------------
-    // Calling wxWindow::Destroy() or delete on m_wxPanel / m_wxContainer would
-    // normally schedule deferred window deletion via a wx idle event.  But
-    // without a wx event loop, idle events never process, leaving wx in a
-    // partially destructed state.  Moreover, wx's internal OnUpdateUI machinery
-    // (DoUpdateWindowUI) walks the window tree during destruction and accesses
-    // members that may already be invalid without a running loop.
-    //
-    // The safe approach is to abandon the wx pointers (set to nullptr without
-    // calling any wx teardown API) and let DestroyWindow() below destroy the
-    // underlying Win32 HWNDs.  The wx wrapper objects become "orphaned" — they
-    // hold a dangling HWND — but because the process exits (or the DLL unloads)
-    // shortly after, this is harmless for the current experimental scope.
+    // Content cleanup strategy
+    // ------------------------
+    // The Content object is destroyed (via delete) BEFORE the HWND is
+    // destroyed.  This gives the Content destructor a chance to perform any
+    // framework-specific cleanup while the Win32 child windows are still
+    // alive.  For example, wxWidgets' WxTaskPane destructor abandons its wx
+    // wrappers (sets them to nullptr without calling Destroy), which is safe
+    // because DestroyWindow below will destroy the native child windows.
+    // Other Content types may choose to destroy their windows explicitly in
+    // the destructor.
     //
     // Notification sequence (per OLE spec):
-    //   1. Destroy the HWND so the visual is gone before we tell the site.
-    //   2. Call OnUIDeactivate(FALSE) — the control is relinquishing UI focus.
-    //   3. Call OnInPlaceDeactivate() — the control is no longer in-place active.
-    //   4. Release the IOleInPlaceSite pointer (balances the QI AddRef).
+    //   1. Destroy the Content object (framework cleanup while HWND is live).
+    //   2. Destroy the HWND so the visual is gone before we tell the site.
+    //   3. Call OnUIDeactivate(FALSE) — the control is relinquishing UI focus.
+    //   4. Call OnInPlaceDeactivate() — the control is no longer in-place active.
+    //   5. Release the IOleInPlaceSite pointer (balances the QI AddRef).
     // -------------------------------------------------------------------------
     void deactivate()
     {
@@ -1010,13 +961,11 @@ private:
 
         std::cerr << "[xlCOM] TaskPaneControl::deactivate\n";
 
-        // Abandon wx object pointers — do NOT call Destroy() or delete
-        // on them.  We run without a wx event loop, so wx teardown APIs
-        // crash (DoUpdateWindowUI accesses partially-destructed state).
-        // DestroyWindow below will destroy the native child windows;
-        // the wx wrappers become orphaned but harmless for this experiment.
-        m_wxPanel     = nullptr;
-        m_wxContainer = nullptr;
+        // Destroy the Content object — its destructor handles framework-
+        // appropriate cleanup (e.g. abandoning wx pointers, destroying
+        // native children, etc.).
+        delete m_content;
+        m_content = nullptr;
 
         if (m_hwnd)
         {
@@ -1040,9 +989,10 @@ private:
 };
 
 // ===========================================================================
-// TaskPaneControlFactory
+// TaskPaneControlFactory<Content>
 //
-// An IClassFactory implementation that creates TaskPaneControl instances.
+// An IClassFactory implementation that creates TaskPaneControl<Content>
+// instances.
 //
 // COM's class-object lookup (CoGetClassObject / DllGetClassObject) always
 // returns an IClassFactory.  The factory is a separate object from the control
@@ -1052,6 +1002,7 @@ private:
 // ephemeral and its lifetime is managed by the caller via AddRef/Release.
 // ===========================================================================
 
+template<typename Content>
 class TaskPaneControlFactory : public IClassFactory // NOLINT
 {
 public:
@@ -1099,7 +1050,7 @@ public:
         if (!ppv)    return E_POINTER;
         if (pOuter)  return CLASS_E_NOAGGREGATION;
 
-        auto* pCtrl = new(std::nothrow) TaskPaneControl();
+        auto* pCtrl = new(std::nothrow) TaskPaneControl<Content>();
         if (!pCtrl) return E_OUTOFMEMORY;
 
         const HRESULT hr = pCtrl->QueryInterface(riid, ppv);
@@ -1144,21 +1095,22 @@ private:
 namespace detail {
 
 // ---------------------------------------------------------------------------
-// taskPaneGetClassObject
+// taskPaneGetClassObject<Content>
 //
 // Called from the DLL's DllGetClassObject export (via g_pfnExtraGetClassObject)
 // when the CLSID matches CLSID_TaskPaneControl.
 //
-// Allocates a new TaskPaneControlFactory, QI's it for the requested interface
-// (usually IID_IClassFactory), releases the factory's own ref, and returns the
-// QI result.  If the CLSID does not match, returns CLASS_E_CLASSNOTAVAILABLE
-// so the dispatcher tries other registered factories.
+// Allocates a new TaskPaneControlFactory<Content>, QI's it for the requested
+// interface (usually IID_IClassFactory), releases the factory's own ref, and
+// returns the QI result.  If the CLSID does not match, returns
+// CLASS_E_CLASSNOTAVAILABLE so the dispatcher tries other registered factories.
 // ---------------------------------------------------------------------------
+template<typename Content>
 inline HRESULT taskPaneGetClassObject(REFCLSID rclsid, REFIID riid, LPVOID* ppv)
 {
     if (rclsid == CLSID_TaskPaneControl)
     {
-        auto* pFactory = new(std::nothrow) TaskPaneControlFactory();
+        auto* pFactory = new(std::nothrow) TaskPaneControlFactory<Content>();
         if (!pFactory) return E_OUTOFMEMORY;
         const HRESULT hr = pFactory->QueryInterface(riid, ppv);
         pFactory->Release();
@@ -1278,26 +1230,31 @@ inline void taskPaneUnregister()
 }
 
 // ---------------------------------------------------------------------------
-// s_taskPaneHooked — static-initialisation hook
+// registerTaskPaneHooks<Content>
 //
-// This inline variable is initialised by a lambda that runs at DLL load time
-// (before any exported function is called) and installs the three function
-// pointers into the global slots defined by COMServer.hpp.
+// Installs the COM server extension hooks for TaskPaneControl<Content>.
+// Must be called exactly once at DLL load time.  The canonical usage is:
 //
-// Because the variable is inline, the ODR guarantees exactly one copy of this
-// initialisation across all translation units that include this header.
+//   // In a .cpp file (e.g. Handlers.cpp), after including this header
+//   // and the chosen Content header:
+//   static const bool s_tpHooked =
+//       detail::registerTaskPaneHooks<WxTaskPane>();
 //
-// After this runs:
-//   DllGetClassObject  → routes TaskPaneControl CLSIDs to taskPaneGetClassObject
-//   DllRegisterServer  → writes TaskPaneControl registry entries
-//   DllUnregisterServer → removes TaskPaneControl registry entries
+// This populates the three function-pointer slots defined by COMServer.hpp:
+//
+//   g_pfnExtraGetClassObject — routes CLSID_TaskPaneControl to the templated
+//                              factory that creates TaskPaneControl<Content>.
+//   g_pfnExtraRegister       — writes ActiveX registry entries.
+//   g_pfnExtraUnregister     — removes those entries.
 // ---------------------------------------------------------------------------
-inline const bool s_taskPaneHooked = [] {
-    g_pfnExtraGetClassObject = &taskPaneGetClassObject;
+template<typename Content>
+inline bool registerTaskPaneHooks()
+{
+    g_pfnExtraGetClassObject = &taskPaneGetClassObject<Content>;
     g_pfnExtraRegister       = &taskPaneRegister;
     g_pfnExtraUnregister     = &taskPaneUnregister;
     return true;
-}();
+}
 
 } // namespace detail
 

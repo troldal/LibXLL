@@ -1,6 +1,13 @@
-// wx headers MUST come before COM/Macros.hpp — the latter defines
-// WIN32_LEAN_AND_MEAN which strips OLE/GDI headers that wx needs.
-#include <wx/app.h>
+// ---------------------------------------------------------------------------
+// Content type selection — uncomment exactly ONE content include/block below.
+// ---------------------------------------------------------------------------
+
+// #include "ActiveX/WxTaskPane.hpp"          // wxWidgets content
+// #include "ActiveX/Win32TaskPane.hpp"       // pure Win32 content
+// #include "ActiveX/QtTaskPane.hpp"          // Qt Widgets content
+// #include "ActiveX/FltkTaskPane.hpp"        // FLTK content
+// #include "ActiveX/QtQuickTaskPane.hpp"     // Qt Quick (QML) content
+#include "ActiveX/ImGuiTaskPane.hpp"          // Dear ImGui — Win32 + DirectX 11
 
 #include "COM/Macros.hpp"
 #include "ActiveX/TaskPaneControl.hpp"
@@ -10,6 +17,43 @@
 #include <iostream>
 
 CMRC_DECLARE(foo);
+
+// ---------------------------------------------------------------------------
+// Explicit instantiation of the TaskPaneControl with the chosen content type.
+// This causes the compiler to emit the full COM class and factory in this TU.
+// ---------------------------------------------------------------------------
+
+// template class TaskPaneControl<WxTaskPane>;
+// template class TaskPaneControlFactory<WxTaskPane>;
+// template class TaskPaneControl<Win32TaskPane>;
+// template class TaskPaneControlFactory<Win32TaskPane>;
+// template class TaskPaneControl<QtTaskPane>;
+// template class TaskPaneControlFactory<QtTaskPane>;
+// template class TaskPaneControl<FltkTaskPane>;
+// template class TaskPaneControlFactory<FltkTaskPane>;
+// template class TaskPaneControl<QtQuickTaskPane>;
+// template class TaskPaneControlFactory<QtQuickTaskPane>;
+template class TaskPaneControl<ImGuiTaskPane>;
+template class TaskPaneControlFactory<ImGuiTaskPane>;
+
+// ---------------------------------------------------------------------------
+// Install COM server hooks so that DllGetClassObject, DllRegisterServer, and
+// DllUnregisterServer know about the TaskPaneControl ActiveX class.
+// Runs at DLL load time (static initialisation).
+// ---------------------------------------------------------------------------
+
+// static const bool s_taskPaneHooked =
+//     detail::registerTaskPaneHooks<WxTaskPane>();
+// static const bool s_taskPaneHooked =
+//     detail::registerTaskPaneHooks<Win32TaskPane>();
+// static const bool s_taskPaneHooked =
+//     detail::registerTaskPaneHooks<QtTaskPane>();
+// static const bool s_taskPaneHooked =
+//     detail::registerTaskPaneHooks<FltkTaskPane>();
+// static const bool s_taskPaneHooked =
+//     detail::registerTaskPaneHooks<QtQuickTaskPane>();
+static const bool s_taskPaneHooked =
+    detail::registerTaskPaneHooks<ImGuiTaskPane>();
 
 // ---------------------------------------------------------------------------
 // Excel Application pointer — captured on connection, released on disconnect.
@@ -78,8 +122,12 @@ auto onDisconnection = com::OnDisconnection(
             g_taskPane = nullptr;
         }
 
-        // Clean up wxWidgets runtime (initialised by TaskPaneControl).
-        detail::shutdownWx();
+        // Clean up GUI framework runtime on disconnect.
+        // WxTaskPane::shutdown();
+        // QtTaskPane::shutdown();
+        // FltkTaskPane::shutdown();
+        // QtQuickTaskPane::shutdown();
+        ImGuiTaskPane::shutdown();
     });
 XLL_COM_REGISTER(onDisconnection);
 
@@ -131,7 +179,7 @@ auto onButtonClicked = com::DispatchCallback<"OnButtonClicked">(
         if (FAILED(hr)) return hr;
 
         // Build the argument: the XLL command name to execute.
-        com::String macroName(L"QT.STATUS");
+        com::String macroName(L"WX.STATUS");
         VARIANT arg  = {};
         arg.vt       = VT_BSTR;
         arg.bstrVal  = macroName.get();   // non-owning — com::String still owns it
@@ -183,7 +231,7 @@ auto getButtonImage = com::DispatchCallback<"GetButtonImage">(
 XLL_COM_REGISTER(getButtonImage);
 
 // ---------------------------------------------------------------------------
-// Helper: get/set the Visible property on a CustomTaskPane IDispatch.
+// Helpers: interact with a CustomTaskPane IDispatch.
 // ---------------------------------------------------------------------------
 
 static HRESULT TaskPane_GetVisible(IDispatch* pPane, bool& visible)
@@ -223,28 +271,84 @@ static HRESULT TaskPane_SetVisible(IDispatch* pPane, bool visible)
                          DISPATCH_PROPERTYPUT, &params, nullptr, nullptr, nullptr);
 }
 
+// Delete() removes the CTP from Excel's CustomTaskPanes collection, which
+// triggers IOleObject::Close → TaskPaneControl::deactivate → ~ImGuiTaskPane.
+static HRESULT TaskPane_Delete(IDispatch* pPane)
+{
+    LPOLESTR name = const_cast<LPOLESTR>(L"Delete");
+    DISPID   id   = 0;
+    HRESULT  hr   = pPane->GetIDsOfNames(IID_NULL, &name, 1, LOCALE_USER_DEFAULT, &id);
+    if (FAILED(hr)) return hr;
+    DISPPARAMS noParams = {};
+    return pPane->Invoke(id, IID_NULL, LOCALE_USER_DEFAULT,
+                         DISPATCH_METHOD, &noParams, nullptr, nullptr, nullptr);
+}
+
+static HRESULT TaskPane_SetWidth(IDispatch* pPane, int widthPx)
+{
+    LPOLESTR  name = const_cast<LPOLESTR>(L"Width");
+    DISPID    id   = 0;
+    HRESULT   hr   = pPane->GetIDsOfNames(IID_NULL, &name, 1, LOCALE_USER_DEFAULT, &id);
+    if (FAILED(hr)) return hr;
+
+    VARIANT    arg    = {};
+    arg.vt            = VT_I4;
+    arg.lVal          = widthPx;
+    DISPID     putId  = DISPID_PROPERTYPUT;
+    DISPPARAMS params = {};
+    params.rgvarg            = &arg;
+    params.cArgs             = 1;
+    params.rgdispidNamedArgs = &putId;
+    params.cNamedArgs        = 1;
+    return pPane->Invoke(id, IID_NULL, LOCALE_USER_DEFAULT,
+                         DISPATCH_PROPERTYPUT, &params, nullptr, nullptr, nullptr);
+}
+
 // ---------------------------------------------------------------------------
-// OnTaskPaneClicked — creates the custom task pane on first click, then
-// toggles its Visible property on subsequent clicks.
+// OnTaskPaneClicked — destroy-and-recreate toggle.
 //
-// ICTPFactory is IDispatch-only (no vtable methods beyond IDispatch), so
-// CreateCTP is called via GetIDsOfNames / Invoke.
-// The hosted control is our custom TaskPaneControl ActiveX (wxWidgets label).
+// Strategy: Excel's CTP Visible property does not reliably re-drive
+// DoVerb/activation on the hosted ActiveX control after the first hide.
+// Instead we delete the entire CTP on close (which tears down the
+// ImGuiTaskPane cleanly) and create a fresh one on open.
+//
+//   Ribbon press while pane is VISIBLE  → Delete() + release → pane gone.
+//   Ribbon press while pane is HIDDEN   → stale pointer; drop, recreate.
+//   Ribbon press while no pane          → create fresh pane.
+//   User closes with pane X button      → same as "pane hidden" on next press.
 // ---------------------------------------------------------------------------
 
 auto onTaskPaneClicked = com::DispatchCallback<"OnTaskPaneClicked">(
     [](DISPPARAMS*, VARIANT*) -> HRESULT
     {
-        // Already created — just toggle visibility.
+        std::cerr << "[xlCOM] OnTaskPaneClicked\n";
+
         if (g_taskPane)
         {
             bool visible = false;
             HRESULT hr = TaskPane_GetVisible(g_taskPane, visible);
-            if (FAILED(hr)) return hr;
-            return TaskPane_SetVisible(g_taskPane, !visible);
+            if (SUCCEEDED(hr) && visible)
+            {
+                // Pane is open — close it by deleting the CTP entirely.
+                // This triggers TaskPaneControl::deactivate → ~ImGuiTaskPane.
+                std::cerr << "[xlCOM]   deleting visible pane\n";
+                TaskPane_Delete(g_taskPane);
+                g_taskPane->Release();
+                g_taskPane = nullptr;
+                return S_OK;
+            }
+            // Pane is already hidden (user closed with X) or pointer is stale.
+            // Drop it and fall through to recreate.
+            std::cerr << "[xlCOM]   pane hidden/stale — recreating\n";
+            g_taskPane->Release();
+            g_taskPane = nullptr;
         }
 
-        if (!g_ctpFactory) return E_FAIL;
+        if (!g_ctpFactory)
+        {
+            std::cerr << "[xlCOM]   no CTP factory available\n";
+            return E_FAIL;
+        }
 
         // Resolve "CreateCTP" on the ICTPFactory dispatch interface.
         LPOLESTR methodName = const_cast<LPOLESTR>(L"CreateCTP");
@@ -286,12 +390,18 @@ auto onTaskPaneClicked = com::DispatchCallback<"OnTaskPaneClicked">(
         SysFreeString(args[2].bstrVal);
         SysFreeString(args[1].bstrVal);
 
-        // Cache the pane and make it visible — CreateCTP defaults to Visible = False.
+        // Cache the pane and set it visible.
+        // Setting Visible = true on a freshly created CTP triggers
+        // DoVerb(OLEIVERB_INPLACEACTIVATE) → activateInPlace → new ImGuiTaskPane.
         if (SUCCEEDED(hr) && result.vt == VT_DISPATCH && result.pdispVal)
         {
             g_taskPane = result.pdispVal;
             g_taskPane->AddRef();
             hr = TaskPane_SetVisible(g_taskPane, true);
+            if (SUCCEEDED(hr))
+                TaskPane_SetWidth(g_taskPane, 600);
+            std::cerr << "[xlCOM]   pane created, SetVisible hr=0x"
+                      << std::hex << hr << std::dec << '\n';
         }
         VariantClear(&result);
 

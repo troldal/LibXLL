@@ -16,6 +16,7 @@ cmrc_add_resource_library(foo-resources ALIAS foo::rc NAMESPACE foo
     ribbon.xml
     button-help_dark48px.png
     button-help_light48px.png
+    Inter-VariableFont.ttf
 )
 
 # ---------------------------------------------------------------------------
@@ -23,13 +24,22 @@ cmrc_add_resource_library(foo-resources ALIAS foo::rc NAMESPACE foo
 # ---------------------------------------------------------------------------
 add_library(xlCOM SHARED
     Handlers.cpp
+    # ActiveX/QtQuickTaskPane.hpp   # Listed so AUTOMOC discovers Q_OBJECT in the header
+    # ImGui Win32 + DX11 backends — compiled directly into xlCOM so the DLL
+    # carries its own copy and does not conflict with other imgui consumers.
+    "${imgui_SOURCE_DIR}/backends/imgui_impl_win32.cpp"
+    "${imgui_SOURCE_DIR}/backends/imgui_impl_dx11.cpp"
 )
 
 # No "lib" prefix — the output should be xlCOM.dll, not libxlCOM.dll.
-set_target_properties(xlCOM PROPERTIES PREFIX "")
+set_target_properties(xlCOM PROPERTIES
+    PREFIX ""
+    # AUTOMOC ON   # Enable when using a Qt content type (e.g. QtQuickTaskPane)
+)
 
 target_include_directories(xlCOM PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}"   # for COM/, Utils/, COMServer.hpp
+    "${CMAKE_CURRENT_SOURCE_DIR}"          # for COM/, Utils/, COMServer.hpp
+    "${imgui_SOURCE_DIR}/backends"         # imgui_impl_win32.h, imgui_impl_dx11.h
 )
 
 target_link_libraries(xlCOM PRIVATE
@@ -38,7 +48,15 @@ target_link_libraries(xlCOM PRIVATE
     uuid        # IID_IUnknown, IID_IDispatch, IID_IClassFactory, ...
     stb::stb    # stb_image — header-only PNG decoder (replaces GDI+)
     fixed_string::fixed_string  # compile-time string NTTP for DispatchCallback
-    wx::core wx::base           # wxWidgets — used by ActiveX/TaskPaneControl.hpp
+    imgui                       # Dear ImGui core — used by ActiveX/ImGuiTaskPane.hpp
+    d3d11                       # Direct3D 11 — swap chain / device / context
+    dxgi                        # DXGI — adapter / swap chain creation
+    d3dcompiler                 # D3DCompile — shader compilation (imgui_impl_dx11)
+    dwmapi                      # DWM — dark-mode support in imgui_impl_win32
+    # wx::core wx::base           # wxWidgets — used by ActiveX/WxTaskPane.hpp
+    # Qt6::Widgets                  # Qt Widgets — used by ActiveX/QtTaskPane.hpp
+    # fltk::fltk                    # FLTK — used by ActiveX/FltkTaskPane.hpp
+    # Qt6::Quick Qt6::Qml           # Qt Quick — used by ActiveX/QtQuickTaskPane.hpp
     foo::rc
 )
 
