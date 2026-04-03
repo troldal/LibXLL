@@ -9,6 +9,10 @@
                   size="large"
                   getImage="GetButtonImage"
                   onAction="OnButtonClicked" />
+          <button id="xlCOMTaskPaneButton"
+                  label="Open Task Pane"
+                  size="large"
+                  onAction="OnTaskPaneClicked" />
         </group>
       </tab>
     </tabs>

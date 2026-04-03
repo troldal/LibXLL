@@ -10,6 +10,7 @@ endif()
 # Change this value here only — Connect.hpp and the .reg files update automatically.
 # ---------------------------------------------------------------------------
 set(XLCOM_CONNECT_GUID "1E0739E0-A1B5-4AB4-953C-2D8959196A13")
+set(XLCOM_TASKPANE_GUID "7C2D4F8A-3E1B-4A5C-9D6E-8F0B2A1C3D5E")
 
 cmrc_add_resource_library(foo-resources ALIAS foo::rc NAMESPACE foo
     ribbon.xml
@@ -37,6 +38,7 @@ target_link_libraries(xlCOM PRIVATE
     uuid        # IID_IUnknown, IID_IDispatch, IID_IClassFactory, ...
     stb::stb    # stb_image — header-only PNG decoder (replaces GDI+)
     fixed_string::fixed_string  # compile-time string NTTP for DispatchCallback
+    wx::core wx::base           # wxWidgets — used by ActiveX/TaskPaneControl.hpp
     foo::rc
 )
 
@@ -44,6 +46,9 @@ target_link_libraries(xlCOM PRIVATE
 target_compile_definitions(xlCOM PRIVATE
     "XLCOM_CONNECT_GUID=\"${XLCOM_CONNECT_GUID}\""
     NOMINMAX    # Prevent <windows.h> min/max macros from breaking std::min/std::max
+    # wxWidgets with MSVC /sdl promotes C4996 to an error; this suppresses it
+    # at the preprocessor level so /sdl has nothing to promote.
+    _CRT_SECURE_NO_WARNINGS
 )
 
 # ---------------------------------------------------------------------------

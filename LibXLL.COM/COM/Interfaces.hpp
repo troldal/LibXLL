@@ -75,3 +75,18 @@ struct IRibbonUI : public IDispatch // NOLINT
     virtual HRESULT STDMETHODCALLTYPE ActivateTabQ(BSTR controlID, BSTR ribbonID) = 0;
 };
 
+// {000C033E-0000-0000-C000-000000000046}
+static constexpr IID IID_ICustomTaskPaneConsumer =
+    {0x000C033E, 0x0000, 0x0000, {0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46}};
+
+// ICustomTaskPaneConsumer — implemented by the add-in so that Excel can hand
+// over the ICTPFactory (as IDispatch*) when the add-in connects.
+// Office queries for this interface via QueryInterface during OnConnection.
+// The real Office definition derives from IDispatch (vtable slot 7).
+struct ICustomTaskPaneConsumer : public IDispatch // NOLINT
+{
+    // CTPFactoryInst is an ICTPFactory*, passed as IDispatch* to avoid
+    // pulling in the full Office type library.
+    virtual HRESULT STDMETHODCALLTYPE CTPFactoryAvailable(IDispatch* CTPFactoryInst) = 0;
+};
+

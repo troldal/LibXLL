@@ -1,4 +1,9 @@
+// wx headers MUST come before COM/Macros.hpp — the latter defines
+// WIN32_LEAN_AND_MEAN which strips OLE/GDI headers that wx needs.
+#include <wx/app.h>
+
 #include "COM/Macros.hpp"
+#include "ActiveX/TaskPaneControl.hpp"
 #include "Utils/ImageFromPNGBytes.hpp"
 #include "Utils/IsDarkMode.hpp"
 #include <cmrc/cmrc.hpp>
@@ -12,6 +17,19 @@ CMRC_DECLARE(foo);
 // ---------------------------------------------------------------------------
 
 static IDispatch* g_excelApp = nullptr;
+
+// ---------------------------------------------------------------------------
+// ICTPFactory pointer — captured via ICustomTaskPaneConsumer::CTPFactoryAvailable.
+// Used to call ICTPFactory::CreateCTP from ribbon callbacks.
+// ---------------------------------------------------------------------------
+
+static IDispatch* g_ctpFactory = nullptr;
+
+// ---------------------------------------------------------------------------
+// CustomTaskPane IDispatch — created on first button click, toggled thereafter.
+// ---------------------------------------------------------------------------
+
+static IDispatch* g_taskPane = nullptr;
 
 // ---------------------------------------------------------------------------
 // OnConnection — fires when Excel loads and connects the add-in.
@@ -47,8 +65,39 @@ auto onDisconnection = com::OnDisconnection(
             g_excelApp->Release();
             g_excelApp = nullptr;
         }
+
+        if (g_ctpFactory)
+        {
+            g_ctpFactory->Release();
+            g_ctpFactory = nullptr;
+        }
+
+        if (g_taskPane)
+        {
+            g_taskPane->Release();
+            g_taskPane = nullptr;
+        }
+
+        // Clean up wxWidgets runtime (initialised by TaskPaneControl).
+        detail::shutdownWx();
     });
 XLL_COM_REGISTER(onDisconnection);
+
+// ---------------------------------------------------------------------------
+// OnCTPFactoryAvailable — fired by ICustomTaskPaneConsumer::CTPFactoryAvailable.
+// Stores the factory for use in ribbon callbacks.
+// ---------------------------------------------------------------------------
+
+auto onCTPFactoryAvailable = com::OnCTPFactoryAvailable(
+    [](IDispatch* factory)
+    {
+        if (factory)
+        {
+            factory->AddRef();
+            g_ctpFactory = factory;
+        }
+    });
+XLL_COM_REGISTER(onCTPFactoryAvailable);
 
 // ---------------------------------------------------------------------------
 // OnGetCustomUI — returns the RibbonX XML from the embedded resource.
@@ -132,4 +181,121 @@ auto getButtonImage = com::DispatchCallback<"GetButtonImage">(
         return S_OK;
     });
 XLL_COM_REGISTER(getButtonImage);
+
+// ---------------------------------------------------------------------------
+// Helper: get/set the Visible property on a CustomTaskPane IDispatch.
+// ---------------------------------------------------------------------------
+
+static HRESULT TaskPane_GetVisible(IDispatch* pPane, bool& visible)
+{
+    LPOLESTR  name = const_cast<LPOLESTR>(L"Visible");
+    DISPID    id   = 0;
+    HRESULT   hr   = pPane->GetIDsOfNames(IID_NULL, &name, 1, LOCALE_USER_DEFAULT, &id);
+    if (FAILED(hr)) return hr;
+
+    DISPPARAMS noParams = {};
+    VARIANT    result   = {};
+    hr = pPane->Invoke(id, IID_NULL, LOCALE_USER_DEFAULT,
+                       DISPATCH_PROPERTYGET, &noParams, &result, nullptr, nullptr);
+    if (SUCCEEDED(hr) && result.vt == VT_BOOL)
+        visible = (result.boolVal != VARIANT_FALSE);
+    VariantClear(&result);
+    return hr;
+}
+
+static HRESULT TaskPane_SetVisible(IDispatch* pPane, bool visible)
+{
+    LPOLESTR  name = const_cast<LPOLESTR>(L"Visible");
+    DISPID    id   = 0;
+    HRESULT   hr   = pPane->GetIDsOfNames(IID_NULL, &name, 1, LOCALE_USER_DEFAULT, &id);
+    if (FAILED(hr)) return hr;
+
+    VARIANT    arg     = {};
+    arg.vt             = VT_BOOL;
+    arg.boolVal        = visible ? VARIANT_TRUE : VARIANT_FALSE;
+    DISPID     putId   = DISPID_PROPERTYPUT;
+    DISPPARAMS params  = {};
+    params.rgvarg            = &arg;
+    params.cArgs             = 1;
+    params.rgdispidNamedArgs = &putId;
+    params.cNamedArgs        = 1;
+    return pPane->Invoke(id, IID_NULL, LOCALE_USER_DEFAULT,
+                         DISPATCH_PROPERTYPUT, &params, nullptr, nullptr, nullptr);
+}
+
+// ---------------------------------------------------------------------------
+// OnTaskPaneClicked — creates the custom task pane on first click, then
+// toggles its Visible property on subsequent clicks.
+//
+// ICTPFactory is IDispatch-only (no vtable methods beyond IDispatch), so
+// CreateCTP is called via GetIDsOfNames / Invoke.
+// The hosted control is our custom TaskPaneControl ActiveX (wxWidgets label).
+// ---------------------------------------------------------------------------
+
+auto onTaskPaneClicked = com::DispatchCallback<"OnTaskPaneClicked">(
+    [](DISPPARAMS*, VARIANT*) -> HRESULT
+    {
+        // Already created — just toggle visibility.
+        if (g_taskPane)
+        {
+            bool visible = false;
+            HRESULT hr = TaskPane_GetVisible(g_taskPane, visible);
+            if (FAILED(hr)) return hr;
+            return TaskPane_SetVisible(g_taskPane, !visible);
+        }
+
+        if (!g_ctpFactory) return E_FAIL;
+
+        // Resolve "CreateCTP" on the ICTPFactory dispatch interface.
+        LPOLESTR methodName = const_cast<LPOLESTR>(L"CreateCTP");
+        DISPID   dispId     = 0;
+        HRESULT  hr = g_ctpFactory->GetIDsOfNames(IID_NULL, &methodName, 1,
+                                                    LOCALE_USER_DEFAULT, &dispId);
+        if (FAILED(hr)) return hr;
+
+        // Arguments are passed in reverse order per IDispatch convention.
+        // CreateCTP(CTPAxID As String, CTPTitle As String,
+        //           [CTPParentWindow As Object]) As CustomTaskPane
+        VARIANT args[3] = {};
+        args[2].vt      = VT_BSTR;                          // CTPAxID  (1st param → last index)
+        args[2].bstrVal = SysAllocString(kProgID_TaskPane);
+        args[1].vt      = VT_BSTR;                          // CTPTitle (2nd param)
+        args[1].bstrVal = SysAllocString(L"My Task Pane");
+        args[0].vt      = VT_ERROR;                          // CTPParentWindow (optional)
+        args[0].scode   = DISP_E_PARAMNOTFOUND;
+
+        DISPPARAMS params  = {};
+        params.rgvarg      = args;
+        params.cArgs       = 3;
+
+        VARIANT   result   = {};
+        EXCEPINFO excep    = {};
+        UINT      argErr   = 0;
+        hr = g_ctpFactory->Invoke(dispId, IID_NULL, LOCALE_USER_DEFAULT,
+                                   DISPATCH_METHOD, &params, &result, &excep, &argErr);
+
+        if (hr == DISP_E_EXCEPTION)
+        {
+            if (excep.bstrDescription)
+                fprintf(stderr, "[xlCOM] CreateCTP failed: %ls\n", excep.bstrDescription);
+            SysFreeString(excep.bstrDescription);
+            SysFreeString(excep.bstrSource);
+            SysFreeString(excep.bstrHelpFile);
+        }
+
+        SysFreeString(args[2].bstrVal);
+        SysFreeString(args[1].bstrVal);
+
+        // Cache the pane and make it visible — CreateCTP defaults to Visible = False.
+        if (SUCCEEDED(hr) && result.vt == VT_DISPATCH && result.pdispVal)
+        {
+            g_taskPane = result.pdispVal;
+            g_taskPane->AddRef();
+            hr = TaskPane_SetVisible(g_taskPane, true);
+        }
+        VariantClear(&result);
+
+        return hr;
+    });
+XLL_COM_REGISTER(onTaskPaneClicked);
 

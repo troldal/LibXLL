@@ -33,6 +33,22 @@ inline LONG    g_lockCount = 0;
 inline HMODULE g_hModule   = nullptr;
 
 // ---------------------------------------------------------------------------
+// Extension hooks — let external headers (e.g. ActiveX controls) plug
+// additional class factories and registration logic into the COM server
+// without modifying this boilerplate.
+// ---------------------------------------------------------------------------
+
+// Called by DllGetClassObject when CLSID_Connect doesn't match.
+// Return CLASS_E_CLASSNOTAVAILABLE to fall through.
+inline HRESULT (*g_pfnExtraGetClassObject)(REFCLSID, REFIID, LPVOID*) = nullptr;
+
+// Called at the end of DllRegisterServer; receives the DLL path.
+inline HRESULT (*g_pfnExtraRegister)(const wchar_t* dllPath) = nullptr;
+
+// Called at the end of DllUnregisterServer.
+inline void (*g_pfnExtraUnregister)() = nullptr;
+
+// ---------------------------------------------------------------------------
 // Connect — implements _IDTExtensibility2 + IRibbonExtensibility.
 //
 // Every virtual method delegates to the handler infrastructure
@@ -40,7 +56,8 @@ inline HMODULE g_hModule   = nullptr;
 // users never need to touch this class.
 // ---------------------------------------------------------------------------
 
-class Connect : public _IDTExtensibility2, public IRibbonExtensibility // NOLINT
+class Connect : public _IDTExtensibility2, public IRibbonExtensibility,
+                public ICustomTaskPaneConsumer // NOLINT
 {
 public:
     Connect() : m_refCount(1)
@@ -75,6 +92,13 @@ public:
         if (riid == IID_IRibbonExtensibility)
         {
             *ppvObject = static_cast<IRibbonExtensibility*>(this);
+            AddRef();
+            return S_OK;
+        }
+
+        if (riid == IID_ICustomTaskPaneConsumer)
+        {
+            *ppvObject = static_cast<ICustomTaskPaneConsumer*>(this);
             AddRef();
             return S_OK;
         }
@@ -185,6 +209,14 @@ public:
         if (result.empty()) return E_FAIL;
 
         *RibbonXml = result.release();
+        return S_OK;
+    }
+
+    // --- ICustomTaskPaneConsumer ------------------------------------------
+
+    STDMETHODIMP CTPFactoryAvailable(IDispatch* CTPFactoryInst) override
+    {
+        com::OnCTPFactoryAvailable::Execute(CTPFactoryInst);
         return S_OK;
     }
 
@@ -371,6 +403,10 @@ HRESULT STDAPICALLTYPE DllGetClassObject(REFCLSID rclsid, REFIID riid, LPVOID* p
         return hr;
     }
 
+    // Extension hook — let additional class factories handle the request.
+    if (g_pfnExtraGetClassObject)
+        return g_pfnExtraGetClassObject(rclsid, riid, ppv);
+
     return CLASS_E_CLASSNOTAVAILABLE;
 }
 
@@ -428,6 +464,13 @@ HRESULT STDAPICALLTYPE DllRegisterServer()
     hr = detail::SetRegDword(HKEY_CURRENT_USER, addinKey, L"LoadBehavior", 3);
     if (FAILED(hr)) return hr;
 
+    // Extension hook — register additional CLSIDs.
+    if (g_pfnExtraRegister)
+    {
+        hr = g_pfnExtraRegister(dllPath);
+        if (FAILED(hr)) return hr;
+    }
+
     return S_OK;
 }
 
@@ -449,6 +492,10 @@ HRESULT STDAPICALLTYPE DllUnregisterServer()
     // Remove Excel add-in entry
     detail::DeleteRegKey(HKEY_CURRENT_USER,
                          L"Software\\Microsoft\\Office\\Excel\\Addins\\xlCOM.Connect");
+
+    // Extension hook — unregister additional CLSIDs.
+    if (g_pfnExtraUnregister)
+        g_pfnExtraUnregister();
 
     return S_OK;
 }

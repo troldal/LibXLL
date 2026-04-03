@@ -27,6 +27,12 @@ struct AddInsUpdate    { using Callback = std::function<void(SAFEARRAY** custom)
 struct StartupComplete { using Callback = std::function<void(SAFEARRAY** custom)>; };
 struct BeginShutdown   { using Callback = std::function<void(SAFEARRAY** custom)>; };
 
+// Event fired when Excel hands over the ICTPFactory for custom task panes.
+// The factory is passed as IDispatch* to avoid importing the Office type library.
+struct CTPFactory {
+    using Callback = std::function<void(IDispatch* factory)>;
+};
+
 // Query-style event — the callback receives the RibbonID and returns the
 // RibbonX XML as a com::String.  Returning an empty com::String defers to
 // the next handler (or to the built-in ribbon.xml resource).
@@ -133,6 +139,7 @@ using OnAddInsUpdate    = EventHandler<AddInsUpdate>;
 using OnStartupComplete = EventHandler<StartupComplete>;
 using OnBeginShutdown   = EventHandler<BeginShutdown>;
 using OnGetCustomUI     = QueryHandler<GetCustomUI>;
+using OnCTPFactoryAvailable = EventHandler<CTPFactory>;
 
 // ---------------------------------------------------------------------------
 // Registrar — RAII wrapper instantiated by XLL_COM_REGISTER.

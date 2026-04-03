@@ -10,3 +10,7 @@ Windows Registry Editor Version 5.00
 [-HKEY_CURRENT_USER\Software\Classes\xlCOM.Connect]
 [-HKEY_CURRENT_USER\Software\Microsoft\Office\Excel\Addins\xlCOM.Connect]
 
+; --- TaskPaneControl ActiveX ---
+[-HKEY_CURRENT_USER\Software\Classes\CLSID\{@XLCOM_TASKPANE_GUID@}]
+[-HKEY_CURRENT_USER\Software\Classes\xlCOM.TaskPaneCtrl]
+

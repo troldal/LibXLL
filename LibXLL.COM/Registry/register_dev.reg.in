@@ -36,3 +36,25 @@ Windows Registry Editor Version 5.00
 "Description"="xlCOM Excel COM Add-in sample"
 "LoadBehavior"=dword:00000003
 
+; --- TaskPaneControl ActiveX (for custom task panes) --------------------
+
+[HKEY_CURRENT_USER\Software\Classes\CLSID\{@XLCOM_TASKPANE_GUID@}]
+@="xlCOM TaskPaneControl"
+
+[HKEY_CURRENT_USER\Software\Classes\CLSID\{@XLCOM_TASKPANE_GUID@}\InprocServer32]
+@="@XLCOM_DLL_PATH_REG@"
+"ThreadingModel"="Apartment"
+
+[HKEY_CURRENT_USER\Software\Classes\CLSID\{@XLCOM_TASKPANE_GUID@}\Control]
+
+[HKEY_CURRENT_USER\Software\Classes\CLSID\{@XLCOM_TASKPANE_GUID@}\ProgID]
+@="xlCOM.TaskPaneCtrl"
+
+[HKEY_CURRENT_USER\Software\Classes\CLSID\{@XLCOM_TASKPANE_GUID@}\Implemented Categories\{40FC6ED4-2438-11CF-A3DB-080036F12502}]
+
+[HKEY_CURRENT_USER\Software\Classes\xlCOM.TaskPaneCtrl]
+@="xlCOM TaskPaneControl"
+
+[HKEY_CURRENT_USER\Software\Classes\xlCOM.TaskPaneCtrl\CLSID]
+@="{@XLCOM_TASKPANE_GUID@}"
+
