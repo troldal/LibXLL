@@ -36,6 +36,9 @@
 #include <memory>
 #include <string>
 
+#include <cmrc/cmrc.hpp>
+CMRC_DECLARE(qml_demo);
+
 #include <QEventLoop>
 #include <QGuiApplication>
 #include <QQmlComponent>
@@ -57,135 +60,15 @@
 #include <Types.hpp>
 
 // ============================================================================
-// QML sources — embedded as raw string literals
+// QML sources — loaded from embedded CMakeRC resources at runtime.
 // ============================================================================
 
-// Non-modal status window.  Binds to the "bridge" context property
-// (QmlBridge) for two-way communication with the C++ layer.
-static const QByteArray statusWindowQml = R"QML(
-import QtQuick
-import QtQuick.Controls
-import QtQuick.Layouts
-
-ApplicationWindow {
-    id: root
-    title: "XLL Status (QML)"
-    width: 340
-    height: 170
-
-    ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: 16
-
-        Item { Layout.fillHeight: true }
-
-        RowLayout {
-            Layout.fillWidth: true
-            Label { text: "Your name:" }
-            TextField {
-                id: nameField
-                text: "World"
-                Layout.fillWidth: true
-                onAccepted: sendBtn.clicked()
-            }
-        }
-
-        Label {
-            text: bridge.statusText
-            horizontalAlignment: Text.AlignHCenter
-            Layout.fillWidth: true
-            wrapMode: Text.Wrap
-        }
-
-        Button {
-            id: sendBtn
-            text: "Greet Active Cell"
-            Layout.alignment: Qt.AlignHCenter
-            highlighted: true
-            onClicked: bridge.writeToCell("Hello, " + nameField.text + "!")
-        }
-
-        Item { Layout.fillHeight: true }
-    }
-
-    // Hide instead of destroy when the user closes the window.
-    onClosing: function(close) {
-        close.accepted = false
-        root.hide()
-    }
+static QByteArray loadQml(const char* path)
+{
+    auto fs   = cmrc::qml_demo::get_filesystem();
+    auto file = fs.open(path);
+    return QByteArray(file.begin(), static_cast<qsizetype>(file.size()));
 }
-)QML";
-
-// Modal greeting dialog.  Self-contained — does not use the bridge.
-// Sets the "accepted" and "inputText" properties that C++ reads after
-// the window closes.
-static const QByteArray greetingDialogQml = R"QML(
-import QtQuick
-import QtQuick.Controls
-import QtQuick.Layouts
-
-ApplicationWindow {
-    id: root
-    title: "QML inside an XLL"
-    width: 360
-    height: 150
-
-    property string inputText: ""
-    property bool accepted: false
-
-    ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: 16
-
-        Item { Layout.fillHeight: true }
-
-        RowLayout {
-            Layout.fillWidth: true
-            Label { text: "Enter your name:" }
-            TextField {
-                id: nameField
-                Layout.fillWidth: true
-                Layout.minimumWidth: 200
-                onAccepted: okBtn.clicked()
-            }
-        }
-
-        Item { Layout.preferredHeight: 10 }
-
-        RowLayout {
-            Layout.alignment: Qt.AlignHCenter
-            spacing: 8
-
-            Button {
-                id: okBtn
-                text: "OK"
-                onClicked: {
-                    root.inputText = nameField.text
-                    root.accepted = true
-                    root.close()
-                }
-            }
-
-            Button {
-                text: "Cancel"
-                onClicked: {
-                    root.accepted = false
-                    root.close()
-                }
-            }
-        }
-
-        Item { Layout.fillHeight: true }
-    }
-
-    // Title-bar X button → treat as Cancel.
-    onClosing: function(close) {
-        if (!root.accepted) {
-            root.inputText = ""
-        }
-    }
-}
-)QML";
 
 // ============================================================================
 // post_to_qt
@@ -488,7 +371,7 @@ private:
             post_to_qt([this, excelHwnd]() {
                 if (!m_statusWindow) {
                     QQmlComponent component(m_engine);
-                    component.setData(statusWindowQml, QUrl());
+                    component.setData(loadQml("QML/StatusWindow.qml"), QUrl());
                     if (component.isError()) {
                         for (const auto& e : component.errors())
                             qWarning() << e.toString();
@@ -601,7 +484,7 @@ XLL_FUNCTION void XLLAPI ShowQmlGreeting()
         if (!engine) return {};
 
         QQmlComponent component(engine);
-        component.setData(greetingDialogQml, QUrl());
+        component.setData(loadQml("QML/GreetingDialog.qml"), QUrl());
         if (component.isError()) return {};
 
         std::unique_ptr<QObject> obj(component.create());

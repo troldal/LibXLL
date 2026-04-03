@@ -36,6 +36,9 @@
 #include <memory>
 #include <string>
 
+#include <cmrc/cmrc.hpp>
+CMRC_DECLARE(qml_demo);
+
 #include <QEventLoop>
 #include <QGuiApplication>
 #include <QQmlComponent>
@@ -91,76 +94,15 @@ private:
 };
 
 // ============================================================================
-// QML source — Greeting dialog (embedded as a raw string literal)
+// QML source — loaded from the embedded CMakeRC resource at runtime.
 // ============================================================================
 
-static const QByteArray greetingDialogQml = R"QML(
-import QtQuick
-import QtQuick.Controls
-import QtQuick.Layouts
-
-ApplicationWindow {
-    id: root
-    title: "QML inside an XLL"
-    width: 360
-    height: 150
-
-    property string inputText: ""
-    property bool accepted: false
-
-    ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: 16
-
-        Item { Layout.fillHeight: true }
-
-        RowLayout {
-            Layout.fillWidth: true
-            Label { text: "Enter your name:" }
-            TextField {
-                id: nameField
-                Layout.fillWidth: true
-                Layout.minimumWidth: 200
-                onAccepted: okBtn.clicked()
-            }
-        }
-
-        Item { Layout.preferredHeight: 10 }
-
-        RowLayout {
-            Layout.alignment: Qt.AlignHCenter
-            spacing: 8
-
-            Button {
-                id: okBtn
-                text: "OK"
-                onClicked: {
-                    root.inputText = nameField.text
-                    root.accepted = true
-                    root.close()
-                }
-            }
-
-            Button {
-                text: "Cancel"
-                onClicked: {
-                    root.accepted = false
-                    root.close()
-                }
-            }
-        }
-
-        Item { Layout.fillHeight: true }
-    }
-
-    // Title-bar X button → treat as Cancel.
-    onClosing: function(close) {
-        if (!root.accepted) {
-            root.inputText = ""
-        }
-    }
+static QByteArray loadQml(const char* path)
+{
+    auto fs   = cmrc::qml_demo::get_filesystem();
+    auto file = fs.open(path);
+    return QByteArray(file.begin(), static_cast<qsizetype>(file.size()));
 }
-)QML";
 
 // ============================================================================
 // QGuiApplication + QQmlEngine lifetime — managed via unique_ptrs.
@@ -219,7 +161,7 @@ XLL_FUNCTION void XLLAPI ShowQmlModalGreeting()
     if (!excelHwnd || !s_engine) return;
 
     QQmlComponent component(s_engine.get());
-    component.setData(greetingDialogQml, QUrl());
+    component.setData(loadQml("QML/GreetingDialog.qml"), QUrl());
     if (component.isError()) return;
 
     std::unique_ptr<QObject> obj(component.create());
