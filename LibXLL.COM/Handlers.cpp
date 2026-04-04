@@ -338,8 +338,11 @@ auto onTaskPaneClicked = com::DispatchCallback<"OnTaskPaneClicked">(
                 return S_OK;
             }
             // Pane is already hidden (user closed with X) or pointer is stale.
-            // Drop it and fall through to recreate.
-            std::cerr << "[xlCOM]   pane hidden/stale — recreating\n";
+            // Delete the CTP so Excel removes it from its collection, which
+            // triggers IOleObject::Close → deactivate → ~ImGuiTaskPane. Without
+            // this, CreateCTP with the same ProgID would throw DISP_E_EXCEPTION.
+            std::cerr << "[xlCOM]   pane hidden/stale — deleting and recreating\n";
+            TaskPane_Delete(g_taskPane);
             g_taskPane->Release();
             g_taskPane = nullptr;
         }
