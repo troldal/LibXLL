@@ -5,4 +5,5 @@ endif()
 add_subdirectory(fltk)
 add_subdirectory(wx)
 add_subdirectory(Qt)
+add_subdirectory(imgui)
 

@@ -104,17 +104,24 @@ public:
         style.ScaleAllSizes(dpiScale);
         style.FontScaleDpi = dpiScale;
 
-        // Load Inter Variable Font from the CMakeRC embedded resource.
+        // Load Segoe UI from the system fonts directory if available;
+        // fall back to the CMakeRC-embedded Inter Variable Font otherwise.
         {
-            auto fs   = cmrc::foo::get_filesystem();
-            auto file = fs.open("Inter-VariableFont.ttf");
-            ImFontConfig cfg;
-            cfg.FontDataOwnedByAtlas = false;   // data lives in the static CMakeRC segment
-            io.Fonts->AddFontFromMemoryTTF(
-                const_cast<void*>(static_cast<const void*>(file.begin())),
-                static_cast<int>(file.size()),
-                16.0f,
-                &cfg);
+            constexpr const char* kSegoeUI = "C:\\Windows\\Fonts\\segoeui.ttf";
+            const bool segoeExists = (GetFileAttributesA(kSegoeUI) != INVALID_FILE_ATTRIBUTES);
+            ImFont* font = segoeExists ? io.Fonts->AddFontFromFileTTF(kSegoeUI, 18.0f) : nullptr;
+            if (!font)
+            {
+                auto fs   = cmrc::foo::get_filesystem();
+                auto file = fs.open("Inter-VariableFont.ttf");
+                ImFontConfig cfg;
+                cfg.FontDataOwnedByAtlas = false;   // data lives in the static CMakeRC segment
+                io.Fonts->AddFontFromMemoryTTF(
+                    const_cast<void*>(static_cast<const void*>(file.begin())),
+                    static_cast<int>(file.size()),
+                    16.0f,
+                    &cfg);
+            }
         }
 
         // Initialise platform and renderer backends.
@@ -214,6 +221,27 @@ private:
     bool                    m_pendingMsgBox = false;  // deferred dialog — see renderFrame()
     bool                    m_resizePending = false;  // true when resize() stored new dims
                                                       // but ResizeBuffers not yet called
+
+    // -----------------------------------------------------------------------
+    // HighlightedButton — wraps ImGui::Button with the brand accent colour
+    // #37A660 (R=55 G=166 B=96).  Hovered and active variants are computed
+    // by brightening / darkening the base colour slightly.
+    // -----------------------------------------------------------------------
+    static bool HighlightedButton(const char* label, const ImVec2& size = ImVec2(0, 0))
+    {
+        constexpr ImVec4 kBase    { 55.0f/255.0f, 166.0f/255.0f,  96.0f/255.0f, 1.0f };
+        constexpr ImVec4 kHovered { 80.0f/255.0f, 191.0f/255.0f, 121.0f/255.0f, 1.0f };
+        constexpr ImVec4 kActive  { 38.0f/255.0f, 140.0f/255.0f,  75.0f/255.0f, 1.0f };
+        constexpr ImVec4 kText    {  0.0f,          0.0f,           0.0f,         1.0f };
+
+        ImGui::PushStyleColor(ImGuiCol_Text,          kText);
+        ImGui::PushStyleColor(ImGuiCol_Button,        kBase);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, kHovered);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  kActive);
+        const bool pressed = ImGui::Button(label, size);
+        ImGui::PopStyleColor(4);
+        return pressed;
+    }
 
     // -----------------------------------------------------------------------
     // createDevice — creates the D3D11 device and DXGI swap chain bound to
@@ -354,7 +382,7 @@ private:
             const float  btnH  = ImGui::GetFrameHeight();
             ImGui::SetCursorPos(ImVec2((avail.x - btnW) * 0.5f,
                                        (avail.y - btnH) * 0.5f));
-            if (ImGui::Button("Show Message"))
+            if (HighlightedButton("Show Message"))
                 m_pendingMsgBox = true;
         //}
 

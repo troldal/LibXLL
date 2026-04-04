@@ -179,7 +179,7 @@ auto onButtonClicked = com::DispatchCallback<"OnButtonClicked">(
         if (FAILED(hr)) return hr;
 
         // Build the argument: the XLL command name to execute.
-        com::String macroName(L"WX.STATUS");
+        com::String macroName(L"IM.STATUS");
         VARIANT arg  = {};
         arg.vt       = VT_BSTR;
         arg.bstrVal  = macroName.get();   // non-owning — com::String still owns it
