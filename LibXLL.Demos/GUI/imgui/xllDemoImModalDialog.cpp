@@ -213,7 +213,7 @@ HINSTANCE dll_handle()
 
 void applyStyle(HWND hwnd)
 {
-    SetStyleFluentWinUIDark();
+    SetStyleExcelDark();
 
     const float  dpiScale = ImGui_ImplWin32_GetDpiScaleForHwnd(hwnd);
     ImGuiStyle&  style    = ImGui::GetStyle();
@@ -356,7 +356,7 @@ private:
         const float itemH   = ImGui::GetFrameHeight();
         const float spacing = ImGui::GetStyle().ItemSpacing.y;
         const float totalH  = itemH + spacing + itemH;
-        ImGui::SetCursorPosY((io.DisplaySize.y - totalH) * 0.5f - 4.0f);
+        ImGui::SetCursorPosY((io.DisplaySize.y - totalH) * 0.5f);
 
         ImGui::Text("Enter your name:");
         ImGui::SameLine();
@@ -375,19 +375,24 @@ private:
             "##Name", m_buf.data(), m_buf.size(),
             ImGuiInputTextFlags_EnterReturnsTrue);
 
-        ImGui::Spacing();
-
+        // Right-align buttons so Cancel's right edge matches InputText's right edge.
+        // InputText right edge = io.DisplaySize.x - WindowPadding.x
+        // => OK starts at:  displayW - padding - 2*btnW - gap
         constexpr float kBtnW = 80.0f;
         constexpr float kGap  = 8.0f;
-        ImGui::SetCursorPosX((io.DisplaySize.x - kBtnW * 2.0f - kGap) * 0.5f);
+        ImGui::SetCursorPosX(
+            io.DisplaySize.x
+            - ImGui::GetStyle().WindowPadding.x
+            - kBtnW * 2.0f
+            - kGap);
 
-        if (ImGui::Button("OK", ImVec2(kBtnW, 0)) || enter)
+        if (ButtonBlackOnHover("OK", ImVec2(kBtnW, 0)) || enter)
         {
             m_ok   = true;
             m_done = true;
         }
         ImGui::SameLine(0.0f, kGap);
-        if (ImGui::Button("Cancel", ImVec2(kBtnW, 0)))
+        if (ButtonBlackOnHover("Cancel", ImVec2(kBtnW, 0)))
         {
             m_ok   = false;
             m_done = true;
@@ -396,7 +401,7 @@ private:
         ImGui::End();
         ImGui::Render();
 
-        constexpr float kClear[] = { 0.1255f, 0.1255f, 0.1255f, 1.0f };
+        constexpr float kClear[] = { 0.1216f, 0.1216f, 0.1216f, 1.0f };
         m_d3d.context->OMSetRenderTargets(1, &m_d3d.rtv, nullptr);
         m_d3d.context->ClearRenderTargetView(m_d3d.rtv, kClear);
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());

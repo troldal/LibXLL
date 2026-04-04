@@ -293,7 +293,7 @@ HINSTANCE dll_handle()
 
 void applyStyle(HWND hwnd)
 {
-    SetStyleFluentWinUIDark();
+    SetStyleExcelDark();
 
     // Scale metrics and font rendering for the window's DPI (same as ImGuiTaskPane).
     const float  dpiScale = ImGui_ImplWin32_GetDpiScaleForHwnd(hwnd);
@@ -520,7 +520,7 @@ private:
         ImGui::Render();
 
         // Clear colour matches ImGuiCol_WindowBg from SetStyleFluentWinUIDark (#202020).
-        constexpr float kClear[] = { 0.1255f, 0.1255f, 0.1255f, 1.0f };
+        constexpr float kClear[] = { 0.1216f, 0.1216f, 0.1216f, 1.0f };
         m_d3d.context->OMSetRenderTargets(1, &m_d3d.rtv, nullptr);
         m_d3d.context->ClearRenderTargetView(m_d3d.rtv, kClear);
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
@@ -797,7 +797,7 @@ private:
         ImGui::End();
         ImGui::Render();
 
-        constexpr float kClear[] = { 0.1255f, 0.1255f, 0.1255f, 1.0f };
+        constexpr float kClear[] = { 0.1216f, 0.1216f, 0.1216f, 1.0f };
         m_d3d.context->OMSetRenderTargets(1, &m_d3d.rtv, nullptr);
         m_d3d.context->ClearRenderTargetView(m_d3d.rtv, kClear);
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());

@@ -490,6 +490,218 @@ inline void SetStyleFluentWinUIDark()
     style.Colors[ImGuiCol_ModalWindowDimBg]      = ImVec4(0.0f,    0.0f,    0.0f,   0.54f);
 }
 
+inline void SetStyleExcelDark()
+{
+    // Excel / Office 365 Dark theme
+    // Background #1F1F1F   Surface #2D2D2D   Accent #217346 (Excel Green)
+    ImGuiStyle& style = ImGui::GetStyle();
+
+    // --- Metrics: subtle rounding (approx. half of WinUI3) ---
+    style.Alpha                            = 1.0f;
+    style.DisabledAlpha                    = 0.40f;
+    style.WindowPadding                    = ImVec2(12.0f, 12.0f);
+    style.WindowRounding                   = 4.0f;
+    style.WindowBorderSize                 = 1.0f;
+    style.WindowMinSize                    = ImVec2(32.0f, 32.0f);
+    style.WindowTitleAlign                 = ImVec2(0.0f, 0.5f);
+    style.WindowMenuButtonPosition         = ImGuiDir_Left;
+    style.ChildRounding                    = 4.0f;
+    style.ChildBorderSize                  = 1.0f;
+    style.PopupRounding                    = 4.0f;
+    style.PopupBorderSize                  = 1.0f;
+    style.FramePadding                     = ImVec2(8.0f, 4.0f);
+    style.FrameRounding                    = 2.0f;
+    style.FrameBorderSize                  = 1.0f;
+    style.ItemSpacing                      = ImVec2(8.0f, 6.0f);
+    style.ItemInnerSpacing                 = ImVec2(6.0f, 4.0f);
+    style.CellPadding                      = ImVec2(6.0f, 4.0f);
+    style.IndentSpacing                    = 20.0f;
+    style.ColumnsMinSpacing                = 6.0f;
+    style.ScrollbarSize                    = 12.0f;
+    style.ScrollbarRounding                = 4.0f;
+    style.GrabMinSize                      = 8.0f;
+    style.GrabRounding                     = 4.0f;
+    style.TabRounding                      = 2.0f;
+    style.TabBorderSize                    = 0.0f;
+    style.TabCloseButtonMinWidthUnselected = 0.0f;
+    style.ColorButtonPosition              = ImGuiDir_Right;
+    style.ButtonTextAlign                  = ImVec2(0.5f, 0.5f);
+    style.SelectableTextAlign              = ImVec2(0.0f, 0.0f);
+
+    // --- Excel Green (Office 365 accent) ---
+    // Base:    RGB( 55, 166,  96) — resting green
+    // Hovered: RGB( 80, 191, 121) — lighter on hover
+    // Active:  RGB( 38, 140,  75) — darker on press
+    constexpr ImVec4 kGreen    = {  55.0f/255.0f, 166.0f/255.0f,  96.0f/255.0f, 1.00f };
+    constexpr ImVec4 kGreenHov = {  80.0f/255.0f, 191.0f/255.0f, 121.0f/255.0f, 1.00f };
+    constexpr ImVec4 kGreenAct = {  38.0f/255.0f, 140.0f/255.0f,  75.0f/255.0f, 1.00f };
+    constexpr ImVec4 kGreen30  = {  55.0f/255.0f, 166.0f/255.0f,  96.0f/255.0f, 0.30f };
+    constexpr ImVec4 kGreen45  = {  55.0f/255.0f, 166.0f/255.0f,  96.0f/255.0f, 0.45f };
+    constexpr ImVec4 kGreen60  = {  55.0f/255.0f, 166.0f/255.0f,  96.0f/255.0f, 0.60f };
+
+    // --- Colors ---
+    style.Colors[ImGuiCol_Text]                  = ImVec4(0.9490f, 0.9490f, 0.9490f, 1.00f);  // #F2F2F2
+    style.Colors[ImGuiCol_TextDisabled]          = ImVec4(0.9490f, 0.9490f, 0.9490f, 0.40f);
+    style.Colors[ImGuiCol_WindowBg]              = ImVec4(0.1216f, 0.1216f, 0.1216f, 1.00f);  // #1F1F1F
+    style.Colors[ImGuiCol_ChildBg]               = ImVec4(0.1765f, 0.1765f, 0.1765f, 1.00f);  // #2D2D2D
+    style.Colors[ImGuiCol_PopupBg]               = ImVec4(0.1412f, 0.1412f, 0.1412f, 1.00f);  // #242424
+    style.Colors[ImGuiCol_Border]                = ImVec4(1.0f,    1.0f,    1.0f,    0.12f);
+    style.Colors[ImGuiCol_BorderShadow]          = ImVec4(0.0f,    0.0f,    0.0f,    0.00f);
+    style.Colors[ImGuiCol_FrameBg]               = ImVec4(1.0f,    1.0f,    1.0f,    0.07f);
+    style.Colors[ImGuiCol_FrameBgHovered]        = ImVec4(1.0f,    1.0f,    1.0f,    0.12f);
+    style.Colors[ImGuiCol_FrameBgActive]         = ImVec4(1.0f,    1.0f,    1.0f,    0.18f);
+    style.Colors[ImGuiCol_TitleBg]               = ImVec4(0.0902f, 0.0902f, 0.0902f, 1.00f);  // #171717
+    style.Colors[ImGuiCol_TitleBgActive]         = ImVec4(0.1216f, 0.1216f, 0.1216f, 1.00f);  // #1F1F1F
+    style.Colors[ImGuiCol_TitleBgCollapsed]      = ImVec4(0.0902f, 0.0902f, 0.0902f, 1.00f);
+    style.Colors[ImGuiCol_MenuBarBg]             = ImVec4(0.1373f, 0.1373f, 0.1373f, 1.00f);  // #232323
+    style.Colors[ImGuiCol_ScrollbarBg]           = ImVec4(0.0f,    0.0f,    0.0f,    0.00f);
+    style.Colors[ImGuiCol_ScrollbarGrab]         = ImVec4(1.0f,    1.0f,    1.0f,    0.30f);
+    style.Colors[ImGuiCol_ScrollbarGrabHovered]  = ImVec4(1.0f,    1.0f,    1.0f,    0.45f);
+    style.Colors[ImGuiCol_ScrollbarGrabActive]   = ImVec4(1.0f,    1.0f,    1.0f,    0.60f);
+    style.Colors[ImGuiCol_CheckMark]             = kGreen;
+    style.Colors[ImGuiCol_SliderGrab]            = kGreen;
+    style.Colors[ImGuiCol_SliderGrabActive]      = kGreenAct;
+    // Buttons: subtle at rest → lighter green on hover → darker green on press
+    style.Colors[ImGuiCol_Button]                = ImVec4(1.0f,    1.0f,    1.0f,    0.07f);
+    style.Colors[ImGuiCol_ButtonHovered]         = kGreenHov;
+    style.Colors[ImGuiCol_ButtonActive]          = kGreenAct;
+    // Selectables / list items: green-tinted selection
+    style.Colors[ImGuiCol_Header]                = kGreen30;
+    style.Colors[ImGuiCol_HeaderHovered]         = kGreen45;
+    style.Colors[ImGuiCol_HeaderActive]          = kGreen60;
+    style.Colors[ImGuiCol_Separator]             = ImVec4(1.0f,    1.0f,    1.0f,    0.12f);
+    style.Colors[ImGuiCol_SeparatorHovered]      = kGreen60;
+    style.Colors[ImGuiCol_SeparatorActive]       = kGreen;
+    style.Colors[ImGuiCol_ResizeGrip]            = ImVec4(1.0f,    1.0f,    1.0f,    0.10f);
+    style.Colors[ImGuiCol_ResizeGripHovered]     = kGreen60;
+    style.Colors[ImGuiCol_ResizeGripActive]      = kGreen;
+    style.Colors[ImGuiCol_Tab]                   = ImVec4(0.0f,    0.0f,    0.0f,    0.00f);
+    style.Colors[ImGuiCol_TabHovered]            = kGreen30;
+    style.Colors[ImGuiCol_TabSelected]           = kGreen45;
+    style.Colors[ImGuiCol_TabDimmed]             = ImVec4(0.0f,    0.0f,    0.0f,    0.00f);
+    style.Colors[ImGuiCol_TabDimmedSelected]     = kGreen30;
+    style.Colors[ImGuiCol_PlotLines]             = ImVec4(1.0f,    1.0f,    1.0f,    0.50f);
+    style.Colors[ImGuiCol_PlotLinesHovered]      = kGreen;
+    style.Colors[ImGuiCol_PlotHistogram]         = ImVec4(0.1294f, 0.4510f, 0.2745f, 0.80f);
+    style.Colors[ImGuiCol_PlotHistogramHovered]  = kGreen;
+    style.Colors[ImGuiCol_TableHeaderBg]         = ImVec4(0.1765f, 0.1765f, 0.1765f, 1.00f);
+    style.Colors[ImGuiCol_TableBorderStrong]     = ImVec4(1.0f,    1.0f,    1.0f,    0.15f);
+    style.Colors[ImGuiCol_TableBorderLight]      = ImVec4(1.0f,    1.0f,    1.0f,    0.08f);
+    style.Colors[ImGuiCol_TableRowBg]            = ImVec4(0.0f,    0.0f,    0.0f,    0.00f);
+    style.Colors[ImGuiCol_TableRowBgAlt]         = ImVec4(1.0f,    1.0f,    1.0f,    0.03f);
+    style.Colors[ImGuiCol_TextSelectedBg]        = kGreen30;
+    style.Colors[ImGuiCol_DragDropTarget]        = kGreen;
+    style.Colors[ImGuiCol_NavCursor]             = kGreen;
+    style.Colors[ImGuiCol_NavWindowingHighlight] = ImVec4(1.0f,    1.0f,    1.0f,    0.70f);
+    style.Colors[ImGuiCol_NavWindowingDimBg]     = ImVec4(0.0f,    0.0f,    0.0f,    0.45f);
+    style.Colors[ImGuiCol_ModalWindowDimBg]      = ImVec4(0.0f,    0.0f,    0.0f,    0.54f);
+}
+
+inline void SetStyleExcelLight()
+{
+    // Excel / Office 365 Light theme
+    // Background #F3F3F3   Surface #FFFFFF   Accent #217346 (Excel Green)
+    ImGuiStyle& style = ImGui::GetStyle();
+
+    // --- Metrics: subtle rounding (approx. half of WinUI3) ---
+    style.Alpha                            = 1.0f;
+    style.DisabledAlpha                    = 0.40f;
+    style.WindowPadding                    = ImVec2(12.0f, 12.0f);
+    style.WindowRounding                   = 4.0f;
+    style.WindowBorderSize                 = 1.0f;
+    style.WindowMinSize                    = ImVec2(32.0f, 32.0f);
+    style.WindowTitleAlign                 = ImVec2(0.0f, 0.5f);
+    style.WindowMenuButtonPosition         = ImGuiDir_Left;
+    style.ChildRounding                    = 4.0f;
+    style.ChildBorderSize                  = 1.0f;
+    style.PopupRounding                    = 4.0f;
+    style.PopupBorderSize                  = 1.0f;
+    style.FramePadding                     = ImVec2(8.0f, 4.0f);
+    style.FrameRounding                    = 2.0f;
+    style.FrameBorderSize                  = 1.0f;
+    style.ItemSpacing                      = ImVec2(8.0f, 6.0f);
+    style.ItemInnerSpacing                 = ImVec2(6.0f, 4.0f);
+    style.CellPadding                      = ImVec2(6.0f, 4.0f);
+    style.IndentSpacing                    = 20.0f;
+    style.ColumnsMinSpacing                = 6.0f;
+    style.ScrollbarSize                    = 12.0f;
+    style.ScrollbarRounding                = 4.0f;
+    style.GrabMinSize                      = 8.0f;
+    style.GrabRounding                     = 4.0f;
+    style.TabRounding                      = 2.0f;
+    style.TabBorderSize                    = 0.0f;
+    style.TabCloseButtonMinWidthUnselected = 0.0f;
+    style.ColorButtonPosition              = ImGuiDir_Right;
+    style.ButtonTextAlign                  = ImVec2(0.5f, 0.5f);
+    style.SelectableTextAlign              = ImVec2(0.0f, 0.0f);
+
+    // --- Excel Green (Office 365 accent) — same as dark variant ---
+    // Base:    RGB( 55, 166,  96)   Active: RGB( 38, 140,  75)
+    constexpr ImVec4 kGreen    = {  55.0f/255.0f, 166.0f/255.0f,  96.0f/255.0f, 1.00f };
+    constexpr ImVec4 kGreenAct = {  38.0f/255.0f, 140.0f/255.0f,  75.0f/255.0f, 1.00f };
+    constexpr ImVec4 kGreen15  = {  55.0f/255.0f, 166.0f/255.0f,  96.0f/255.0f, 0.15f };
+    constexpr ImVec4 kGreen25  = {  55.0f/255.0f, 166.0f/255.0f,  96.0f/255.0f, 0.25f };
+    constexpr ImVec4 kGreen40  = {  55.0f/255.0f, 166.0f/255.0f,  96.0f/255.0f, 0.40f };
+
+    // --- Colors ---
+    style.Colors[ImGuiCol_Text]                  = ImVec4(0.1255f, 0.1216f, 0.1176f, 1.00f);  // #201F1E Office near-black
+    style.Colors[ImGuiCol_TextDisabled]          = ImVec4(0.1255f, 0.1216f, 0.1176f, 0.40f);
+    style.Colors[ImGuiCol_WindowBg]              = ImVec4(0.9529f, 0.9529f, 0.9529f, 1.00f);  // #F3F3F3
+    style.Colors[ImGuiCol_ChildBg]               = ImVec4(1.0f,    1.0f,    1.0f,    1.00f);  // #FFFFFF
+    style.Colors[ImGuiCol_PopupBg]               = ImVec4(1.0f,    1.0f,    1.0f,    1.00f);  // #FFFFFF
+    style.Colors[ImGuiCol_Border]                = ImVec4(0.0f,    0.0f,    0.0f,    0.15f);
+    style.Colors[ImGuiCol_BorderShadow]          = ImVec4(0.0f,    0.0f,    0.0f,    0.00f);
+    // Input fields: white with border
+    style.Colors[ImGuiCol_FrameBg]               = ImVec4(1.0f,    1.0f,    1.0f,    1.00f);
+    style.Colors[ImGuiCol_FrameBgHovered]        = ImVec4(0.9647f, 0.9647f, 0.9647f, 1.00f);  // #F6F6F6
+    style.Colors[ImGuiCol_FrameBgActive]         = ImVec4(0.9333f, 0.9333f, 0.9333f, 1.00f);  // #EEEEEE
+    style.Colors[ImGuiCol_TitleBg]               = ImVec4(0.9020f, 0.9020f, 0.9020f, 1.00f);  // #E6E6E6
+    style.Colors[ImGuiCol_TitleBgActive]         = ImVec4(0.8824f, 0.8824f, 0.8824f, 1.00f);  // #E1E1E1
+    style.Colors[ImGuiCol_TitleBgCollapsed]      = ImVec4(0.9020f, 0.9020f, 0.9020f, 1.00f);
+    style.Colors[ImGuiCol_MenuBarBg]             = ImVec4(0.9529f, 0.9529f, 0.9529f, 1.00f);
+    style.Colors[ImGuiCol_ScrollbarBg]           = ImVec4(0.0f,    0.0f,    0.0f,    0.00f);
+    style.Colors[ImGuiCol_ScrollbarGrab]         = ImVec4(0.0f,    0.0f,    0.0f,    0.30f);
+    style.Colors[ImGuiCol_ScrollbarGrabHovered]  = ImVec4(0.0f,    0.0f,    0.0f,    0.45f);
+    style.Colors[ImGuiCol_ScrollbarGrabActive]   = ImVec4(0.0f,    0.0f,    0.0f,    0.60f);
+    style.Colors[ImGuiCol_CheckMark]             = kGreen;
+    style.Colors[ImGuiCol_SliderGrab]            = kGreen;
+    style.Colors[ImGuiCol_SliderGrabActive]      = kGreenAct;
+    // Buttons: Office grey at rest → green tint on hover (dark text stays readable)
+    style.Colors[ImGuiCol_Button]                = ImVec4(0.8824f, 0.8784f, 0.8706f, 1.00f);  // #E1DFDD
+    style.Colors[ImGuiCol_ButtonHovered]         = kGreen15;
+    style.Colors[ImGuiCol_ButtonActive]          = kGreen25;
+    // Selectables / list items
+    style.Colors[ImGuiCol_Header]                = kGreen15;
+    style.Colors[ImGuiCol_HeaderHovered]         = kGreen25;
+    style.Colors[ImGuiCol_HeaderActive]          = kGreen40;
+    style.Colors[ImGuiCol_Separator]             = ImVec4(0.0f,    0.0f,    0.0f,    0.15f);
+    style.Colors[ImGuiCol_SeparatorHovered]      = kGreen40;
+    style.Colors[ImGuiCol_SeparatorActive]       = kGreen;
+    style.Colors[ImGuiCol_ResizeGrip]            = ImVec4(0.0f,    0.0f,    0.0f,    0.10f);
+    style.Colors[ImGuiCol_ResizeGripHovered]     = kGreen40;
+    style.Colors[ImGuiCol_ResizeGripActive]      = kGreen;
+    style.Colors[ImGuiCol_Tab]                   = ImVec4(0.0f,    0.0f,    0.0f,    0.00f);
+    style.Colors[ImGuiCol_TabHovered]            = kGreen15;
+    style.Colors[ImGuiCol_TabSelected]           = kGreen25;
+    style.Colors[ImGuiCol_TabDimmed]             = ImVec4(0.0f,    0.0f,    0.0f,    0.00f);
+    style.Colors[ImGuiCol_TabDimmedSelected]     = kGreen15;
+    style.Colors[ImGuiCol_PlotLines]             = ImVec4(0.0f,    0.0f,    0.0f,    0.50f);
+    style.Colors[ImGuiCol_PlotLinesHovered]      = kGreen;
+    style.Colors[ImGuiCol_PlotHistogram]         = ImVec4(0.1294f, 0.4510f, 0.2745f, 0.80f);
+    style.Colors[ImGuiCol_PlotHistogramHovered]  = kGreen;
+    style.Colors[ImGuiCol_TableHeaderBg]         = ImVec4(0.9020f, 0.9020f, 0.9020f, 1.00f);  // #E6E6E6
+    style.Colors[ImGuiCol_TableBorderStrong]     = ImVec4(0.0f,    0.0f,    0.0f,    0.20f);
+    style.Colors[ImGuiCol_TableBorderLight]      = ImVec4(0.0f,    0.0f,    0.0f,    0.12f);
+    style.Colors[ImGuiCol_TableRowBg]            = ImVec4(0.0f,    0.0f,    0.0f,    0.00f);
+    style.Colors[ImGuiCol_TableRowBgAlt]         = ImVec4(0.0f,    0.0f,    0.0f,    0.02f);
+    style.Colors[ImGuiCol_TextSelectedBg]        = kGreen25;
+    style.Colors[ImGuiCol_DragDropTarget]        = kGreen;
+    style.Colors[ImGuiCol_NavCursor]             = kGreen;
+    style.Colors[ImGuiCol_NavWindowingHighlight] = ImVec4(0.1255f, 0.1216f, 0.1176f, 0.70f);
+    style.Colors[ImGuiCol_NavWindowingDimBg]     = ImVec4(0.2f,    0.2f,    0.2f,    0.10f);
+    style.Colors[ImGuiCol_ModalWindowDimBg]      = ImVec4(0.0f,    0.0f,    0.0f,    0.30f);
+}
+
 inline void SetStyleFluentWinUILight()
 {
     // Fluent WinUI 3 Light — based on WinUI 3 design tokens
@@ -595,5 +807,35 @@ inline void SetStyleFluentWinUILight()
     style.Colors[ImGuiCol_NavWindowingHighlight] = ImVec4(0.0f,    0.0f,    0.0f,    0.70f);
     style.Colors[ImGuiCol_NavWindowingDimBg]     = ImVec4(0.2f,    0.2f,    0.2f,    0.10f);
     style.Colors[ImGuiCol_ModalWindowDimBg]      = ImVec4(0.0f,    0.0f,    0.0f,    0.30f);
+}
+
+// Helper: drop-in replacement for ImGui::Button() that renders its label in
+// black while the cursor is over it.  Useful with dark Excel/Office themes
+// where ButtonHovered is a solid colour (e.g. Excel Green) that makes light
+// text hard to read.
+//
+// Usage:  if (ButtonBlackOnHover("Apply")) { ... }
+inline bool ButtonBlackOnHover(const char* label, const ImVec2& size = ImVec2(0.0f, 0.0f))
+{
+    const ImVec2      pos        = ImGui::GetCursorScreenPos();
+    const ImVec2      labelSize  = ImGui::CalcTextSize(label, nullptr, true);
+    const ImGuiStyle& style      = ImGui::GetStyle();
+
+    // Replicate ImGui's default button-size logic for {0,0} and explicit positive sizes.
+    // (CalcItemSize is internal; negative sizes are treated as default here.)
+    const float       defaultW   = labelSize.x + style.FramePadding.x * 2.0f;
+    const float       defaultH   = labelSize.y + style.FramePadding.y * 2.0f;
+    const ImVec2      actualSize = {
+        (size.x > 0.0f) ? size.x : defaultW,
+        (size.y > 0.0f) ? size.y : defaultH
+    };
+
+    const bool hovered = ImGui::IsMouseHoveringRect(pos, { pos.x + actualSize.x, pos.y + actualSize.y });
+    if (hovered)
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
+    const bool clicked = ImGui::Button(label, size);
+    if (hovered)
+        ImGui::PopStyleColor();
+    return clicked;
 }
 

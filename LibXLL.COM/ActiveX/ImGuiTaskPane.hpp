@@ -96,7 +96,7 @@ public:
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
         // Apply the Rest Dark colour scheme.
-        SetStyleFluentWinUIDark();
+        SetStyleExcelDark();
 
         // Scale the style for the display DPI.
         const float dpiScale = ImGui_ImplWin32_GetDpiScaleForHwnd(m_hwnd);
