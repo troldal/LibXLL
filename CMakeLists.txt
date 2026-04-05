@@ -66,6 +66,10 @@ if(stb_ADDED)
     target_include_directories(stb INTERFACE "${stb_SOURCE_DIR}")
 endif()
 
+option(IMGUI_USE_THREAD_LOCAL_CONTEXT_TLS
+        "Append a thread-local GImGui override to imconfig.h at configure time"
+        ON)
+
 CPMFindPackage(
         NAME imgui
         GIT_TAG v1.92.7-docking
@@ -80,6 +84,32 @@ file(
         "${imgui_SOURCE_DIR}/CMakeLists.txt"
         EXPECTED_HASH SHA256=fd62f69364ce13a4f7633a9b50ae6672c466bcc44be60c69c45c0c6e225bb086
 )
+
+# Append thread-local context override to imconfig.h when ImGui is fetched.
+# The block is wrapped in #ifdef so it only takes effect when the compile
+# definition IMGUI_USE_THREAD_LOCAL_CONTEXT_TLS is set.
+# A sentinel macro prevents duplicate appends on repeated configure runs.
+if(IMGUI_USE_THREAD_LOCAL_CONTEXT_TLS AND imgui_ADDED)
+    set(_imconfig "${imgui_SOURCE_DIR}/imconfig.h")
+    file(READ "${_imconfig}" _imconfig_content)
+    if(NOT _imconfig_content MATCHES "IMGUI_TLS_CONTEXT_OVERRIDE")
+        file(APPEND "${_imconfig}"
+                "\n// Thread-local ImGui context override (injected by CMake).\n"
+                "// Enable by defining IMGUI_USE_THREAD_LOCAL_CONTEXT_TLS.\n"
+                "#ifndef IMGUI_TLS_CONTEXT_OVERRIDE\n"
+                "#define IMGUI_TLS_CONTEXT_OVERRIDE\n"
+                "struct ImGuiContext;\n"
+                "\n"
+                "extern thread_local ImGuiContext* MyImGuiTLS;\n"
+                "\n"
+                "#define GImGui MyImGuiTLS\n"
+                "#endif // IMGUI_TLS_CONTEXT_OVERRIDE\n"
+        )
+        message(STATUS "imgui: appended thread-local GImGui override to imconfig.h")
+    endif()
+    unset(_imconfig)
+    unset(_imconfig_content)
+endif()
 
 # Options
 set(IMGUI_EXAMPLES TRUE)

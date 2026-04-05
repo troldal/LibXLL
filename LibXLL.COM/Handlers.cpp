@@ -18,6 +18,8 @@
 
 CMRC_DECLARE(foo);
 
+thread_local ImGuiContext*   GImGui = NULL;
+
 // ---------------------------------------------------------------------------
 // Explicit instantiation of the TaskPaneControl with the chosen content type.
 // This causes the compiler to emit the full COM class and factory in this TU.

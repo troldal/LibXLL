@@ -76,3 +76,39 @@ target_compile_definitions(xllDemoImModalDialog PRIVATE
     $<$<CXX_COMPILER_ID:MSVC>:_CRT_SECURE_NO_WARNINGS>
 )
 
+# ----------------------------------------------------------------------------
+# xllDemoImDemoWindow — modal 800x1200 window running the Dear ImGui built-in demo
+# ----------------------------------------------------------------------------
+
+add_library(xllDemoImDemoWindow SHARED
+    xllDemoImDemoWindow.cpp
+    "${imgui_SOURCE_DIR}/backends/imgui_impl_win32.cpp"
+    "${imgui_SOURCE_DIR}/backends/imgui_impl_dx11.cpp"
+)
+
+target_include_directories(xllDemoImDemoWindow PRIVATE
+    "${imgui_SOURCE_DIR}/backends"
+    "${CMAKE_SOURCE_DIR}/LibXLL.COM/ActiveX"
+)
+
+target_link_libraries(xllDemoImDemoWindow PUBLIC
+    LibXLL
+    project_warnings
+    project_hardening
+    imgui
+    d3d11
+    dxgi
+    d3dcompiler
+    dwmapi
+    advapi32
+)
+
+set_target_properties(xllDemoImDemoWindow PROPERTIES
+    OUTPUT_NAME "im_demo_window"
+    SUFFIX      ".xll"
+)
+
+target_compile_definitions(xllDemoImDemoWindow PRIVATE
+    NOMINMAX
+    $<$<CXX_COMPILER_ID:MSVC>:_CRT_SECURE_NO_WARNINGS>
+)
