@@ -8,6 +8,7 @@
 // #include "ActiveX/FltkTaskPane.hpp"        // FLTK content
 // #include "ActiveX/QtQuickTaskPane.hpp"     // Qt Quick (QML) content
 #include "ActiveX/ImGuiTaskPane.hpp"          // Dear ImGui — Win32 + DirectX 11
+#include "ActiveX/ImGuiDemoWindow.hpp"        // Dear ImGui demo window (modal)
 
 #include "COM/Macros.hpp"
 #include "ActiveX/TaskPaneControl.hpp"
@@ -414,3 +415,40 @@ auto onTaskPaneClicked = com::DispatchCallback<"OnTaskPaneClicked">(
     });
 XLL_COM_REGISTER(onTaskPaneClicked);
 
+// ---------------------------------------------------------------------------
+// OnDemoWindowClicked — opens a modal 800 x 1200 window running ImGui::ShowDemoWindow.
+// ---------------------------------------------------------------------------
+
+auto onDemoWindowClicked = com::DispatchCallback<"OnDemoWindowClicked">(
+    [](DISPPARAMS*, VARIANT*) -> HRESULT
+    {
+        std::cerr << "[xlCOM] OnDemoWindowClicked\n";
+
+        // Find the top-level Excel window to use as the modal owner.
+        HWND owner = nullptr;
+        if (g_excelApp)
+        {
+            LPOLESTR name = const_cast<LPOLESTR>(L"Hwnd");
+            DISPID   id   = 0;
+            if (SUCCEEDED(g_excelApp->GetIDsOfNames(IID_NULL, &name, 1,
+                                                     LOCALE_USER_DEFAULT, &id)))
+            {
+                DISPPARAMS noParams = {};
+                VARIANT    result   = {};
+                if (SUCCEEDED(g_excelApp->Invoke(id, IID_NULL, LOCALE_USER_DEFAULT,
+                                                  DISPATCH_PROPERTYGET, &noParams,
+                                                  &result, nullptr, nullptr)))
+                {
+                    if (result.vt == VT_I4 || result.vt == VT_INT)
+                        owner = reinterpret_cast<HWND>(static_cast<LONG_PTR>(result.lVal));
+                    else if (result.vt == VT_I8)
+                        owner = reinterpret_cast<HWND>(static_cast<LONG_PTR>(result.llVal));
+                    VariantClear(&result);
+                }
+            }
+        }
+
+        ImGuiDemoWindow::show(owner);
+        return S_OK;
+    });
+XLL_COM_REGISTER(onDemoWindowClicked);

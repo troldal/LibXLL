@@ -13,6 +13,11 @@
                   label="Open Task Pane"
                   size="large"
                   onAction="OnTaskPaneClicked" />
+          <button id="xlCOMDemoButton"
+                  label="ImGui Demo"
+                  size="large"
+                  imageMso="HappyFace"
+                  onAction="OnDemoWindowClicked" />
         </group>
       </tab>
     </tabs>
