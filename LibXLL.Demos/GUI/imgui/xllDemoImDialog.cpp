@@ -37,6 +37,8 @@
 #include <Register.hpp>
 #include <Types.hpp>        // pulls in xll::get_hwnd(), xll::alert(), xll::String
 
+thread_local ImGuiContext*   GImGui = NULL;
+
 namespace {
 
 // ============================================================================
@@ -259,7 +261,7 @@ private:
             + ImGui::GetStyle().FramePadding.x * 2.0f;
         ImGui::SetCursorPosX((avail.x - btnW) * 0.5f);
 
-        if (ImGui::Button("Greet Active Cell") || enter)
+        if (HighlightedExcelButton("Greet Active Cell") || enter)
         {
             const std::string name(m_nameBuf.data());
             m_pendingGreeting = L"Hello, "

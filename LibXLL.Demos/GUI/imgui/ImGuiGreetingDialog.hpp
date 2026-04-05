@@ -236,7 +236,7 @@ inline void applyStyle(HWND hwnd)
 
     constexpr const char* kSegoeUI = "C:\\Windows\\Fonts\\segoeui.ttf";
     if (GetFileAttributesA(kSegoeUI) != INVALID_FILE_ATTRIBUTES)
-        ImGui::GetIO().Fonts->AddFontFromFileTTF(kSegoeUI, 19.2f);
+        ImGui::GetIO().Fonts->AddFontFromFileTTF(kSegoeUI, 18.0f);
 }
 
 // ============================================================================
@@ -407,13 +407,13 @@ private:
             - kBtnW * 2.0f
             - kGap);
 
-        if (ButtonBlackOnHover("OK", ImVec2(kBtnW, 0)) || enter)
+        if (ExcelButton("OK", ImVec2(kBtnW, 0)) || enter)
         {
             m_ok   = true;
             m_done = true;
         }
         ImGui::SameLine(0.0f, kGap);
-        if (ButtonBlackOnHover("Cancel", ImVec2(kBtnW, 0)))
+        if (HighlightedExcelButton("Cancel", ImVec2(kBtnW, 0)))
         {
             m_ok   = false;
             m_done = true;

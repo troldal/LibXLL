@@ -493,7 +493,7 @@ inline void SetStyleFluentWinUIDark()
 inline void SetStyleExcelDark()
 {
     // Excel / Office 365 Dark theme
-    // Background #1F1F1F   Surface #2D2D2D   Accent #217346 (Excel Green)
+    // Background #292929   Surface #3D3D3D   Accent #37A660 (Excel Green)
     ImGuiStyle& style = ImGui::GetStyle();
 
     // --- Metrics: subtle rounding (approx. half of WinUI3) ---
@@ -528,12 +528,12 @@ inline void SetStyleExcelDark()
     style.ButtonTextAlign                  = ImVec2(0.5f, 0.5f);
     style.SelectableTextAlign              = ImVec2(0.0f, 0.0f);
 
-    // --- Excel Green (Office 365 accent) ---
-    // Base:    RGB( 55, 166,  96) — resting green
-    // Hovered: RGB( 80, 191, 121) — lighter on hover
-    // Active:  RGB( 38, 140,  75) — darker on press
-    constexpr ImVec4 kGreen    = {  55.0f/255.0f, 166.0f/255.0f,  96.0f/255.0f, 1.00f };
-    constexpr ImVec4 kGreenHov = {  80.0f/255.0f, 191.0f/255.0f, 121.0f/255.0f, 1.00f };
+    // --- Highlighted button (Excel Green) ---
+    // Normal      button: bg #292929, hover #3D3D3D, edge #626262
+    // Highlighted button: bg #37A660, hover #60BD82, edge = same as bg
+    constexpr ImVec4 kGreen    = {  55.0f/255.0f, 166.0f/255.0f,  96.0f/255.0f, 1.00f };  // #37A660
+    [[maybe_unused]]
+    constexpr ImVec4 kGreenHov = {  96.0f/255.0f, 189.0f/255.0f, 130.0f/255.0f, 1.00f };  // #60BD82 — for highlighted button hover (PushStyleColor)
     constexpr ImVec4 kGreenAct = {  38.0f/255.0f, 140.0f/255.0f,  75.0f/255.0f, 1.00f };
     constexpr ImVec4 kGreen30  = {  55.0f/255.0f, 166.0f/255.0f,  96.0f/255.0f, 0.30f };
     constexpr ImVec4 kGreen45  = {  55.0f/255.0f, 166.0f/255.0f,  96.0f/255.0f, 0.45f };
@@ -542,16 +542,16 @@ inline void SetStyleExcelDark()
     // --- Colors ---
     style.Colors[ImGuiCol_Text]                  = ImVec4(0.9490f, 0.9490f, 0.9490f, 1.00f);  // #F2F2F2
     style.Colors[ImGuiCol_TextDisabled]          = ImVec4(0.9490f, 0.9490f, 0.9490f, 0.40f);
-    style.Colors[ImGuiCol_WindowBg]              = ImVec4(0.1216f, 0.1216f, 0.1216f, 1.00f);  // #1F1F1F
-    style.Colors[ImGuiCol_ChildBg]               = ImVec4(0.1765f, 0.1765f, 0.1765f, 1.00f);  // #2D2D2D
-    style.Colors[ImGuiCol_PopupBg]               = ImVec4(0.1412f, 0.1412f, 0.1412f, 1.00f);  // #242424
-    style.Colors[ImGuiCol_Border]                = ImVec4(1.0f,    1.0f,    1.0f,    0.12f);
+    style.Colors[ImGuiCol_WindowBg]              = ImVec4(0.1608f, 0.1608f, 0.1608f, 1.00f);  // #292929
+    style.Colors[ImGuiCol_ChildBg]               = ImVec4(0.2392f, 0.2392f, 0.2392f, 1.00f);  // #3D3D3D
+    style.Colors[ImGuiCol_PopupBg]               = ImVec4(0.1608f, 0.1608f, 0.1608f, 1.00f);  // #292929
+    style.Colors[ImGuiCol_Border]                = ImVec4(0.3843f, 0.3843f, 0.3843f, 1.00f);  // #626262
     style.Colors[ImGuiCol_BorderShadow]          = ImVec4(0.0f,    0.0f,    0.0f,    0.00f);
     style.Colors[ImGuiCol_FrameBg]               = ImVec4(1.0f,    1.0f,    1.0f,    0.07f);
     style.Colors[ImGuiCol_FrameBgHovered]        = ImVec4(1.0f,    1.0f,    1.0f,    0.12f);
     style.Colors[ImGuiCol_FrameBgActive]         = ImVec4(1.0f,    1.0f,    1.0f,    0.18f);
     style.Colors[ImGuiCol_TitleBg]               = ImVec4(0.0902f, 0.0902f, 0.0902f, 1.00f);  // #171717
-    style.Colors[ImGuiCol_TitleBgActive]         = ImVec4(0.1216f, 0.1216f, 0.1216f, 1.00f);  // #1F1F1F
+    style.Colors[ImGuiCol_TitleBgActive]         = ImVec4(0.1608f, 0.1608f, 0.1608f, 1.00f);  // #292929
     style.Colors[ImGuiCol_TitleBgCollapsed]      = ImVec4(0.0902f, 0.0902f, 0.0902f, 1.00f);
     style.Colors[ImGuiCol_MenuBarBg]             = ImVec4(0.1373f, 0.1373f, 0.1373f, 1.00f);  // #232323
     style.Colors[ImGuiCol_ScrollbarBg]           = ImVec4(0.0f,    0.0f,    0.0f,    0.00f);
@@ -561,10 +561,11 @@ inline void SetStyleExcelDark()
     style.Colors[ImGuiCol_CheckMark]             = kGreen;
     style.Colors[ImGuiCol_SliderGrab]            = kGreen;
     style.Colors[ImGuiCol_SliderGrabActive]      = kGreenAct;
-    // Buttons: subtle at rest → lighter green on hover → darker green on press
-    style.Colors[ImGuiCol_Button]                = ImVec4(1.0f,    1.0f,    1.0f,    0.07f);
-    style.Colors[ImGuiCol_ButtonHovered]         = kGreenHov;
-    style.Colors[ImGuiCol_ButtonActive]          = kGreenAct;
+    // Normal buttons: #292929 at rest → #3D3D3D on hover → #484848 on press
+    // Highlighted buttons: use PushStyleColor with kGreen / kGreenHov / kGreenAct
+    style.Colors[ImGuiCol_Button]                = ImVec4(0.1608f, 0.1608f, 0.1608f, 1.00f);  // #292929
+    style.Colors[ImGuiCol_ButtonHovered]         = ImVec4(0.2392f, 0.2392f, 0.2392f, 1.00f);  // #3D3D3D
+    style.Colors[ImGuiCol_ButtonActive]          = ImVec4(0.2824f, 0.2824f, 0.2824f, 1.00f);  // #484848
     // Selectables / list items: green-tinted selection
     style.Colors[ImGuiCol_Header]                = kGreen30;
     style.Colors[ImGuiCol_HeaderHovered]         = kGreen45;
@@ -600,7 +601,7 @@ inline void SetStyleExcelDark()
 inline void SetStyleExcelLight()
 {
     // Excel / Office 365 Light theme
-    // Background #F3F3F3   Surface #FFFFFF   Accent #217346 (Excel Green)
+    // Background #FFFFFF   Accent #107C41 (Excel Green)
     ImGuiStyle& style = ImGui::GetStyle();
 
     // --- Metrics: subtle rounding (approx. half of WinUI3) ---
@@ -635,21 +636,24 @@ inline void SetStyleExcelLight()
     style.ButtonTextAlign                  = ImVec2(0.5f, 0.5f);
     style.SelectableTextAlign              = ImVec2(0.0f, 0.0f);
 
-    // --- Excel Green (Office 365 accent) — same as dark variant ---
-    // Base:    RGB( 55, 166,  96)   Active: RGB( 38, 140,  75)
-    constexpr ImVec4 kGreen    = {  55.0f/255.0f, 166.0f/255.0f,  96.0f/255.0f, 1.00f };
-    constexpr ImVec4 kGreenAct = {  38.0f/255.0f, 140.0f/255.0f,  75.0f/255.0f, 1.00f };
-    constexpr ImVec4 kGreen15  = {  55.0f/255.0f, 166.0f/255.0f,  96.0f/255.0f, 0.15f };
-    constexpr ImVec4 kGreen25  = {  55.0f/255.0f, 166.0f/255.0f,  96.0f/255.0f, 0.25f };
-    constexpr ImVec4 kGreen40  = {  55.0f/255.0f, 166.0f/255.0f,  96.0f/255.0f, 0.40f };
+    // --- Highlighted button (Excel Green, Light Mode) ---
+    // Normal      button: bg #FFFFFF, hover #F5F5F5, edge #999999
+    // Highlighted button: bg #107C41, hover #0F703B, edge = same as bg
+    constexpr ImVec4 kGreen    = {  16.0f/255.0f, 124.0f/255.0f,  65.0f/255.0f, 1.00f };  // #107C41
+    [[maybe_unused]]
+    constexpr ImVec4 kGreenHov = {  15.0f/255.0f, 112.0f/255.0f,  59.0f/255.0f, 1.00f };  // #0F703B — for highlighted button hover (PushStyleColor)
+    constexpr ImVec4 kGreenAct = {  12.0f/255.0f,  97.0f/255.0f,  50.0f/255.0f, 1.00f };  // #0C6132
+    constexpr ImVec4 kGreen15  = {  16.0f/255.0f, 124.0f/255.0f,  65.0f/255.0f, 0.15f };
+    constexpr ImVec4 kGreen25  = {  16.0f/255.0f, 124.0f/255.0f,  65.0f/255.0f, 0.25f };
+    constexpr ImVec4 kGreen40  = {  16.0f/255.0f, 124.0f/255.0f,  65.0f/255.0f, 0.40f };
 
     // --- Colors ---
     style.Colors[ImGuiCol_Text]                  = ImVec4(0.1255f, 0.1216f, 0.1176f, 1.00f);  // #201F1E Office near-black
     style.Colors[ImGuiCol_TextDisabled]          = ImVec4(0.1255f, 0.1216f, 0.1176f, 0.40f);
-    style.Colors[ImGuiCol_WindowBg]              = ImVec4(0.9529f, 0.9529f, 0.9529f, 1.00f);  // #F3F3F3
+    style.Colors[ImGuiCol_WindowBg]              = ImVec4(1.0f,    1.0f,    1.0f,    1.00f);  // #FFFFFF
     style.Colors[ImGuiCol_ChildBg]               = ImVec4(1.0f,    1.0f,    1.0f,    1.00f);  // #FFFFFF
     style.Colors[ImGuiCol_PopupBg]               = ImVec4(1.0f,    1.0f,    1.0f,    1.00f);  // #FFFFFF
-    style.Colors[ImGuiCol_Border]                = ImVec4(0.0f,    0.0f,    0.0f,    0.15f);
+    style.Colors[ImGuiCol_Border]                = ImVec4(0.6000f, 0.6000f, 0.6000f, 1.00f);  // #999999
     style.Colors[ImGuiCol_BorderShadow]          = ImVec4(0.0f,    0.0f,    0.0f,    0.00f);
     // Input fields: white with border
     style.Colors[ImGuiCol_FrameBg]               = ImVec4(1.0f,    1.0f,    1.0f,    1.00f);
@@ -666,10 +670,11 @@ inline void SetStyleExcelLight()
     style.Colors[ImGuiCol_CheckMark]             = kGreen;
     style.Colors[ImGuiCol_SliderGrab]            = kGreen;
     style.Colors[ImGuiCol_SliderGrabActive]      = kGreenAct;
-    // Buttons: Office grey at rest → green tint on hover (dark text stays readable)
-    style.Colors[ImGuiCol_Button]                = ImVec4(0.8824f, 0.8784f, 0.8706f, 1.00f);  // #E1DFDD
-    style.Colors[ImGuiCol_ButtonHovered]         = kGreen15;
-    style.Colors[ImGuiCol_ButtonActive]          = kGreen25;
+    // Normal buttons: #FFFFFF at rest → #F5F5F5 on hover → #EBEBEB on press
+    // Highlighted buttons: use PushStyleColor with kGreen / kGreenHov / kGreenAct
+    style.Colors[ImGuiCol_Button]                = ImVec4(1.0f,    1.0f,    1.0f,    1.00f);  // #FFFFFF
+    style.Colors[ImGuiCol_ButtonHovered]         = ImVec4(0.9608f, 0.9608f, 0.9608f, 1.00f);  // #F5F5F5
+    style.Colors[ImGuiCol_ButtonActive]          = ImVec4(0.9216f, 0.9216f, 0.9216f, 1.00f);  // #EBEBEB
     // Selectables / list items
     style.Colors[ImGuiCol_Header]                = kGreen15;
     style.Colors[ImGuiCol_HeaderHovered]         = kGreen25;
@@ -700,6 +705,72 @@ inline void SetStyleExcelLight()
     style.Colors[ImGuiCol_NavWindowingHighlight] = ImVec4(0.1255f, 0.1216f, 0.1176f, 0.70f);
     style.Colors[ImGuiCol_NavWindowingDimBg]     = ImVec4(0.2f,    0.2f,    0.2f,    0.10f);
     style.Colors[ImGuiCol_ModalWindowDimBg]      = ImVec4(0.0f,    0.0f,    0.0f,    0.30f);
+}
+
+// ============================================================================
+// Excel-theme button helpers
+//
+// Use these in place of ImGui::Button() when the current style is one of the
+// SetStyleExcel* variants.  Both helpers detect the active mode from the
+// window background brightness so they work correctly with both dark and
+// light themes without requiring a separate theme parameter.
+//
+// ExcelButton
+//   Neutral button that follows the style's Button/ButtonHovered colours.
+//   Pushes the theme's own text colour explicitly so the call is resistant
+//   to any outer PushStyleColor(ImGuiCol_Text, …) that may be in effect.
+//   Dark mode : white text on #292929 / #3D3D3D hover
+//   Light mode: black text on #FFFFFF  / #F5F5F5 hover
+//
+// HighlightedExcelButton
+//   Call-to-action (Excel green) button with contrasting text.
+//   The border is set to the same colour as the button face so it remains
+//   invisible, as per the Office 365 specification.
+//   Dark mode : black text on #37A660 / #60BD82 hover
+//   Light mode: white text on #107C41 / #0F703B hover
+// ============================================================================
+
+// Returns true on the frame the button is clicked.
+inline bool ExcelButton(const char* label, const ImVec2& size = ImVec2(0.0f, 0.0f))
+{
+    // Re-push the theme's own text colour for symmetry with
+    // HighlightedExcelButton and resistance to outer overrides.
+    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_Text]);
+    const bool clicked = ImGui::Button(label, size);
+    ImGui::PopStyleColor();
+    return clicked;
+}
+
+// Returns true on the frame the button is clicked.
+inline bool HighlightedExcelButton(const char* label, const ImVec2& size = ImVec2(0.0f, 0.0f))
+{
+    // Detect dark vs. light from window background brightness.
+    const ImVec4& winBg  = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
+    const bool    isDark = winBg.x < 0.5f;
+
+    // Dark mode : bg #37A660 / hover #60BD82 / active #268C4B / text black
+    // Light mode: bg #107C41 / hover #0F703B / active #0C6132 / text white
+    const ImVec4 btnBg  = isDark
+        ? ImVec4( 55.0f/255.0f, 166.0f/255.0f,  96.0f/255.0f, 1.0f)   // #37A660
+        : ImVec4( 16.0f/255.0f, 124.0f/255.0f,  65.0f/255.0f, 1.0f);  // #107C41
+    const ImVec4 btnHov = isDark
+        ? ImVec4( 96.0f/255.0f, 189.0f/255.0f, 130.0f/255.0f, 1.0f)   // #60BD82
+        : ImVec4( 15.0f/255.0f, 112.0f/255.0f,  59.0f/255.0f, 1.0f);  // #0F703B
+    const ImVec4 btnAct = isDark
+        ? ImVec4( 38.0f/255.0f, 140.0f/255.0f,  75.0f/255.0f, 1.0f)   // #268C4B
+        : ImVec4( 12.0f/255.0f,  97.0f/255.0f,  50.0f/255.0f, 1.0f);  // #0C6132
+    const ImVec4 text   = isDark
+        ? ImVec4(0.0f, 0.0f, 0.0f, 1.0f)   // black on green in dark mode
+        : ImVec4(1.0f, 1.0f, 1.0f, 1.0f);  // white on green in light mode
+
+    ImGui::PushStyleColor(ImGuiCol_Button,        btnBg);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,  btnHov);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,   btnAct);
+    ImGui::PushStyleColor(ImGuiCol_Border,         btnBg);  // edge = bg (invisible)
+    ImGui::PushStyleColor(ImGuiCol_Text,           text);
+    const bool clicked = ImGui::Button(label, size);
+    ImGui::PopStyleColor(5);
+    return clicked;
 }
 
 inline void SetStyleFluentWinUILight()
