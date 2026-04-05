@@ -81,6 +81,23 @@ file(
         EXPECTED_HASH SHA256=fd62f69364ce13a4f7633a9b50ae6672c466bcc44be60c69c45c0c6e225bb086
 )
 
+# Append project-specific lines to imconfig.h exactly once (idempotent via sentinel).
+set(_imconfig "${imgui_SOURCE_DIR}/imconfig.h")
+set(_imconfig_sentinel "// @LibXLL custom additions – do not remove this line")
+file(READ "${_imconfig}" _imconfig_contents)
+string(FIND "${_imconfig_contents}" "${_imconfig_sentinel}" _imconfig_sentinel_pos)
+if(_imconfig_sentinel_pos EQUAL -1)
+    file(APPEND "${_imconfig}"
+        "\n${_imconfig_sentinel}\n"
+        "struct ImGuiContext;\n"
+        "extern thread_local ImGuiContext* MyImGuiTLS;\n"
+        "#define GImGui MyImGuiTLS\n"
+    )
+    message(STATUS "imconfig.h: custom additions appended")
+else()
+    message(STATUS "imconfig.h: custom additions already present, skipping")
+endif()
+
 # Options
 set(IMGUI_EXAMPLES TRUE)
 set(IMGUI_DEMO TRUE)
