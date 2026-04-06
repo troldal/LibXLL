@@ -51,11 +51,6 @@ static IDispatch* g_ctpFactory = nullptr;
 
 static IDispatch* g_taskPane = nullptr;
 
-// ---------------------------------------------------------------------------
-// Modeless ImGui demo window — created on first click, toggled thereafter.
-// ---------------------------------------------------------------------------
-
-static ImGuiDemoWindow2* g_demoWindow2 = nullptr;
 
 // ---------------------------------------------------------------------------
 // OnConnection — fires when Excel loads and connects the add-in.
@@ -105,11 +100,6 @@ auto onDisconnection = com::OnDisconnection(
         }
 
         // Clean up GUI framework runtime on disconnect.
-        if (g_demoWindow2)
-        {
-            delete g_demoWindow2;
-            g_demoWindow2 = nullptr;
-        }
         WxTaskPane::shutdown();
     });
 XLL_COM_REGISTER(onDisconnection);
