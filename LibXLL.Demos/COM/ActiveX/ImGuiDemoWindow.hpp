@@ -1,19 +1,14 @@
 // ---------------------------------------------------------------------------
-// ImGuiDemoWindow2.hpp — modeless 800 x 1200 window that hosts the Dear ImGui
-// built-in demo (ImGui::ShowDemoWindow).
+// ImGuiDemoWindow.hpp — self-contained modal 800 x 1200 window that hosts
+// the Dear ImGui built-in demo (ImGui::ShowDemoWindow).
 //
-// Unlike ImGuiDemoWindow (modal, blocking local message loop), this version
-// creates the window and returns immediately.  Rendering is driven by a
-// WM_TIMER dispatched through Excel's own STA message pump — Excel stays
-// fully interactive while the demo window is open.
+// Designed for the xlCOM add-in: launched from a ribbon callback on Excel's
+// STA thread.  Creates its own Win32 window, D3D11 device/swap chain, and
+// per-instance ImGuiContext.  Runs a local PeekMessage loop until the user
+// closes the window.
 //
-// Lifecycle:
-//   create(owner)  — allocates and shows the window; returns a raw pointer
-//                     that the caller stores in a static/global.
-//   showOrRaise()  — brings a hidden window back to the foreground.
-//   destroy()      — tears down D3D11 + ImGui and destroys the Win32 window.
-//   WM_CLOSE       — hides the window (toggle pattern); caller can re-show
-//                     with showOrRaise() or destroy() on shutdown.
+// show(owner) disables the Excel window for proper modal semantics, centres
+// the dialog over the owner, and re-enables/foregrounds the owner on exit.
 // ---------------------------------------------------------------------------
 
 #pragma once
@@ -33,94 +28,63 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(
     HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 #include "SetStyle.hpp"
-#include "../Utils/IsDarkMode.hpp"
+#include "Utils/IsDarkMode.hpp"
 
 #include <cmrc/cmrc.hpp>
 CMRC_DECLARE(foo);
 
-class ImGuiDemoWindow2
+class ImGuiDemoWindow
 {
 public:
-    // -----------------------------------------------------------------------
-    // Factory — creates the window, shows it, and returns immediately.
-    // The caller owns the returned pointer and must eventually call destroy()
-    // or delete it.  Returns nullptr on failure.
-    // -----------------------------------------------------------------------
-    [[nodiscard]] static ImGuiDemoWindow2* create(HWND owner)
+    /// Opens an 800 x 1200 modal window running the ImGui built-in demo.
+    /// Blocks until the user closes the window (Win32 X or ImGui close button).
+    static void show(HWND owner)
     {
-        auto* self = new (std::nothrow) ImGuiDemoWindow2;
-        if (!self) return nullptr;
+        ImGuiDemoWindow dlg;
+        if (!dlg.create()) return;
 
-        if (!self->init(owner))
+        // Modal semantics: disable owner, centre dialog, re-enable on exit.
+        if (owner && IsWindow(owner))
         {
-            delete self;
-            return nullptr;
+            SetWindowLongPtr(dlg.m_hwnd, GWLP_HWNDPARENT,
+                             reinterpret_cast<LONG_PTR>(owner));
+            RECT ow{}, wd{};
+            GetWindowRect(owner,      &ow);
+            GetWindowRect(dlg.m_hwnd, &wd);
+            const int dw = wd.right  - wd.left;
+            const int dh = wd.bottom - wd.top;
+            SetWindowPos(dlg.m_hwnd, nullptr,
+                         ow.left + (ow.right  - ow.left - dw) / 2,
+                         ow.top  + (ow.bottom - ow.top  - dh) / 2,
+                         0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+            EnableWindow(owner, FALSE);
         }
 
-        ShowWindow(self->m_hwnd, SW_SHOW);
-        UpdateWindow(self->m_hwnd);
-        return self;
-    }
+        ShowWindow(dlg.m_hwnd, SW_SHOW);
+        UpdateWindow(dlg.m_hwnd);
 
-    // -----------------------------------------------------------------------
-    // showOrRaise — if the window is hidden (user closed with X), show it
-    // again and bring it to the foreground.
-    // -----------------------------------------------------------------------
-    void showOrRaise()
-    {
-        if (!m_hwnd) return;
+        dlg.runModal();
 
-        // Reset the ImGui demo window open flag so ShowDemoWindow renders
-        // again after a previous hide triggered by the close button.
-        m_show = true;
-
-        ShowWindow(m_hwnd, SW_SHOW);
-        SetForegroundWindow(m_hwnd);
-    }
-
-    // -----------------------------------------------------------------------
-    // destroy — full teardown.  Safe to call multiple times.
-    // -----------------------------------------------------------------------
-    void destroy()
-    {
-        if (m_hwnd) KillTimer(m_hwnd, kTimerId);
-
-        if (m_ctx)
+        // Re-enable owner.
+        if (owner && IsWindow(owner))
         {
-            ImGui::SetCurrentContext(m_ctx);
-            ImGui_ImplDX11_Shutdown();
-            ImGui_ImplWin32_Shutdown();
-            ImGui::DestroyContext(m_ctx);
-            m_ctx = nullptr;
+            EnableWindow(owner, TRUE);
+            SetForegroundWindow(owner);
         }
-
-        cleanupRenderTarget();
-        if (m_swapChain) { m_swapChain->Release(); m_swapChain = nullptr; }
-        if (m_d3dCtx)    { m_d3dCtx->Release();    m_d3dCtx    = nullptr; }
-        if (m_device)    { m_device->Release();     m_device    = nullptr; }
-
-        if (m_hwnd) { DestroyWindow(m_hwnd); m_hwnd = nullptr; }
     }
-
-    ~ImGuiDemoWindow2() { destroy(); }
-
-    ImGuiDemoWindow2(const ImGuiDemoWindow2&)            = delete;
-    ImGuiDemoWindow2& operator=(const ImGuiDemoWindow2&) = delete;
 
 private:
-    ImGuiDemoWindow2() = default;
-
-    static constexpr UINT_PTR kTimerId = 0xCBA6;
-    static constexpr wchar_t  kClass[] = L"xlCOMImGuiDemoWnd2";
+    static constexpr UINT_PTR kTimerId = 0xCBA5;
+    static constexpr wchar_t  kClass[] = L"xlCOMImGuiDemoWnd";
 
     HWND          m_hwnd          = nullptr;
     ImGuiContext* m_ctx           = nullptr;
-    bool          m_show          = true;   // ShowDemoWindow open flag
+    bool          m_done          = false;
+    bool          m_show          = true;  // ShowDemoWindow open flag
 
-    int           m_width         = 800;
+    int           m_width         = 1600;
     int           m_height        = 1200;
     bool          m_resizePending = false;
-    bool          m_wasVisible    = false;  // for hide/restore on WM_ACTIVATEAPP
 
     // D3D11 resources
     ID3D11Device*           m_device    = nullptr;
@@ -129,7 +93,7 @@ private:
     ID3D11RenderTargetView* m_rtv       = nullptr;
 
     // -----------------------------------------------------------------------
-    // HINSTANCE of the hosting DLL.
+    // HINSTANCE of the hosting DLL (for window class registration).
     // -----------------------------------------------------------------------
     static HINSTANCE dllHandle()
     {
@@ -155,33 +119,22 @@ private:
     }
 
     // -----------------------------------------------------------------------
-    // init — creates the Win32 window, D3D11 device, and ImGui context.
+    // Window + D3D11 + ImGui creation
     // -----------------------------------------------------------------------
-    [[nodiscard]] bool init(HWND owner)
+    [[nodiscard]] bool create()
     {
         ensureClass();
 
         m_hwnd = CreateWindowExW(
-            WS_EX_TOOLWINDOW, kClass, L"Dear ImGui Demo (modeless)",
+            0, kClass, L"Dear ImGui Demo",
             WS_OVERLAPPEDWINDOW,
             CW_USEDEFAULT, CW_USEDEFAULT, m_width, m_height,
-            owner,   // owned by Excel — floats above it without being system-wide topmost
-            nullptr,
+            nullptr, nullptr,
             dllHandle(), this);
 
         if (!m_hwnd) return false;
 
         applyWindowTheme(m_hwnd);
-
-        // Position near the owner if available.
-        if (owner && IsWindow(owner))
-        {
-            RECT rc{};
-            if (GetWindowRect(owner, &rc))
-                SetWindowPos(m_hwnd, nullptr,
-                             rc.left + 60, rc.top + 60,
-                             0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-        }
 
         if (!createDevice())
         {
@@ -199,16 +152,19 @@ private:
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
         io.IniFilename  = nullptr;
 
+        // Apply Excel dark/light style based on Windows theme.
         if (isDarkMode())
             SetStyleExcelDark();
         else
             SetStyleExcelLight();
 
+        // Scale for DPI.
         const float  dpiScale = ImGui_ImplWin32_GetDpiScaleForHwnd(m_hwnd);
         ImGuiStyle&  style    = ImGui::GetStyle();
         style.ScaleAllSizes(dpiScale);
         style.FontScaleDpi = dpiScale;
 
+        // Load Segoe UI; fall back to embedded Inter font, then ImGui default.
         {
             constexpr const char* kSegoeUI = "C:\\Windows\\Fonts\\segoeui.ttf";
             const bool segoeExists = (GetFileAttributesA(kSegoeUI) != INVALID_FILE_ATTRIBUTES);
@@ -234,8 +190,47 @@ private:
         return true;
     }
 
+    ~ImGuiDemoWindow()
+    {
+        if (m_hwnd) KillTimer(m_hwnd, kTimerId);
+
+        if (m_ctx)
+        {
+            ImGui::SetCurrentContext(m_ctx);
+            ImGui_ImplDX11_Shutdown();
+            ImGui_ImplWin32_Shutdown();
+            ImGui::DestroyContext(m_ctx);
+            m_ctx = nullptr;
+        }
+
+        cleanupRenderTarget();
+        if (m_swapChain) { m_swapChain->Release(); m_swapChain = nullptr; }
+        if (m_d3dCtx)    { m_d3dCtx->Release();    m_d3dCtx    = nullptr; }
+        if (m_device)    { m_device->Release();     m_device    = nullptr; }
+
+        if (m_hwnd) { DestroyWindow(m_hwnd); m_hwnd = nullptr; }
+    }
+
     // -----------------------------------------------------------------------
-    // renderFrame — called from WM_TIMER / WM_PAINT.
+    // Modal message loop
+    // -----------------------------------------------------------------------
+    void runModal()
+    {
+        MSG msg;
+        while (!m_done)
+        {
+            while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
+            {
+                TranslateMessage(&msg);
+                DispatchMessage(&msg);
+                if (msg.message == WM_QUIT) { m_done = true; break; }
+            }
+            if (!m_done) renderFrame();
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Render one Dear ImGui frame
     // -----------------------------------------------------------------------
     void renderFrame()
     {
@@ -257,21 +252,11 @@ private:
         ImGui::NewFrame();
 
         ImGui::ShowDemoWindow(&m_show);
-
-        // If user clicked the ImGui demo window's own close button, hide the
-        // Win32 window instead of tearing down — matches WM_CLOSE behaviour.
-        if (!m_show)
-        {
-            ImGui::Render();     // must complete the frame before hiding
-            m_d3dCtx->OMSetRenderTargets(1, &m_rtv, nullptr);
-            ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-            m_swapChain->Present(1, 0);
-            ShowWindow(m_hwnd, SW_HIDE);
-            return;
-        }
+        if (!m_show) m_done = true;
 
         ImGui::Render();
 
+        // Clear colour: #292929 dark, #FFFFFF light
         const bool dark = isDarkMode();
         const float kClear[] = {
             dark ? 0.1608f : 1.0f,
@@ -365,7 +350,7 @@ private:
             return DefWindowProcW(hwnd, msg, wParam, lParam);
         }
 
-        auto* self = reinterpret_cast<ImGuiDemoWindow2*>(
+        auto* self = reinterpret_cast<ImGuiDemoWindow*>(
             GetWindowLongPtrW(hwnd, GWLP_USERDATA));
 
         if (self && self->m_ctx)
@@ -415,22 +400,7 @@ private:
                 return 0;
 
             case WM_CLOSE:
-                // Hide rather than destroy — the window can be re-shown.
-                ShowWindow(hwnd, SW_HIDE);
-                return 0;
-
-            case WM_ACTIVATEAPP:
-                // Hide on app deactivation, restore on activation.
-                if (wParam == FALSE)
-                {
-                    ShowWindow(hwnd, SW_HIDE);
-                    self->m_wasVisible = true;
-                }
-                else if (self->m_wasVisible)
-                {
-                    ShowWindow(hwnd, SW_SHOW);
-                    self->m_wasVisible = false;
-                }
+                self->m_done = true;
                 return 0;
 
             default: break;

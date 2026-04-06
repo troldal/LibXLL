@@ -101,6 +101,7 @@ set_target_properties(xllDemoScalarValidation PROPERTIES OUTPUT_NAME "scalar_val
 target_compile_definitions(xllDemoScalarValidation PRIVATE NOMINMAX)
 
 add_subdirectory(GUI)
+add_subdirectory(COM)
 
 add_executable(DemoMockExcelScalar Types/DemoMockExcelScalar.cpp)
 target_link_libraries(DemoMockExcelScalar PUBLIC MockXL)
