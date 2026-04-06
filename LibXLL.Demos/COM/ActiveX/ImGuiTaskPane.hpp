@@ -113,7 +113,7 @@ public:
             if (!font)
             {
                 auto fs   = cmrc::foo::get_filesystem();
-                auto file = fs.open("Inter-VariableFont.ttf");
+                auto file = fs.open("Resources/Fonts/Inter-VariableFont.ttf");
                 ImFontConfig cfg;
                 cfg.FontDataOwnedByAtlas = false;   // data lives in the static CMakeRC segment
                 io.Fonts->AddFontFromMemoryTTF(

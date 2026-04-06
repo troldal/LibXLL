@@ -9,10 +9,10 @@ endif()
 # Embedded resources — ribbon XML, button images, font.
 # ---------------------------------------------------------------------------
 cmrc_add_resource_library(foo-resources ALIAS foo::rc NAMESPACE foo
-    ribbon.xml
-    button-help_dark48px.png
-    button-help_light48px.png
-    Inter-VariableFont.ttf
+    Resources/XML/ribbon.xml
+    Resources/Images/button-help_dark48px.png
+    Resources/Images/button-help_light48px.png
+    Resources/Fonts/Inter-VariableFont.ttf
 )
 
 # ---------------------------------------------------------------------------

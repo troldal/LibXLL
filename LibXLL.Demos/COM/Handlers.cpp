@@ -170,7 +170,7 @@ auto onGetCustomUI = com::OnGetCustomUI(
     [](const com::String& /*ribbonId*/) -> com::String
     {
         auto fs   = cmrc::foo::get_filesystem();
-        auto file = fs.open("ribbon.xml");
+        auto file = fs.open("Resources/XML/ribbon.xml");
         return com::String(std::string(file.begin(), file.end()));
     });
 XLL_COM_REGISTER(onGetCustomUI);
@@ -229,8 +229,8 @@ auto getButtonImage = com::DispatchCallback<"GetButtonImage">(
         if (!pVarResult) return E_POINTER;
 
         const char* resource = isDarkMode()
-            ? "button-help_dark48px.png"
-            : "button-help_light48px.png";
+            ? "Resources/Images/button-help_dark48px.png"
+            : "Resources/Images/button-help_light48px.png";
 
         auto fs   = cmrc::foo::get_filesystem();
         auto file = fs.open(resource);
