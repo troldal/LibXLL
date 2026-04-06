@@ -1,15 +1,8 @@
-// ---------------------------------------------------------------------------
-// Content type selection — uncomment exactly ONE content include/block below.
+﻿// ---------------------------------------------------------------------------
+// Content type — Win32
 // ---------------------------------------------------------------------------
 
-// #include "ActiveX/WxTaskPane.hpp"          // wxWidgets content
-// #include "ActiveX/Win32TaskPane.hpp"       // pure Win32 content
-// #include "ActiveX/QtTaskPane.hpp"          // Qt Widgets content
-// #include "ActiveX/FltkTaskPane.hpp"        // FLTK content
-// #include "ActiveX/QtQuickTaskPane.hpp"     // Qt Quick (QML) content
-#include "ActiveX/ImGuiTaskPane.hpp"          // Dear ImGui — Win32 + DirectX 11
-#include "ActiveX/ImGuiDemoWindow.hpp"        // Dear ImGui demo window (modal)
-#include "ActiveX/ImGuiDemoWindow2.hpp"       // Dear ImGui demo window (modeless)
+#include "Win32TaskPane.hpp"
 
 #include "COM/Macros.hpp"
 #include "ActiveX/TaskPaneControl.hpp"
@@ -20,25 +13,14 @@
 
 CMRC_DECLARE(foo);
 
-thread_local ImGuiContext*   GImGui = NULL;
 
 // ---------------------------------------------------------------------------
 // Explicit instantiation of the TaskPaneControl with the chosen content type.
 // This causes the compiler to emit the full COM class and factory in this TU.
 // ---------------------------------------------------------------------------
 
-// template class TaskPaneControl<WxTaskPane>;
-// template class TaskPaneControlFactory<WxTaskPane>;
-// template class TaskPaneControl<Win32TaskPane>;
-// template class TaskPaneControlFactory<Win32TaskPane>;
-// template class TaskPaneControl<QtTaskPane>;
-// template class TaskPaneControlFactory<QtTaskPane>;
-// template class TaskPaneControl<FltkTaskPane>;
-// template class TaskPaneControlFactory<FltkTaskPane>;
-// template class TaskPaneControl<QtQuickTaskPane>;
-// template class TaskPaneControlFactory<QtQuickTaskPane>;
-template class TaskPaneControl<ImGuiTaskPane>;
-template class TaskPaneControlFactory<ImGuiTaskPane>;
+template class TaskPaneControl<Win32TaskPane>;
+template class TaskPaneControlFactory<Win32TaskPane>;
 
 // ---------------------------------------------------------------------------
 // Install COM server hooks so that DllGetClassObject, DllRegisterServer, and
@@ -46,18 +28,8 @@ template class TaskPaneControlFactory<ImGuiTaskPane>;
 // Runs at DLL load time (static initialisation).
 // ---------------------------------------------------------------------------
 
-// static const bool s_taskPaneHooked =
-//     detail::registerTaskPaneHooks<WxTaskPane>();
-// static const bool s_taskPaneHooked =
-//     detail::registerTaskPaneHooks<Win32TaskPane>();
-// static const bool s_taskPaneHooked =
-//     detail::registerTaskPaneHooks<QtTaskPane>();
-// static const bool s_taskPaneHooked =
-//     detail::registerTaskPaneHooks<FltkTaskPane>();
-// static const bool s_taskPaneHooked =
-//     detail::registerTaskPaneHooks<QtQuickTaskPane>();
 static const bool s_taskPaneHooked =
-    detail::registerTaskPaneHooks<ImGuiTaskPane>();
+    detail::registerTaskPaneHooks<Win32TaskPane>();
 
 // ---------------------------------------------------------------------------
 // Excel Application pointer — captured on connection, released on disconnect.
@@ -93,7 +65,7 @@ auto onConnection = com::OnConnection(
     [](IDispatch* application, ext_ConnectMode connectMode,
        IDispatch* /*addInInst*/, SAFEARRAY** /*custom*/)
     {
-        std::cerr << "[xlCOM] OnConnection fired. "
+        std::cerr << "[xlCOM-Win32] OnConnection fired. "
                      "ConnectMode = " << static_cast<int>(connectMode) << '\n';
 
         if (application)
@@ -111,7 +83,7 @@ XLL_COM_REGISTER(onConnection);
 auto onDisconnection = com::OnDisconnection(
     [](ext_DisconnectMode disconnectMode, SAFEARRAY** /*custom*/)
     {
-        std::cerr << "[xlCOM] OnDisconnection fired. "
+        std::cerr << "[xlCOM-Win32] OnDisconnection fired. "
                      "DisconnectMode = " << static_cast<int>(disconnectMode) << '\n';
 
         if (g_excelApp)
@@ -133,16 +105,12 @@ auto onDisconnection = com::OnDisconnection(
         }
 
         // Clean up GUI framework runtime on disconnect.
-        // WxTaskPane::shutdown();
-        // QtTaskPane::shutdown();
-        // FltkTaskPane::shutdown();
-        // QtQuickTaskPane::shutdown();
         if (g_demoWindow2)
         {
             delete g_demoWindow2;
             g_demoWindow2 = nullptr;
         }
-        ImGuiTaskPane::shutdown();
+        // Win32TaskPane has no process-wide shutdown.
     });
 XLL_COM_REGISTER(onDisconnection);
 
@@ -194,7 +162,7 @@ auto onButtonClicked = com::DispatchCallback<"OnButtonClicked">(
         if (FAILED(hr)) return hr;
 
         // Build the argument: the XLL command name to execute.
-        com::String macroName(L"IM.STATUS");
+        com::String macroName(L"WIN32.STATUS");
         VARIANT arg  = {};
         arg.vt       = VT_BSTR;
         arg.bstrVal  = macroName.get();   // non-owning — com::String still owns it
@@ -217,7 +185,7 @@ auto onRibbonLoad = com::DispatchCallback<"OnRibbonLoad">(
             pDispParams->rgvarg[0].vt == VT_DISPATCH &&
             pDispParams->rgvarg[0].pdispVal)
         {
-            std::cerr << "[xlCOM] OnRibbonLoad fired — IRibbonUI captured.\n";
+            std::cerr << "[xlCOM-Win32] OnRibbonLoad fired — IRibbonUI captured.\n";
         }
         return S_OK;
     });
@@ -336,7 +304,7 @@ static HRESULT TaskPane_SetWidth(IDispatch* pPane, int widthPx)
 auto onTaskPaneClicked = com::DispatchCallback<"OnTaskPaneClicked">(
     [](DISPPARAMS*, VARIANT*) -> HRESULT
     {
-        std::cerr << "[xlCOM] OnTaskPaneClicked\n";
+        std::cerr << "[xlCOM-Win32] OnTaskPaneClicked\n";
 
         if (g_taskPane)
         {
@@ -346,7 +314,7 @@ auto onTaskPaneClicked = com::DispatchCallback<"OnTaskPaneClicked">(
             {
                 // Pane is open — close it by deleting the CTP entirely.
                 // This triggers TaskPaneControl::deactivate → ~ImGuiTaskPane.
-                std::cerr << "[xlCOM]   deleting visible pane\n";
+                std::cerr << "[xlCOM-Win32]   deleting visible pane\n";
                 TaskPane_Delete(g_taskPane);
                 g_taskPane->Release();
                 g_taskPane = nullptr;
@@ -356,7 +324,7 @@ auto onTaskPaneClicked = com::DispatchCallback<"OnTaskPaneClicked">(
             // Delete the CTP so Excel removes it from its collection, which
             // triggers IOleObject::Close → deactivate → ~ImGuiTaskPane. Without
             // this, CreateCTP with the same ProgID would throw DISP_E_EXCEPTION.
-            std::cerr << "[xlCOM]   pane hidden/stale — deleting and recreating\n";
+            std::cerr << "[xlCOM-Win32]   pane hidden/stale — deleting and recreating\n";
             TaskPane_Delete(g_taskPane);
             g_taskPane->Release();
             g_taskPane = nullptr;
@@ -364,7 +332,7 @@ auto onTaskPaneClicked = com::DispatchCallback<"OnTaskPaneClicked">(
 
         if (!g_ctpFactory)
         {
-            std::cerr << "[xlCOM]   no CTP factory available\n";
+            std::cerr << "[xlCOM-Win32]   no CTP factory available\n";
             return E_FAIL;
         }
 
@@ -399,7 +367,7 @@ auto onTaskPaneClicked = com::DispatchCallback<"OnTaskPaneClicked">(
         if (hr == DISP_E_EXCEPTION)
         {
             if (excep.bstrDescription)
-                fprintf(stderr, "[xlCOM] CreateCTP failed: %ls\n", excep.bstrDescription);
+                fprintf(stderr, "[xlCOM-Win32] CreateCTP failed: %ls\n", excep.bstrDescription);
             SysFreeString(excep.bstrDescription);
             SysFreeString(excep.bstrSource);
             SysFreeString(excep.bstrHelpFile);
@@ -418,7 +386,7 @@ auto onTaskPaneClicked = com::DispatchCallback<"OnTaskPaneClicked">(
             hr = TaskPane_SetVisible(g_taskPane, true);
             if (SUCCEEDED(hr))
                 TaskPane_SetWidth(g_taskPane, 600);
-            std::cerr << "[xlCOM]   pane created, SetVisible hr=0x"
+            std::cerr << "[xlCOM-Win32]   pane created, SetVisible hr=0x"
                       << std::hex << hr << std::dec << '\n';
         }
         VariantClear(&result);
@@ -426,94 +394,4 @@ auto onTaskPaneClicked = com::DispatchCallback<"OnTaskPaneClicked">(
         return hr;
     });
 XLL_COM_REGISTER(onTaskPaneClicked);
-
-// ---------------------------------------------------------------------------
-// OnDemoWindowClicked — opens a modal 800 x 1200 window running ImGui::ShowDemoWindow.
-// ---------------------------------------------------------------------------
-
-auto onDemoWindowClicked = com::DispatchCallback<"OnDemoWindowClicked">(
-    [](DISPPARAMS*, VARIANT*) -> HRESULT
-    {
-        std::cerr << "[xlCOM] OnDemoWindowClicked\n";
-
-        // Find the top-level Excel window to use as the modal owner.
-        HWND owner = nullptr;
-        if (g_excelApp)
-        {
-            LPOLESTR name = const_cast<LPOLESTR>(L"Hwnd");
-            DISPID   id   = 0;
-            if (SUCCEEDED(g_excelApp->GetIDsOfNames(IID_NULL, &name, 1,
-                                                     LOCALE_USER_DEFAULT, &id)))
-            {
-                DISPPARAMS noParams = {};
-                VARIANT    result   = {};
-                if (SUCCEEDED(g_excelApp->Invoke(id, IID_NULL, LOCALE_USER_DEFAULT,
-                                                  DISPATCH_PROPERTYGET, &noParams,
-                                                  &result, nullptr, nullptr)))
-                {
-                    if (result.vt == VT_I4 || result.vt == VT_INT)
-                        owner = reinterpret_cast<HWND>(static_cast<LONG_PTR>(result.lVal));
-                    else if (result.vt == VT_I8)
-                        owner = reinterpret_cast<HWND>(static_cast<LONG_PTR>(result.llVal));
-                    VariantClear(&result);
-                }
-            }
-        }
-
-        ImGuiDemoWindow::show(owner);
-        return S_OK;
-    });
-XLL_COM_REGISTER(onDemoWindowClicked);
-
-// ---------------------------------------------------------------------------
-// OnDemoWindow2Clicked — opens a modeless 800 x 1200 window running
-// ImGui::ShowDemoWindow.  Excel remains fully interactive.
-//
-// Toggle behaviour (same pattern as ImGuiStatusWindow):
-//   First click  → create + show.
-//   Click while visible → bring to front.
-//   User closes with X  → window hides; next click re-shows it.
-//   OnDisconnection     → delete g_demoWindow2.
-// ---------------------------------------------------------------------------
-
-auto onDemoWindow2Clicked = com::DispatchCallback<"OnDemoWindow2Clicked">(
-    [](DISPPARAMS*, VARIANT*) -> HRESULT
-    {
-        std::cerr << "[xlCOM] OnDemoWindow2Clicked\n";
-
-        // Already created — just show / raise.
-        if (g_demoWindow2)
-        {
-            g_demoWindow2->showOrRaise();
-            return S_OK;
-        }
-
-        // Resolve the Excel top-level HWND to position the window nearby.
-        HWND owner = nullptr;
-        if (g_excelApp)
-        {
-            LPOLESTR name = const_cast<LPOLESTR>(L"Hwnd");
-            DISPID   id   = 0;
-            if (SUCCEEDED(g_excelApp->GetIDsOfNames(IID_NULL, &name, 1,
-                                                     LOCALE_USER_DEFAULT, &id)))
-            {
-                DISPPARAMS noParams = {};
-                VARIANT    result   = {};
-                if (SUCCEEDED(g_excelApp->Invoke(id, IID_NULL, LOCALE_USER_DEFAULT,
-                                                  DISPATCH_PROPERTYGET, &noParams,
-                                                  &result, nullptr, nullptr)))
-                {
-                    if (result.vt == VT_I4 || result.vt == VT_INT)
-                        owner = reinterpret_cast<HWND>(static_cast<LONG_PTR>(result.lVal));
-                    else if (result.vt == VT_I8)
-                        owner = reinterpret_cast<HWND>(static_cast<LONG_PTR>(result.llVal));
-                    VariantClear(&result);
-                }
-            }
-        }
-
-        g_demoWindow2 = ImGuiDemoWindow2::create(owner);
-        return g_demoWindow2 ? S_OK : E_FAIL;
-    });
-XLL_COM_REGISTER(onDemoWindow2Clicked);
 

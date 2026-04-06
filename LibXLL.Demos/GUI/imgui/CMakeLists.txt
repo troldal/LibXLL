@@ -8,7 +8,7 @@ add_library(xllDemoImDialog SHARED
 
 target_include_directories(xllDemoImDialog PRIVATE
     "${imgui_SOURCE_DIR}/backends"          # imgui_impl_win32.h, imgui_impl_dx11.h
-    "${CMAKE_SOURCE_DIR}/LibXLL.Demos/COM/ActiveX" # SetStyle.hpp
+    "${CMAKE_SOURCE_DIR}/LibXLL.Demos/COM/imgui" # SetStyle.hpp
 )
 
 target_link_libraries(xllDemoImDialog PUBLIC
@@ -51,7 +51,7 @@ add_library(xllDemoImModalDialog SHARED
 
 target_include_directories(xllDemoImModalDialog PRIVATE
     "${imgui_SOURCE_DIR}/backends"
-    "${CMAKE_SOURCE_DIR}/LibXLL.Demos/COM/ActiveX"
+    "${CMAKE_SOURCE_DIR}/LibXLL.Demos/COM/imgui"
 )
 
 target_link_libraries(xllDemoImModalDialog PUBLIC
@@ -88,7 +88,7 @@ add_library(xllDemoImDemoWindow SHARED
 
 target_include_directories(xllDemoImDemoWindow PRIVATE
     "${imgui_SOURCE_DIR}/backends"
-    "${CMAKE_SOURCE_DIR}/LibXLL.Demos/COM/ActiveX"
+    "${CMAKE_SOURCE_DIR}/LibXLL.Demos/COM/imgui"
 )
 
 target_link_libraries(xllDemoImDemoWindow PUBLIC
