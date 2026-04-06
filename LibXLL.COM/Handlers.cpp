@@ -9,6 +9,7 @@
 // #include "ActiveX/QtQuickTaskPane.hpp"     // Qt Quick (QML) content
 #include "ActiveX/ImGuiTaskPane.hpp"          // Dear ImGui — Win32 + DirectX 11
 #include "ActiveX/ImGuiDemoWindow.hpp"        // Dear ImGui demo window (modal)
+#include "ActiveX/ImGuiDemoWindow2.hpp"       // Dear ImGui demo window (modeless)
 
 #include "COM/Macros.hpp"
 #include "ActiveX/TaskPaneControl.hpp"
@@ -79,6 +80,12 @@ static IDispatch* g_ctpFactory = nullptr;
 static IDispatch* g_taskPane = nullptr;
 
 // ---------------------------------------------------------------------------
+// Modeless ImGui demo window — created on first click, toggled thereafter.
+// ---------------------------------------------------------------------------
+
+static ImGuiDemoWindow2* g_demoWindow2 = nullptr;
+
+// ---------------------------------------------------------------------------
 // OnConnection — fires when Excel loads and connects the add-in.
 // ---------------------------------------------------------------------------
 
@@ -130,6 +137,11 @@ auto onDisconnection = com::OnDisconnection(
         // QtTaskPane::shutdown();
         // FltkTaskPane::shutdown();
         // QtQuickTaskPane::shutdown();
+        if (g_demoWindow2)
+        {
+            delete g_demoWindow2;
+            g_demoWindow2 = nullptr;
+        }
         ImGuiTaskPane::shutdown();
     });
 XLL_COM_REGISTER(onDisconnection);
@@ -452,3 +464,56 @@ auto onDemoWindowClicked = com::DispatchCallback<"OnDemoWindowClicked">(
         return S_OK;
     });
 XLL_COM_REGISTER(onDemoWindowClicked);
+
+// ---------------------------------------------------------------------------
+// OnDemoWindow2Clicked — opens a modeless 800 x 1200 window running
+// ImGui::ShowDemoWindow.  Excel remains fully interactive.
+//
+// Toggle behaviour (same pattern as ImGuiStatusWindow):
+//   First click  → create + show.
+//   Click while visible → bring to front.
+//   User closes with X  → window hides; next click re-shows it.
+//   OnDisconnection     → delete g_demoWindow2.
+// ---------------------------------------------------------------------------
+
+auto onDemoWindow2Clicked = com::DispatchCallback<"OnDemoWindow2Clicked">(
+    [](DISPPARAMS*, VARIANT*) -> HRESULT
+    {
+        std::cerr << "[xlCOM] OnDemoWindow2Clicked\n";
+
+        // Already created — just show / raise.
+        if (g_demoWindow2)
+        {
+            g_demoWindow2->showOrRaise();
+            return S_OK;
+        }
+
+        // Resolve the Excel top-level HWND to position the window nearby.
+        HWND owner = nullptr;
+        if (g_excelApp)
+        {
+            LPOLESTR name = const_cast<LPOLESTR>(L"Hwnd");
+            DISPID   id   = 0;
+            if (SUCCEEDED(g_excelApp->GetIDsOfNames(IID_NULL, &name, 1,
+                                                     LOCALE_USER_DEFAULT, &id)))
+            {
+                DISPPARAMS noParams = {};
+                VARIANT    result   = {};
+                if (SUCCEEDED(g_excelApp->Invoke(id, IID_NULL, LOCALE_USER_DEFAULT,
+                                                  DISPATCH_PROPERTYGET, &noParams,
+                                                  &result, nullptr, nullptr)))
+                {
+                    if (result.vt == VT_I4 || result.vt == VT_INT)
+                        owner = reinterpret_cast<HWND>(static_cast<LONG_PTR>(result.lVal));
+                    else if (result.vt == VT_I8)
+                        owner = reinterpret_cast<HWND>(static_cast<LONG_PTR>(result.llVal));
+                    VariantClear(&result);
+                }
+            }
+        }
+
+        g_demoWindow2 = ImGuiDemoWindow2::create(owner);
+        return g_demoWindow2 ? S_OK : E_FAIL;
+    });
+XLL_COM_REGISTER(onDemoWindow2Clicked);
+

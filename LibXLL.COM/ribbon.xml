@@ -18,6 +18,11 @@
                   size="large"
                   imageMso="HappyFace"
                   onAction="OnDemoWindowClicked" />
+          <button id="xlCOMDemoButton2"
+                  label="ImGui Demo 2"
+                  size="large"
+                  imageMso="HappyFace"
+                  onAction="OnDemoWindow2Clicked" />
         </group>
       </tab>
     </tabs>
