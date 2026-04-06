@@ -120,6 +120,7 @@ private:
     int           m_width         = 800;
     int           m_height        = 1200;
     bool          m_resizePending = false;
+    bool          m_wasVisible    = false;  // for hide/restore on WM_ACTIVATEAPP
 
     // D3D11 resources
     ID3D11Device*           m_device    = nullptr;
@@ -161,10 +162,11 @@ private:
         ensureClass();
 
         m_hwnd = CreateWindowExW(
-            WS_EX_PALETTEWINDOW, kClass, L"Dear ImGui Demo (modeless)",
+            WS_EX_TOOLWINDOW, kClass, L"Dear ImGui Demo (modeless)",
             WS_OVERLAPPEDWINDOW,
             CW_USEDEFAULT, CW_USEDEFAULT, m_width, m_height,
-            nullptr, nullptr,
+            owner,   // owned by Excel — floats above it without being system-wide topmost
+            nullptr,
             dllHandle(), this);
 
         if (!m_hwnd) return false;
@@ -415,6 +417,20 @@ private:
             case WM_CLOSE:
                 // Hide rather than destroy — the window can be re-shown.
                 ShowWindow(hwnd, SW_HIDE);
+                return 0;
+
+            case WM_ACTIVATEAPP:
+                // Hide on app deactivation, restore on activation.
+                if (wParam == FALSE)
+                {
+                    ShowWindow(hwnd, SW_HIDE);
+                    self->m_wasVisible = true;
+                }
+                else if (self->m_wasVisible)
+                {
+                    ShowWindow(hwnd, SW_SHOW);
+                    self->m_wasVisible = false;
+                }
                 return 0;
 
             default: break;
