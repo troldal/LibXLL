@@ -10,51 +10,50 @@ Windows Registry Editor Version 5.00
 
 ; --- COM class (InprocServer32) -----------------------------------------
 
-[HKEY_CURRENT_USER\Software\Classes\CLSID\{@XLCOM_CONNECT_GUID@}]
-@="xlCOM Connect"
+[HKEY_CURRENT_USER\Software\Classes\CLSID\{@XLLCOM_ADDIN_GUID@}]
+@="@XLLCOM_ADDIN_FRIENDLY_NAME@"
 
-[HKEY_CURRENT_USER\Software\Classes\CLSID\{@XLCOM_CONNECT_GUID@}\InprocServer32]
-@="@XLCOM_DLL_PATH_REG@"
+[HKEY_CURRENT_USER\Software\Classes\CLSID\{@XLLCOM_ADDIN_GUID@}\InprocServer32]
+@="@XLLCOM_DLL_PATH_REG@"
 "ThreadingModel"="Apartment"
 
-[HKEY_CURRENT_USER\Software\Classes\CLSID\{@XLCOM_CONNECT_GUID@}\ProgID]
-@="xlCOM.Connect"
+[HKEY_CURRENT_USER\Software\Classes\CLSID\{@XLLCOM_ADDIN_GUID@}\ProgID]
+@="@XLLCOM_ADDIN_PROGID@"
 
 ; --- ProgID → CLSID mapping ---------------------------------------------
 
-[HKEY_CURRENT_USER\Software\Classes\xlCOM.Connect]
-@="xlCOM Connect"
+[HKEY_CURRENT_USER\Software\Classes\@XLLCOM_ADDIN_PROGID@]
+@="@XLLCOM_ADDIN_FRIENDLY_NAME@"
 
-[HKEY_CURRENT_USER\Software\Classes\xlCOM.Connect\CLSID]
-@="{@XLCOM_CONNECT_GUID@}"
+[HKEY_CURRENT_USER\Software\Classes\@XLLCOM_ADDIN_PROGID@\CLSID]
+@="{@XLLCOM_ADDIN_GUID@}"
 
 ; --- Excel COM Add-in entry ---------------------------------------------
 ; LoadBehavior 3 = Connected + Load at Startup
 
-[HKEY_CURRENT_USER\Software\Microsoft\Office\Excel\Addins\xlCOM.Connect]
-"FriendlyName"="xlCOM"
-"Description"="xlCOM Excel COM Add-in sample"
+[HKEY_CURRENT_USER\Software\Microsoft\Office\Excel\Addins\@XLLCOM_ADDIN_PROGID@]
+"FriendlyName"="@XLLCOM_ADDIN_FRIENDLY_NAME@"
+"Description"="@XLLCOM_ADDIN_DESCRIPTION@"
 "LoadBehavior"=dword:00000003
 
 ; --- TaskPaneControl ActiveX (for custom task panes) --------------------
 
-[HKEY_CURRENT_USER\Software\Classes\CLSID\{@XLCOM_TASKPANE_GUID@}]
-@="xlCOM TaskPaneControl"
+[HKEY_CURRENT_USER\Software\Classes\CLSID\{@XLLCOM_TASKPANE_GUID@}]
+@="@XLLCOM_TASKPANE_FRIENDLY_NAME@"
 
-[HKEY_CURRENT_USER\Software\Classes\CLSID\{@XLCOM_TASKPANE_GUID@}\InprocServer32]
-@="@XLCOM_DLL_PATH_REG@"
+[HKEY_CURRENT_USER\Software\Classes\CLSID\{@XLLCOM_TASKPANE_GUID@}\InprocServer32]
+@="@XLLCOM_DLL_PATH_REG@"
 "ThreadingModel"="Apartment"
 
-[HKEY_CURRENT_USER\Software\Classes\CLSID\{@XLCOM_TASKPANE_GUID@}\Control]
+[HKEY_CURRENT_USER\Software\Classes\CLSID\{@XLLCOM_TASKPANE_GUID@}\Control]
 
-[HKEY_CURRENT_USER\Software\Classes\CLSID\{@XLCOM_TASKPANE_GUID@}\ProgID]
-@="xlCOM.TaskPaneCtrl"
+[HKEY_CURRENT_USER\Software\Classes\CLSID\{@XLLCOM_TASKPANE_GUID@}\ProgID]
+@="@XLLCOM_TASKPANE_PROGID@"
 
-[HKEY_CURRENT_USER\Software\Classes\CLSID\{@XLCOM_TASKPANE_GUID@}\Implemented Categories\{40FC6ED4-2438-11CF-A3DB-080036F12502}]
+[HKEY_CURRENT_USER\Software\Classes\CLSID\{@XLLCOM_TASKPANE_GUID@}\Implemented Categories\{40FC6ED4-2438-11CF-A3DB-080036F12502}]
 
-[HKEY_CURRENT_USER\Software\Classes\xlCOM.TaskPaneCtrl]
-@="xlCOM TaskPaneControl"
+[HKEY_CURRENT_USER\Software\Classes\@XLLCOM_TASKPANE_PROGID@]
+@="@XLLCOM_TASKPANE_FRIENDLY_NAME@"
 
-[HKEY_CURRENT_USER\Software\Classes\xlCOM.TaskPaneCtrl\CLSID]
-@="{@XLCOM_TASKPANE_GUID@}"
-
+[HKEY_CURRENT_USER\Software\Classes\@XLLCOM_TASKPANE_PROGID@\CLSID]
+@="{@XLLCOM_TASKPANE_GUID@}"

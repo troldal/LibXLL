@@ -6,10 +6,9 @@
 
 #include <objbase.h>
 
-// XLCOM_CONNECT_GUID is injected by the build system (CMakeLists.txt) as a
-// string literal, e.g. "1E0739E0-A1B5-4AB4-953C-2D8959196A13".
-// The constexpr parser below converts it to a GUID struct at compile time,
-// which works on MSVC, Clang-CL, and MinGW/GCC without __declspec(uuid).
+// Constexpr GUID parser — converts a string literal such as
+// "1E0739E0-A1B5-4AB4-953C-2D8959196A13" to a GUID struct at compile time.
+// Works on MSVC, Clang-CL, and MinGW/GCC without __declspec(uuid).
 
 namespace detail
 {

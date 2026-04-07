@@ -72,8 +72,10 @@
 
 
 // OLE / ActiveX interfaces (from Windows SDK).
-#include <oleidl.h>     // IOleObject, IOleInPlaceObject, IOleInPlaceSite …
-#include <ocidl.h>      // IOleControl, IPersistStreamInit, CONTROLINFO …
+#include "COMServer.hpp"
+
+#include <ocidl.h>     // IOleControl, IPersistStreamInit, CONTROLINFO …
+#include <oleidl.h>    // IOleObject, IOleInPlaceObject, IOleInPlaceSite …
 
 #include <iostream>
 #include <new>
@@ -81,21 +83,20 @@
 // ---------------------------------------------------------------------------
 // CLSID & ProgID for the TaskPaneControl.
 //
-// The CLSID is the binary key used by COM's class-object lookup (CoCreateInstance
-// / DllGetClassObject).  It is stored in the registry under HKCR\CLSID\{...}.
+// These are no longer defined as globals in the library. Each consumer
+// provides a Traits struct that supplies the CLSID, ProgID, and friendly name
+// specific to their add-in:
 //
-// The ProgID is a human-readable string alias for the CLSID.  Excel VBA can
-// refer to the control by ProgID when constructing a custom task pane:
-//   Application.CTP.Add "xlCOM.TaskPaneCtrl"
+//   struct MyPaneTraits {
+//       static constexpr CLSID   clsid        = detail::parseGUID("xxxxxxxx-...");
+//       static constexpr wchar_t progId[]     = L"Company.AddinName.TaskPane";
+//       static constexpr wchar_t friendlyName[] = L"My Task Pane Control";
+//   };
 //
-// {7C2D4F8A-3E1B-4A5C-9D6E-8F0B2A1C3D5E}
+// Pass the traits type as the second template parameter:
+//   template class TaskPaneControl<MyContent, MyPaneTraits>;
 // ---------------------------------------------------------------------------
 
-inline constexpr CLSID CLSID_TaskPaneControl =
-    {0x7C2D4F8A, 0x3E1B, 0x4A5C, {0x9D, 0x6E, 0x8F, 0x0B, 0x2A, 0x1C, 0x3D, 0x5E}};
-
-// Human-readable ProgID registered under HKCR\xlCOM.TaskPaneCtrl.
-inline constexpr wchar_t kProgID_TaskPane[] = L"xlCOM.TaskPaneCtrl";
 
 // ---------------------------------------------------------------------------
 // detail namespace — internal helpers for Win32 window class registration.
@@ -169,7 +170,7 @@ inline const wchar_t* controlWindowClass()
 //   4. Excel calls Close() or InPlaceDeactivate() to tear down the control.
 // ===========================================================================
 
-template<typename Content>
+template<typename Content, typename Traits>
 class TaskPaneControl
     : public IOleObject              // core OLE embedding interface
     , public IOleInPlaceObject       // in-place window management
@@ -371,7 +372,7 @@ public:
     STDMETHODIMP GetUserClassID(CLSID* pClsid) override
     {
         if (!pClsid) return E_POINTER;
-        *pClsid = CLSID_TaskPaneControl;
+        *pClsid = Traits::clsid;
         return S_OK;
     }
 
@@ -684,7 +685,7 @@ public:
     STDMETHODIMP GetClassID(CLSID* pClsid) override
     {
         if (!pClsid) return E_POINTER;
-        *pClsid = CLSID_TaskPaneControl;
+        *pClsid = Traits::clsid;
         return S_OK;
     }
 
@@ -1002,7 +1003,7 @@ private:
 // ephemeral and its lifetime is managed by the caller via AddRef/Release.
 // ===========================================================================
 
-template<typename Content>
+template<typename Content, typename Traits>
 class TaskPaneControlFactory : public IClassFactory // NOLINT
 {
 public:
@@ -1050,7 +1051,7 @@ public:
         if (!ppv)    return E_POINTER;
         if (pOuter)  return CLASS_E_NOAGGREGATION;
 
-        auto* pCtrl = new(std::nothrow) TaskPaneControl<Content>();
+        auto* pCtrl = new(std::nothrow) TaskPaneControl<Content, Traits>();
         if (!pCtrl) return E_OUTOFMEMORY;
 
         const HRESULT hr = pCtrl->QueryInterface(riid, ppv);
@@ -1098,19 +1099,19 @@ namespace detail {
 // taskPaneGetClassObject<Content>
 //
 // Called from the DLL's DllGetClassObject export (via g_pfnExtraGetClassObject)
-// when the CLSID matches CLSID_TaskPaneControl.
+// when the CLSID matches Traits::clsid.
 //
 // Allocates a new TaskPaneControlFactory<Content>, QI's it for the requested
 // interface (usually IID_IClassFactory), releases the factory's own ref, and
 // returns the QI result.  If the CLSID does not match, returns
 // CLASS_E_CLASSNOTAVAILABLE so the dispatcher tries other registered factories.
 // ---------------------------------------------------------------------------
-template<typename Content>
+template<typename Content, typename Traits>
 inline HRESULT taskPaneGetClassObject(REFCLSID rclsid, REFIID riid, LPVOID* ppv)
 {
-    if (rclsid == CLSID_TaskPaneControl)
+    if (rclsid == Traits::clsid)
     {
-        auto* pFactory = new(std::nothrow) TaskPaneControlFactory<Content>();
+        auto* pFactory = new(std::nothrow) TaskPaneControlFactory<Content, Traits>();
         if (!pFactory) return E_OUTOFMEMORY;
         const HRESULT hr = pFactory->QueryInterface(riid, ppv);
         pFactory->Release();
@@ -1156,18 +1157,18 @@ inline HRESULT taskPaneGetClassObject(REFCLSID rclsid, REFIID riid, LPVOID* ppv)
 //       (default) = "{CLSID}"                   — ProgID → CLSID mapping used by
 //                                                 CLSIDFromProgID().
 // ---------------------------------------------------------------------------
+template<typename Traits>
 inline HRESULT taskPaneRegister(const wchar_t* dllPath)
 {
     wchar_t clsidStr[64] = {};
-    StringFromGUID2(CLSID_TaskPaneControl, clsidStr,
+    StringFromGUID2(Traits::clsid, clsidStr,
                     static_cast<int>(_countof(clsidStr)));
 
     wchar_t key[512] = {};
 
     // HKCR\CLSID\{...}
     swprintf_s(key, L"CLSID\\%s", clsidStr);
-    HRESULT hr = SetRegString(HKEY_CLASSES_ROOT, key, nullptr,
-                              L"xlCOM TaskPaneControl");
+    HRESULT hr = SetRegString(HKEY_CLASSES_ROOT, key, nullptr, Traits::friendlyName);
     if (FAILED(hr)) return hr;
 
     // InprocServer32
@@ -1193,16 +1194,15 @@ inline HRESULT taskPaneRegister(const wchar_t* dllPath)
 
     // ProgID
     swprintf_s(key, L"CLSID\\%s\\ProgID", clsidStr);
-    hr = SetRegString(HKEY_CLASSES_ROOT, key, nullptr, kProgID_TaskPane);
+    hr = SetRegString(HKEY_CLASSES_ROOT, key, nullptr, Traits::progId);
     if (FAILED(hr)) return hr;
 
     // Reverse ProgID → CLSID
-    hr = SetRegString(HKEY_CLASSES_ROOT, kProgID_TaskPane, nullptr,
-                      L"xlCOM TaskPaneControl");
+    hr = SetRegString(HKEY_CLASSES_ROOT, Traits::progId, nullptr, Traits::friendlyName);
     if (FAILED(hr)) return hr;
 
     wchar_t progKey[512] = {};
-    swprintf_s(progKey, L"%s\\CLSID", kProgID_TaskPane);
+    swprintf_s(progKey, L"%s\\CLSID", Traits::progId);
     hr = SetRegString(HKEY_CLASSES_ROOT, progKey, nullptr, clsidStr);
     if (FAILED(hr)) return hr;
 
@@ -1217,16 +1217,17 @@ inline HRESULT taskPaneRegister(const wchar_t* dllPath)
 // DeleteRegKey (from COMServer.hpp) performs a recursive delete so all sub-
 // keys are removed even if they were not originally written by this function.
 // ---------------------------------------------------------------------------
+template<typename Traits>
 inline void taskPaneUnregister()
 {
     wchar_t clsidStr[64] = {};
-    StringFromGUID2(CLSID_TaskPaneControl, clsidStr,
+    StringFromGUID2(Traits::clsid, clsidStr,
                     static_cast<int>(_countof(clsidStr)));
 
     wchar_t key[512] = {};
     swprintf_s(key, L"CLSID\\%s", clsidStr);
     DeleteRegKey(HKEY_CLASSES_ROOT, key);           // removes entire CLSID subtree
-    DeleteRegKey(HKEY_CLASSES_ROOT, kProgID_TaskPane); // removes ProgID subtree
+    DeleteRegKey(HKEY_CLASSES_ROOT, Traits::progId); // removes ProgID subtree
 }
 
 // ---------------------------------------------------------------------------
@@ -1242,17 +1243,17 @@ inline void taskPaneUnregister()
 //
 // This populates the three function-pointer slots defined by COMServer.hpp:
 //
-//   g_pfnExtraGetClassObject — routes CLSID_TaskPaneControl to the templated
+//   g_pfnExtraGetClassObject — routes Traits::clsid to the templated
 //                              factory that creates TaskPaneControl<Content>.
 //   g_pfnExtraRegister       — writes ActiveX registry entries.
 //   g_pfnExtraUnregister     — removes those entries.
 // ---------------------------------------------------------------------------
-template<typename Content>
+template<typename Content, typename Traits>
 inline bool registerTaskPaneHooks()
 {
-    g_pfnExtraGetClassObject = &taskPaneGetClassObject<Content>;
-    g_pfnExtraRegister       = &taskPaneRegister;
-    g_pfnExtraUnregister     = &taskPaneUnregister;
+    g_pfnExtraGetClassObject = &taskPaneGetClassObject<Content, Traits>;
+    g_pfnExtraRegister       = &taskPaneRegister<Traits>;
+    g_pfnExtraUnregister     = &taskPaneUnregister<Traits>;
     return true;
 }
 

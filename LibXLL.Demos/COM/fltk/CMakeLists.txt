@@ -18,35 +18,16 @@ target_link_libraries(xlCOM-Fltk PRIVATE
 )
 
 # ---------------------------------------------------------------------------
-# .reg file generation
+# Per-addin COM identity — GUIDs, ProgIDs, friendly names.
+# Configures .reg files and register/unregister targets.
 # ---------------------------------------------------------------------------
-
-set(_dll_path "${CMAKE_CURRENT_BINARY_DIR}/xlCOM-Fltk.dll")
-cmake_path(NATIVE_PATH _dll_path NORMALIZE _dll_path_native)
-string(REPLACE "\\" "\\\\" XLCOM_DLL_PATH_REG "${_dll_path_native}")
-unset(_dll_path)
-unset(_dll_path_native)
-
-configure_file(
-    "${CMAKE_SOURCE_DIR}/LibXLL.COM/Registry/register_dev.reg.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/register_dev.reg"
-    @ONLY
-)
-configure_file(
-    "${CMAKE_SOURCE_DIR}/LibXLL.COM/Registry/unregister_dev.reg.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/unregister_dev.reg"
-    @ONLY
-)
-
-add_custom_target(RegisterDll-Fltk
-    COMMAND regsvr32 /s "$<TARGET_FILE:xlCOM-Fltk>"
-    DEPENDS xlCOM-Fltk
-    COMMENT "Registering xlCOM-Fltk.dll (requires elevated privileges for HKCR)"
-)
-
-add_custom_target(UnregisterDll-Fltk
-    COMMAND regsvr32 /u /s "$<TARGET_FILE:xlCOM-Fltk>"
-    DEPENDS xlCOM-Fltk
-    COMMENT "Unregistering xlCOM-Fltk.dll"
+xlcom_configure_addin(xlCOM-Fltk
+    ADDIN_GUID              "1E0739E1-A1B5-4AB4-953C-2D8959196A13"
+    ADDIN_PROGID            "xlCOM.Fltk.Connect"
+    ADDIN_FRIENDLY_NAME     "xlCOM FLTK"
+    ADDIN_DESCRIPTION       "xlCOM Excel COM Add-in (FLTK)"
+    TASKPANE_GUID           "7C2D4F8B-3E1B-4A5C-9D6E-8F0B2A1C3D5E"
+    TASKPANE_PROGID         "xlCOM.Fltk.TaskPane"
+    TASKPANE_FRIENDLY_NAME  "xlCOM FLTK Task Pane Control"
 )
 

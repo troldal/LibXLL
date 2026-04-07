@@ -6,11 +6,10 @@ Windows Registry Editor Version 5.00
 ; Double-click to remove all entries added by register_dev.reg.
 ; -----------------------------------------------------------------------
 
-[-HKEY_CURRENT_USER\Software\Classes\CLSID\{@XLCOM_CONNECT_GUID@}]
-[-HKEY_CURRENT_USER\Software\Classes\xlCOM.Connect]
-[-HKEY_CURRENT_USER\Software\Microsoft\Office\Excel\Addins\xlCOM.Connect]
+[-HKEY_CURRENT_USER\Software\Classes\CLSID\{@XLLCOM_ADDIN_GUID@}]
+[-HKEY_CURRENT_USER\Software\Classes\@XLLCOM_ADDIN_PROGID@]
+[-HKEY_CURRENT_USER\Software\Microsoft\Office\Excel\Addins\@XLLCOM_ADDIN_PROGID@]
 
 ; --- TaskPaneControl ActiveX ---
-[-HKEY_CURRENT_USER\Software\Classes\CLSID\{@XLCOM_TASKPANE_GUID@}]
-[-HKEY_CURRENT_USER\Software\Classes\xlCOM.TaskPaneCtrl]
-
+[-HKEY_CURRENT_USER\Software\Classes\CLSID\{@XLLCOM_TASKPANE_GUID@}]
+[-HKEY_CURRENT_USER\Software\Classes\@XLLCOM_TASKPANE_PROGID@]

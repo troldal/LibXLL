@@ -6,8 +6,9 @@
 #include "ImGuiDemoWindow.hpp"
 #include "ImGuiDemoWindow2.hpp"
 
-#include "COM/Macros.hpp"
 #include "ActiveX/TaskPaneControl.hpp"
+#include "AddIn.hpp"
+#include "COM/Macros.hpp"
 #include "Utils/ImageFromPNGBytes.hpp"
 #include "Utils/IsDarkMode.hpp"
 #include <cmrc/cmrc.hpp>
@@ -18,12 +19,25 @@ CMRC_DECLARE(foo);
 thread_local ImGuiContext*   GImGui = NULL;
 
 // ---------------------------------------------------------------------------
+// Task pane COM identity — CLSID, ProgID, and friendly name for this add-in's
+// TaskPaneControl instantiation.  Must match the values passed to
+// xlcom_configure_addin() in CMakeLists.txt.
+// ---------------------------------------------------------------------------
+
+struct ImGuiPaneTraits
+{
+    static constexpr CLSID   clsid        = detail::parseGUID("7C2D4F8A-3E1B-4A5C-9D6E-8F0B2A1C3D5E");
+    static constexpr wchar_t progId[]     = L"xlCOM.ImGui.TaskPane";
+    static constexpr wchar_t friendlyName[] = L"xlCOM ImGui Task Pane Control";
+};
+
+// ---------------------------------------------------------------------------
 // Explicit instantiation of the TaskPaneControl with the chosen content type.
 // This causes the compiler to emit the full COM class and factory in this TU.
 // ---------------------------------------------------------------------------
 
-template class TaskPaneControl<ImGuiTaskPane>;
-template class TaskPaneControlFactory<ImGuiTaskPane>;
+template class TaskPaneControl<ImGuiTaskPane, ImGuiPaneTraits>;
+template class TaskPaneControlFactory<ImGuiTaskPane, ImGuiPaneTraits>;
 
 // ---------------------------------------------------------------------------
 // Install COM server hooks so that DllGetClassObject, DllRegisterServer, and
@@ -32,7 +46,28 @@ template class TaskPaneControlFactory<ImGuiTaskPane>;
 // ---------------------------------------------------------------------------
 
 static const bool s_taskPaneHooked =
-    detail::registerTaskPaneHooks<ImGuiTaskPane>();
+    detail::registerTaskPaneHooks<ImGuiTaskPane, ImGuiPaneTraits>();
+
+// ---------------------------------------------------------------------------
+// Add-in COM identity — CLSID, ProgID, friendly name, and description.
+// Must match the values passed to xlcom_configure_addin() in CMakeLists.txt.
+// ---------------------------------------------------------------------------
+
+// static const com::AddIn s_addin(
+//     "1E0739E0-A1B5-4AB4-953C-2D8959196A13",
+//     L"xlCOM.ImGui.Connect",
+//     L"xlCOM ImGui",
+//     L"xlCOM Excel COM Add-in (Dear ImGui)"
+// );
+
+static const com::AddIn s_addin(
+    XLCOM_IMGUI_ADDIN_GUID,
+    XLCOM_IMGUI_ADDIN_PROGID,
+    XLCOM_IMGUI_ADDIN_FRIENDLY_NAME,
+    XLCOM_IMGUI_ADDIN_DESCRIPTION
+);
+
+
 
 // ---------------------------------------------------------------------------
 // Excel Application pointer — captured on connection, released on disconnect.
@@ -351,7 +386,7 @@ auto onTaskPaneClicked = com::DispatchCallback<"OnTaskPaneClicked">(
         //           [CTPParentWindow As Object]) As CustomTaskPane
         VARIANT args[3] = {};
         args[2].vt      = VT_BSTR;                          // CTPAxID  (1st param → last index)
-        args[2].bstrVal = SysAllocString(kProgID_TaskPane);
+        args[2].bstrVal = SysAllocString(ImGuiPaneTraits::progId);
         args[1].vt      = VT_BSTR;                          // CTPTitle (2nd param)
         args[1].bstrVal = SysAllocString(L"My Task Pane");
         args[0].vt      = VT_ERROR;                          // CTPParentWindow (optional)

@@ -4,8 +4,9 @@
 
 #include "FltkTaskPane.hpp"
 
-#include "COM/Macros.hpp"
 #include "ActiveX/TaskPaneControl.hpp"
+#include "AddIn.hpp"
+#include "COM/Macros.hpp"
 #include "Utils/ImageFromPNGBytes.hpp"
 #include "Utils/IsDarkMode.hpp"
 #include <cmrc/cmrc.hpp>
@@ -15,12 +16,25 @@ CMRC_DECLARE(foo);
 
 
 // ---------------------------------------------------------------------------
+// Task pane COM identity — CLSID, ProgID, and friendly name for this add-in's
+// TaskPaneControl instantiation.  Must match the values passed to
+// xlcom_configure_addin() in CMakeLists.txt.
+// ---------------------------------------------------------------------------
+
+struct FltkPaneTraits
+{
+    static constexpr CLSID   clsid        = detail::parseGUID("7C2D4F8B-3E1B-4A5C-9D6E-8F0B2A1C3D5E");
+    static constexpr wchar_t progId[]     = L"xlCOM.Fltk.TaskPane";
+    static constexpr wchar_t friendlyName[] = L"xlCOM FLTK Task Pane Control";
+};
+
+// ---------------------------------------------------------------------------
 // Explicit instantiation of the TaskPaneControl with the chosen content type.
 // This causes the compiler to emit the full COM class and factory in this TU.
 // ---------------------------------------------------------------------------
 
-template class TaskPaneControl<FltkTaskPane>;
-template class TaskPaneControlFactory<FltkTaskPane>;
+template class TaskPaneControl<FltkTaskPane, FltkPaneTraits>;
+template class TaskPaneControlFactory<FltkTaskPane, FltkPaneTraits>;
 
 // ---------------------------------------------------------------------------
 // Install COM server hooks so that DllGetClassObject, DllRegisterServer, and
@@ -29,7 +43,19 @@ template class TaskPaneControlFactory<FltkTaskPane>;
 // ---------------------------------------------------------------------------
 
 static const bool s_taskPaneHooked =
-    detail::registerTaskPaneHooks<FltkTaskPane>();
+    detail::registerTaskPaneHooks<FltkTaskPane, FltkPaneTraits>();
+
+// ---------------------------------------------------------------------------
+// Add-in COM identity — CLSID, ProgID, friendly name, and description.
+// Must match the values passed to xlcom_configure_addin() in CMakeLists.txt.
+// ---------------------------------------------------------------------------
+
+static const com::AddIn s_addin(
+    "1E0739E1-A1B5-4AB4-953C-2D8959196A13",
+    L"xlCOM.Fltk.Connect",
+    L"xlCOM FLTK",
+    L"xlCOM Excel COM Add-in (FLTK)"
+);
 
 // ---------------------------------------------------------------------------
 // Excel Application pointer — captured on connection, released on disconnect.
@@ -338,7 +364,7 @@ auto onTaskPaneClicked = com::DispatchCallback<"OnTaskPaneClicked">(
         //           [CTPParentWindow As Object]) As CustomTaskPane
         VARIANT args[3] = {};
         args[2].vt      = VT_BSTR;                          // CTPAxID  (1st param → last index)
-        args[2].bstrVal = SysAllocString(kProgID_TaskPane);
+        args[2].bstrVal = SysAllocString(FltkPaneTraits::progId);
         args[1].vt      = VT_BSTR;                          // CTPTitle (2nd param)
         args[1].bstrVal = SysAllocString(L"My Task Pane");
         args[0].vt      = VT_ERROR;                          // CTPParentWindow (optional)

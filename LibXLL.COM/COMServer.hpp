@@ -11,17 +11,11 @@
 
 #pragma once
 
+#include "AddIn.hpp"
 #include "COM/ComAuto.hpp"
 #include "COM/DispatchRegistry.hpp"
 #include "COM/Interfaces.hpp"
 #include "COM/String.hpp"
-#include "Utils/ParseGUID.hpp"
-
-// ---------------------------------------------------------------------------
-// GUID parsed at compile time from the CMake-injected string.
-// ---------------------------------------------------------------------------
-
-inline constexpr CLSID CLSID_Connect = detail::parseGUID(XLCOM_CONNECT_GUID);
 
 // ---------------------------------------------------------------------------
 // Globals
@@ -38,7 +32,7 @@ inline HMODULE g_hModule   = nullptr;
 // without modifying this boilerplate.
 // ---------------------------------------------------------------------------
 
-// Called by DllGetClassObject when CLSID_Connect doesn't match.
+// Called by DllGetClassObject when the add-in CLSID doesn't match.
 // Return CLASS_E_CLASSNOTAVAILABLE to fall through.
 inline HRESULT (*g_pfnExtraGetClassObject)(REFCLSID, REFIID, LPVOID*) = nullptr;
 
@@ -56,16 +50,16 @@ inline void (*g_pfnExtraUnregister)() = nullptr;
 // users never need to touch this class.
 // ---------------------------------------------------------------------------
 
-class Connect : public _IDTExtensibility2, public IRibbonExtensibility,
+class AddInServer : public _IDTExtensibility2, public IRibbonExtensibility,
                 public ICustomTaskPaneConsumer // NOLINT
 {
 public:
-    Connect() : m_refCount(1)
+    AddInServer() : m_refCount(1)
     {
         InterlockedIncrement(&g_lockCount);
     }
 
-    ~Connect()
+    ~AddInServer()
     {
         if (m_ribbonUI)
         {
@@ -229,10 +223,10 @@ private:
 // IClassFactory for Connect
 // ---------------------------------------------------------------------------
 
-class ConnectClassFactory : public IClassFactory // NOLINT
+class AddInServerFactory : public IClassFactory // NOLINT
 {
 public:
-    ConnectClassFactory() : m_refCount(1) {}
+    AddInServerFactory() : m_refCount(1) {}
 
     // IUnknown
     STDMETHODIMP QueryInterface(REFIID riid, void** ppv) override
@@ -266,7 +260,7 @@ public:
         if (!ppv)      return E_POINTER;
         if (pUnkOuter) return CLASS_E_NOAGGREGATION;
 
-        Connect* pConnect = new(std::nothrow) Connect();
+        AddInServer* pConnect = new(std::nothrow) AddInServer();
         if (!pConnect) return E_OUTOFMEMORY;
 
         const HRESULT hr = pConnect->QueryInterface(riid, ppv);
@@ -374,7 +368,7 @@ namespace detail
 
 #if defined(_MSC_VER) && !defined(__clang__)
    // Pure MSVC — use linker pragmas, no dllexport (avoids C2375).
-#  define XLCOM_EXPORT
+#  define XLLCOM_EXPORT
 #  pragma comment(linker, "/EXPORT:DllGetClassObject,PRIVATE")
 #  pragma comment(linker, "/EXPORT:DllCanUnloadNow,PRIVATE")
 #  pragma comment(linker, "/EXPORT:DllRegisterServer,PRIVATE")
@@ -393,9 +387,9 @@ HRESULT STDAPICALLTYPE DllGetClassObject(REFCLSID rclsid, REFIID riid, LPVOID* p
 {
     if (!ppv) return E_POINTER;
 
-    if (rclsid == CLSID_Connect)
+    if (rclsid == com::addIn().clsid())
     {
-        ConnectClassFactory* pFactory = new(std::nothrow) ConnectClassFactory();
+        AddInServerFactory* pFactory = new(std::nothrow) AddInServerFactory();
         if (!pFactory) return E_OUTOFMEMORY;
 
         const HRESULT hr = pFactory->QueryInterface(riid, ppv);
@@ -426,12 +420,13 @@ HRESULT STDAPICALLTYPE DllRegisterServer()
 
     // Build CLSID string: {xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}
     wchar_t clsidStr[64] = {};
-    StringFromGUID2(CLSID_Connect, clsidStr, static_cast<int>(_countof(clsidStr)));
+    StringFromGUID2(com::addIn().clsid(), clsidStr, static_cast<int>(_countof(clsidStr)));
 
     // HKCR\CLSID\{...}  —  friendly name
     wchar_t key[512] = {};
     swprintf_s(key, L"CLSID\\%s", clsidStr);
-    HRESULT hr = detail::SetRegString(HKEY_CLASSES_ROOT, key, nullptr, L"xlCOM Connect");
+    HRESULT hr = detail::SetRegString(HKEY_CLASSES_ROOT, key, nullptr,
+                                      com::addIn().friendlyName());
     if (FAILED(hr)) return hr;
 
     // HKCR\CLSID\{...}\InprocServer32
@@ -443,23 +438,28 @@ HRESULT STDAPICALLTYPE DllRegisterServer()
 
     // HKCR\CLSID\{...}\ProgID
     swprintf_s(key, L"CLSID\\%s\\ProgID", clsidStr);
-    hr = detail::SetRegString(HKEY_CLASSES_ROOT, key, nullptr, L"xlCOM.Connect");
+    hr = detail::SetRegString(HKEY_CLASSES_ROOT, key, nullptr, com::addIn().progId());
     if (FAILED(hr)) return hr;
 
-    // HKCR\xlCOM.Connect  —  ProgID → CLSID mapping
-    hr = detail::SetRegString(HKEY_CLASSES_ROOT, L"xlCOM.Connect", nullptr, L"xlCOM Connect");
+    // HKCR\{ProgID}  —  ProgID → CLSID mapping
+    hr = detail::SetRegString(HKEY_CLASSES_ROOT, com::addIn().progId(), nullptr,
+                              com::addIn().friendlyName());
     if (FAILED(hr)) return hr;
-    hr = detail::SetRegString(HKEY_CLASSES_ROOT, L"xlCOM.Connect\\CLSID", nullptr, clsidStr);
+    wchar_t progIdClsidKey[512] = {};
+    swprintf_s(progIdClsidKey, L"%s\\CLSID", com::addIn().progId());
+    hr = detail::SetRegString(HKEY_CLASSES_ROOT, progIdClsidKey, nullptr, clsidStr);
     if (FAILED(hr)) return hr;
 
-    // HKCU\Software\Microsoft\Office\Excel\Addins\xlCOM.Connect
+    // HKCU\Software\Microsoft\Office\Excel\Addins\{ProgID}
     // LoadBehavior = 3  →  Connected + Load at Startup
-    const wchar_t* addinKey =
-        L"Software\\Microsoft\\Office\\Excel\\Addins\\xlCOM.Connect";
-    hr = detail::SetRegString(HKEY_CURRENT_USER, addinKey, L"FriendlyName", L"xlCOM");
+    wchar_t addinKey[512] = {};
+    swprintf_s(addinKey, L"Software\\Microsoft\\Office\\Excel\\Addins\\%s",
+               com::addIn().progId());
+    hr = detail::SetRegString(HKEY_CURRENT_USER, addinKey, L"FriendlyName",
+                              com::addIn().friendlyName());
     if (FAILED(hr)) return hr;
     hr = detail::SetRegString(HKEY_CURRENT_USER, addinKey, L"Description",
-                              L"xlCOM Excel COM Add-in sample");
+                              com::addIn().description());
     if (FAILED(hr)) return hr;
     hr = detail::SetRegDword(HKEY_CURRENT_USER, addinKey, L"LoadBehavior", 3);
     if (FAILED(hr)) return hr;
@@ -478,7 +478,7 @@ extern "C" inline XLLCOM_EXPORT
 HRESULT STDAPICALLTYPE DllUnregisterServer()
 {
     wchar_t clsidStr[64] = {};
-    StringFromGUID2(CLSID_Connect, clsidStr, static_cast<int>(_countof(clsidStr)));
+    StringFromGUID2(com::addIn().clsid(), clsidStr, static_cast<int>(_countof(clsidStr)));
 
     wchar_t key[512] = {};
 
@@ -487,11 +487,13 @@ HRESULT STDAPICALLTYPE DllUnregisterServer()
     detail::DeleteRegKey(HKEY_CLASSES_ROOT, key);
 
     // Remove ProgID
-    detail::DeleteRegKey(HKEY_CLASSES_ROOT, L"xlCOM.Connect");
+    detail::DeleteRegKey(HKEY_CLASSES_ROOT, com::addIn().progId());
 
     // Remove Excel add-in entry
-    detail::DeleteRegKey(HKEY_CURRENT_USER,
-                         L"Software\\Microsoft\\Office\\Excel\\Addins\\xlCOM.Connect");
+    wchar_t addinKey[512] = {};
+    swprintf_s(addinKey, L"Software\\Microsoft\\Office\\Excel\\Addins\\%s",
+               com::addIn().progId());
+    detail::DeleteRegKey(HKEY_CURRENT_USER, addinKey);
 
     // Extension hook — unregister additional CLSIDs.
     if (g_pfnExtraUnregister)
@@ -505,10 +507,4 @@ HRESULT STDAPICALLTYPE DllUnregisterServer()
 #endif
 
 #undef XLLCOM_EXPORT
-
-
-
-
-
-
 

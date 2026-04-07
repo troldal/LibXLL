@@ -115,6 +115,10 @@ endif()
 set(IMGUI_EXAMPLES TRUE)
 set(IMGUI_DEMO TRUE)
 set(IMGUI_ENABLE_STDLIB_SUPPORT TRUE)
+set(IMGUI_IMPL_SDL OFF) # We use Win32 + Direct3D backends, so disable the SDL backend.
+set(IMGUI_IMPL_GLFW OFF) # We use Win32 + Direct3D backends, so disable the GLFW backend.
+set(IMGUI_IMPL_GLUT OFF) # We use Win32 + Direct3D backends, so disable the GLUT backend.
+set(IMGUI_IMPL_VULKAN OFF) # We use Direct3D 11, so disable the Vulkan backend.
 # FreeType disabled — Clang-CL cannot compile ftver.rc via cmcldeps
 set(IMGUI_ENABLE_FREETYPE OFF CACHE BOOL "" FORCE)
 set(FREETYPE_FOUND FALSE)
