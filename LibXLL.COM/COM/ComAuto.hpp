@@ -2,6 +2,9 @@
 
 #include "Interfaces.hpp"
 #include "String.hpp"
+#include "DispatchRegistry.hpp"
+#include "../AddIn.hpp"
+#include <fixed_string.hpp>
 #include <functional>
 #include <string>
 #include <vector>
@@ -42,15 +45,31 @@ struct GetCustomUI {
 };
 
 // ---------------------------------------------------------------------------
+// RequiredInterface specialisations — map event policy types to the COM
+// interface that must be listed in AddIn<...> for the event to be usable.
+// ---------------------------------------------------------------------------
+
+namespace detail {
+    template<> struct RequiredInterface<GetCustomUI> { using type = IRibbonExtensibility; };
+    template<> struct RequiredInterface<CTPFactory>  { using type = ICustomTaskPaneConsumer; };
+
+    // Forward-declare HandlerPusher so EventHandler/QueryHandler can befriend it.
+    template<typename TEvent, typename = void> struct HandlerPusher;
+} // namespace detail
+
+// ---------------------------------------------------------------------------
 // EventHandler<TEvent>
 //
 // Wraps a single callback for the given event.  All registered callbacks are
-// stored in a per-event Meyers-singleton vector so they survive across Connect
-// instances and are safe from static-init-order issues.
+// stored in a per-event Meyers-singleton vector so they survive across
+// AddInServer instances and are safe from static-init-order issues.
 //
-// Usage:
-//   auto onConnection = com::OnConnection(
+// Usage (new API — preferred):
+//   static const auto r = s_addIn.on<com::Connection>(
 //       [](IDispatch* app, ext_ConnectMode mode, IDispatch*, SAFEARRAY**) { ... });
+//
+// Usage (legacy API — still supported):
+//   auto onConnection = com::OnConnection([...]{...});
 //   XLL_COM_REGISTER(onConnection);
 // ---------------------------------------------------------------------------
 
@@ -65,13 +84,16 @@ public:
     // Called by Registrar (via XLL_COM_REGISTER) at static-init time.
     void Register() const { callbacks().push_back(m_callback); }
 
-    // Called by Connect::<event> to fire all registered handlers.
+    // Called by AddInServer to fire all registered handlers.
     template<typename... Args>
     static void Execute(Args&&... args)
     {
         for (auto& cb : callbacks())
             cb(std::forward<Args>(args)...);
     }
+
+    // Returns true if at least one handler is registered for this event.
+    static bool hasHandler() { return !callbacks().empty(); }
 
 private:
     Callback m_callback;
@@ -81,6 +103,11 @@ private:
         static std::vector<Callback> s_list;
         return s_list;
     }
+
+    // Allow AddIn::on<>() to push via HandlerPusher.
+    template<typename... Interfaces>
+    friend class AddIn;
+    template<typename, typename> friend struct detail::HandlerPusher;
 };
 
 // ---------------------------------------------------------------------------
@@ -89,7 +116,7 @@ private:
 // Like EventHandler, but for events that produce a return value.
 // Execute calls each registered callback in registration order and returns
 // the first non-empty result.  Returning an empty ReturnType defers to the
-// next handler (or to the built-in default in Connect).
+// next handler (or to the built-in default in AddInServer).
 //
 // TEvent must define both Callback and ReturnType.
 // ---------------------------------------------------------------------------
@@ -119,6 +146,9 @@ public:
         return {};
     }
 
+    // Returns true if at least one handler is registered for this event.
+    static bool hasHandler() { return !callbacks().empty(); }
+
 private:
     Callback m_callback;
 
@@ -127,6 +157,11 @@ private:
         static std::vector<Callback> s_list;
         return s_list;
     }
+
+    // Allow AddIn::on<>() to push via HandlerPusher.
+    template<typename... Interfaces>
+    friend class AddIn;
+    template<typename, typename> friend struct detail::HandlerPusher;
 };
 
 // ---------------------------------------------------------------------------
@@ -151,5 +186,69 @@ struct Registrar
 {
     explicit Registrar(THandler& h) { h.Register(); }
 };
+
+// ---------------------------------------------------------------------------
+// Helper: detect whether TEvent uses EventHandler or QueryHandler,
+// and push a callback into the appropriate Meyers-singleton vector.
+// ---------------------------------------------------------------------------
+
+namespace detail {
+
+    // Primary: TEvent has only Callback → EventHandler (fire-and-forget).
+    template<typename TEvent, typename>
+    struct HandlerPusher
+    {
+        static void push(typename TEvent::Callback cb)
+        {
+            EventHandler<TEvent>::callbacks().push_back(std::move(cb));
+        }
+    };
+
+    // Specialisation: TEvent also has ReturnType → QueryHandler.
+    template<typename TEvent>
+    struct HandlerPusher<TEvent, std::void_t<typename TEvent::ReturnType>>
+    {
+        static void push(typename TEvent::Callback cb)
+        {
+            QueryHandler<TEvent>::callbacks().push_back(std::move(cb));
+        }
+    };
+
+} // namespace detail
+
+// ---------------------------------------------------------------------------
+// AddIn<Interfaces...>::on<TEvent>() implementation
+// ---------------------------------------------------------------------------
+
+template<typename... Interfaces>
+template<typename TEvent>
+detail::Reg AddIn<Interfaces...>::on(typename TEvent::Callback cb) const
+{
+    // Compile-time check: if the event requires an optional interface,
+    // verify that it is present in the Interfaces... pack.
+    using Required = typename detail::RequiredInterface<TEvent>::type;
+    if constexpr (!std::is_void_v<Required>) {
+        static_assert((std::is_same_v<Interfaces, Required> || ...),
+            "This event requires a COM interface not listed in AddIn<...>.  "
+            "Add the required interface to the AddIn template parameter list.");
+    }
+    detail::HandlerPusher<TEvent>::push(std::move(cb));
+    return {};
+}
+
+// ---------------------------------------------------------------------------
+// AddIn<Interfaces...>::dispatch<Name>() implementation
+// ---------------------------------------------------------------------------
+
+template<typename... Interfaces>
+template<fixstr::fixed_string Name>
+detail::Reg AddIn<Interfaces...>::dispatch(
+    std::function<HRESULT(DISPPARAMS*, VARIANT*)> cb) const
+{
+    constexpr std::string_view sv(Name.data(), Name.size());
+    std::wstring wideName(sv.begin(), sv.end());
+    DispatchRegistry::instance().add(wideName, std::move(cb));
+    return {};
+}
 
 }  // namespace com

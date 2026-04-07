@@ -72,7 +72,7 @@
 
 
 // OLE / ActiveX interfaces (from Windows SDK).
-#include "COMServer.hpp"
+#include "../COM/Server.hpp"
 
 #include <ocidl.h>     // IOleControl, IPersistStreamInit, CONTROLINFO …
 #include <oleidl.h>    // IOleObject, IOleInPlaceObject, IOleInPlaceSite …

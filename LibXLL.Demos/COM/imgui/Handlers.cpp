@@ -7,7 +7,6 @@
 #include "ImGuiDemoWindow2.hpp"
 
 #include "ActiveX/TaskPaneControl.hpp"
-#include "AddIn.hpp"
 #include "COM/Macros.hpp"
 #include "Utils/ImageFromPNGBytes.hpp"
 #include "Utils/IsDarkMode.hpp"
@@ -50,24 +49,15 @@ static const bool s_taskPaneHooked =
 
 // ---------------------------------------------------------------------------
 // Add-in COM identity — CLSID, ProgID, friendly name, and description.
-// Must match the values passed to xlcom_configure_addin() in CMakeLists.txt.
+// Template parameters declare which optional COM interfaces this add-in uses.
 // ---------------------------------------------------------------------------
 
-// static const com::AddIn s_addin(
-//     "1E0739E0-A1B5-4AB4-953C-2D8959196A13",
-//     L"xlCOM.ImGui.Connect",
-//     L"xlCOM ImGui",
-//     L"xlCOM Excel COM Add-in (Dear ImGui)"
-// );
-
-static const com::AddIn s_addin(
+static const com::AddIn<IRibbonExtensibility, ICustomTaskPaneConsumer> s_addin(
     XLCOM_IMGUI_ADDIN_GUID,
     XLCOM_IMGUI_ADDIN_PROGID,
     XLCOM_IMGUI_ADDIN_FRIENDLY_NAME,
     XLCOM_IMGUI_ADDIN_DESCRIPTION
 );
-
-
 
 // ---------------------------------------------------------------------------
 // Excel Application pointer — captured on connection, released on disconnect.
@@ -99,7 +89,7 @@ static ImGuiDemoWindow2* g_demoWindow2 = nullptr;
 // OnConnection — fires when Excel loads and connects the add-in.
 // ---------------------------------------------------------------------------
 
-auto onConnection = com::OnConnection(
+XLL_COM_EVENT onConnection = s_addin.on<com::Connection>(
     [](IDispatch* application, ext_ConnectMode connectMode,
        IDispatch* /*addInInst*/, SAFEARRAY** /*custom*/)
     {
@@ -112,13 +102,12 @@ auto onConnection = com::OnConnection(
             g_excelApp = application;
         }
     });
-XLL_COM_REGISTER(onConnection);
 
 // ---------------------------------------------------------------------------
 // OnDisconnection — fires when Excel unloads the add-in.
 // ---------------------------------------------------------------------------
 
-auto onDisconnection = com::OnDisconnection(
+XLL_COM_EVENT onDisconnection = s_addin.on<com::Disconnection>(
     [](ext_DisconnectMode disconnectMode, SAFEARRAY** /*custom*/)
     {
         std::cerr << "[xlCOM] OnDisconnection fired. "
@@ -150,14 +139,13 @@ auto onDisconnection = com::OnDisconnection(
         }
         ImGuiTaskPane::shutdown();
     });
-XLL_COM_REGISTER(onDisconnection);
 
 // ---------------------------------------------------------------------------
 // OnCTPFactoryAvailable — fired by ICustomTaskPaneConsumer::CTPFactoryAvailable.
 // Stores the factory for use in ribbon callbacks.
 // ---------------------------------------------------------------------------
 
-auto onCTPFactoryAvailable = com::OnCTPFactoryAvailable(
+XLL_COM_EVENT r_ctpFactory = s_addin.on<com::CTPFactory>(
     [](IDispatch* factory)
     {
         if (factory)
@@ -166,28 +154,26 @@ auto onCTPFactoryAvailable = com::OnCTPFactoryAvailable(
             g_ctpFactory = factory;
         }
     });
-XLL_COM_REGISTER(onCTPFactoryAvailable);
 
 // ---------------------------------------------------------------------------
 // OnGetCustomUI — returns the RibbonX XML from the embedded resource.
 // ---------------------------------------------------------------------------
 
-auto onGetCustomUI = com::OnGetCustomUI(
+XLL_COM_EVENT onGetCustomUI = s_addin.on<com::GetCustomUI>(
     [](const com::String& /*ribbonId*/) -> com::String
     {
         auto fs   = cmrc::foo::get_filesystem();
         auto file = fs.open("Resources/XML/ribbon.xml");
         return com::String(std::string(file.begin(), file.end()));
     });
-XLL_COM_REGISTER(onGetCustomUI);
 
 // ---------------------------------------------------------------------------
-// IDispatch callbacks — registered by name via DispatchCallback<"Name">.
-// Connect::GetIDsOfNames and Connect::Invoke resolve these automatically
-// through the DispatchRegistry.
+// IDispatch callbacks — registered by name via dispatch<"Name">.
+// AddInServer::GetIDsOfNames and AddInServer::Invoke resolve these
+// automatically through the DispatchRegistry.
 // ---------------------------------------------------------------------------
 
-auto onButtonClicked = com::DispatchCallback<"OnButtonClicked">(
+XLL_COM_EVENT onButtonClicked = s_addin.dispatch<"OnButtonClicked">(
     [](DISPPARAMS*, VARIANT*) -> HRESULT
     {
         if (!g_excelApp) return E_FAIL;
@@ -209,13 +195,12 @@ auto onButtonClicked = com::DispatchCallback<"OnButtonClicked">(
         params.rgvarg      = &arg;
         params.cArgs       = 1;
 
-        // Application.Run("WX.MODAL.GREETING")
+        // Application.Run("IM.STATUS")
         return g_excelApp->Invoke(dispId, IID_NULL, LOCALE_USER_DEFAULT,
                                    DISPATCH_METHOD, &params, nullptr, nullptr, nullptr);
     });
-XLL_COM_REGISTER(onButtonClicked);
 
-auto onRibbonLoad = com::DispatchCallback<"OnRibbonLoad">(
+XLL_COM_EVENT onRibbonLoad = s_addin.dispatch<"OnRibbonLoad">(
     [](DISPPARAMS* pDispParams, VARIANT*) -> HRESULT
     {
         // Office passes the IRibbonUI pointer as the first (and only) argument.
@@ -227,9 +212,8 @@ auto onRibbonLoad = com::DispatchCallback<"OnRibbonLoad">(
         }
         return S_OK;
     });
-XLL_COM_REGISTER(onRibbonLoad);
 
-auto getButtonImage = com::DispatchCallback<"GetButtonImage">(
+XLL_COM_EVENT onGetButtonImage = s_addin.dispatch<"GetButtonImage">(
     [](DISPPARAMS*, VARIANT* pVarResult) -> HRESULT
     {
         if (!pVarResult) return E_POINTER;
@@ -249,7 +233,6 @@ auto getButtonImage = com::DispatchCallback<"GetButtonImage">(
         pVarResult->pdispVal = pPicture;   // caller releases via VARIANT clear
         return S_OK;
     });
-XLL_COM_REGISTER(getButtonImage);
 
 // ---------------------------------------------------------------------------
 // Helpers: interact with a CustomTaskPane IDispatch.
@@ -327,19 +310,9 @@ static HRESULT TaskPane_SetWidth(IDispatch* pPane, int widthPx)
 
 // ---------------------------------------------------------------------------
 // OnTaskPaneClicked — destroy-and-recreate toggle.
-//
-// Strategy: Excel's CTP Visible property does not reliably re-drive
-// DoVerb/activation on the hosted ActiveX control after the first hide.
-// Instead we delete the entire CTP on close (which tears down the
-// ImGuiTaskPane cleanly) and create a fresh one on open.
-//
-//   Ribbon press while pane is VISIBLE  → Delete() + release → pane gone.
-//   Ribbon press while pane is HIDDEN   → stale pointer; drop, recreate.
-//   Ribbon press while no pane          → create fresh pane.
-//   User closes with pane X button      → same as "pane hidden" on next press.
 // ---------------------------------------------------------------------------
 
-auto onTaskPaneClicked = com::DispatchCallback<"OnTaskPaneClicked">(
+XLL_COM_EVENT onTaskPaneClicked = s_addin.dispatch<"OnTaskPaneClicked">(
     [](DISPPARAMS*, VARIANT*) -> HRESULT
     {
         std::cerr << "[xlCOM] OnTaskPaneClicked\n";
@@ -350,18 +323,12 @@ auto onTaskPaneClicked = com::DispatchCallback<"OnTaskPaneClicked">(
             HRESULT hr = TaskPane_GetVisible(g_taskPane, visible);
             if (SUCCEEDED(hr) && visible)
             {
-                // Pane is open — close it by deleting the CTP entirely.
-                // This triggers TaskPaneControl::deactivate → ~ImGuiTaskPane.
                 std::cerr << "[xlCOM]   deleting visible pane\n";
                 TaskPane_Delete(g_taskPane);
                 g_taskPane->Release();
                 g_taskPane = nullptr;
                 return S_OK;
             }
-            // Pane is already hidden (user closed with X) or pointer is stale.
-            // Delete the CTP so Excel removes it from its collection, which
-            // triggers IOleObject::Close → deactivate → ~ImGuiTaskPane. Without
-            // this, CreateCTP with the same ProgID would throw DISP_E_EXCEPTION.
             std::cerr << "[xlCOM]   pane hidden/stale — deleting and recreating\n";
             TaskPane_Delete(g_taskPane);
             g_taskPane->Release();
@@ -381,15 +348,12 @@ auto onTaskPaneClicked = com::DispatchCallback<"OnTaskPaneClicked">(
                                                     LOCALE_USER_DEFAULT, &dispId);
         if (FAILED(hr)) return hr;
 
-        // Arguments are passed in reverse order per IDispatch convention.
-        // CreateCTP(CTPAxID As String, CTPTitle As String,
-        //           [CTPParentWindow As Object]) As CustomTaskPane
         VARIANT args[3] = {};
-        args[2].vt      = VT_BSTR;                          // CTPAxID  (1st param → last index)
+        args[2].vt      = VT_BSTR;
         args[2].bstrVal = SysAllocString(ImGuiPaneTraits::progId);
-        args[1].vt      = VT_BSTR;                          // CTPTitle (2nd param)
+        args[1].vt      = VT_BSTR;
         args[1].bstrVal = SysAllocString(L"My Task Pane");
-        args[0].vt      = VT_ERROR;                          // CTPParentWindow (optional)
+        args[0].vt      = VT_ERROR;
         args[0].scode   = DISP_E_PARAMNOTFOUND;
 
         DISPPARAMS params  = {};
@@ -414,9 +378,6 @@ auto onTaskPaneClicked = com::DispatchCallback<"OnTaskPaneClicked">(
         SysFreeString(args[2].bstrVal);
         SysFreeString(args[1].bstrVal);
 
-        // Cache the pane and set it visible.
-        // Setting Visible = true on a freshly created CTP triggers
-        // DoVerb(OLEIVERB_INPLACEACTIVATE) → activateInPlace → new ImGuiTaskPane.
         if (SUCCEEDED(hr) && result.vt == VT_DISPATCH && result.pdispVal)
         {
             g_taskPane = result.pdispVal;
@@ -431,13 +392,12 @@ auto onTaskPaneClicked = com::DispatchCallback<"OnTaskPaneClicked">(
 
         return hr;
     });
-XLL_COM_REGISTER(onTaskPaneClicked);
 
 // ---------------------------------------------------------------------------
 // OnDemoWindowClicked — opens a modal 800 x 1200 window running ImGui::ShowDemoWindow.
 // ---------------------------------------------------------------------------
 
-auto onDemoWindowClicked = com::DispatchCallback<"OnDemoWindowClicked">(
+XLL_COM_EVENT onDemoWindowClicked = s_addin.dispatch<"OnDemoWindowClicked">(
     [](DISPPARAMS*, VARIANT*) -> HRESULT
     {
         std::cerr << "[xlCOM] OnDemoWindowClicked\n";
@@ -469,20 +429,13 @@ auto onDemoWindowClicked = com::DispatchCallback<"OnDemoWindowClicked">(
         ImGuiDemoWindow::show(owner);
         return S_OK;
     });
-XLL_COM_REGISTER(onDemoWindowClicked);
 
 // ---------------------------------------------------------------------------
 // OnDemoWindow2Clicked — opens a modeless 800 x 1200 window running
 // ImGui::ShowDemoWindow.  Excel remains fully interactive.
-//
-// Toggle behaviour (same pattern as ImGuiStatusWindow):
-//   First click  → create + show.
-//   Click while visible → bring to front.
-//   User closes with X  → window hides; next click re-shows it.
-//   OnDisconnection     → delete g_demoWindow2.
 // ---------------------------------------------------------------------------
 
-auto onDemoWindow2Clicked = com::DispatchCallback<"OnDemoWindow2Clicked">(
+XLL_COM_EVENT onDemoWindow2Clicked = s_addin.dispatch<"OnDemoWindow2Clicked">(
     [](DISPPARAMS*, VARIANT*) -> HRESULT
     {
         std::cerr << "[xlCOM] OnDemoWindow2Clicked\n";
@@ -521,5 +474,4 @@ auto onDemoWindow2Clicked = com::DispatchCallback<"OnDemoWindow2Clicked">(
         g_demoWindow2 = ImGuiDemoWindow2::create(owner);
         return g_demoWindow2 ? S_OK : E_FAIL;
     });
-XLL_COM_REGISTER(onDemoWindow2Clicked);
 

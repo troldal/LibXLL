@@ -58,8 +58,10 @@ TASKPANE_GUID;TASKPANE_PROGID;TASKPANE_FRIENDLY_NAME"
     set(${_prefix}_ADDIN_DESCRIPTION     "${ARG_ADDIN_DESCRIPTION}"     PARENT_SCOPE)
 
     # A ready-to-paste C++ snippet that constructs the com::AddIn for this target.
+    # Users should add template parameters for the optional interfaces they need,
+    # e.g. com::AddIn<IRibbonExtensibility, ICustomTaskPaneConsumer>.
     string(CONCAT _setup
-        "static const com::AddIn s_addin(\n"
+        "static const com::AddIn</* Interfaces... */> s_addin(\n"
         "    \"${ARG_ADDIN_GUID}\",\n"
         "    L\"${ARG_ADDIN_PROGID}\",\n"
         "    L\"${ARG_ADDIN_FRIENDLY_NAME}\",\n"

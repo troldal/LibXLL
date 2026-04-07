@@ -11,11 +11,12 @@
 
 #pragma once
 
-#include "AddIn.hpp"
-#include "COM/ComAuto.hpp"
-#include "COM/DispatchRegistry.hpp"
-#include "COM/Interfaces.hpp"
-#include "COM/String.hpp"
+#include "../AddIn.hpp"
+#include "ComAuto.hpp"
+#include "DispatchRegistry.hpp"
+#include "Interfaces.hpp"
+#include "String.hpp"
+#include <type_traits>
 
 // ---------------------------------------------------------------------------
 // Globals
@@ -43,15 +44,59 @@ inline HRESULT (*g_pfnExtraRegister)(const wchar_t* dllPath) = nullptr;
 inline void (*g_pfnExtraUnregister)() = nullptr;
 
 // ---------------------------------------------------------------------------
-// Connect — implements _IDTExtensibility2 + IRibbonExtensibility.
+// Interface implementation mixins — each provides the COM method body for
+// one optional interface.  AddInServer inherits from these as needed.
+// ---------------------------------------------------------------------------
+
+namespace mixin {
+
+struct RibbonImpl : public IRibbonExtensibility
+{
+    STDMETHODIMP GetCustomUI(BSTR RibbonID, BSTR* RibbonXml) override
+    {
+        if (!RibbonXml) return E_POINTER;
+
+        com::String result = com::OnGetCustomUI::Execute(com::String(RibbonID));
+        if (result.empty()) return E_FAIL;
+
+        *RibbonXml = result.release();
+        return S_OK;
+    }
+};
+
+struct TaskPaneImpl : public ICustomTaskPaneConsumer
+{
+    STDMETHODIMP CTPFactoryAvailable(IDispatch* CTPFactoryInst) override
+    {
+        com::OnCTPFactoryAvailable::Execute(CTPFactoryInst);
+        return S_OK;
+    }
+};
+
+// Map a COM interface type to its implementation mixin.
+template<typename T> struct ImplFor;
+template<> struct ImplFor<IRibbonExtensibility>    { using type = RibbonImpl; };
+template<> struct ImplFor<ICustomTaskPaneConsumer> { using type = TaskPaneImpl; };
+
+// Map a COM interface type to its IID.
+template<typename T> struct IIDOf;
+template<> struct IIDOf<IRibbonExtensibility>    { static constexpr const IID& value = IID_IRibbonExtensibility; };
+template<> struct IIDOf<ICustomTaskPaneConsumer> { static constexpr const IID& value = IID_ICustomTaskPaneConsumer; };
+
+} // namespace mixin
+
+// ---------------------------------------------------------------------------
+// AddInServer<Interfaces...> — implements _IDTExtensibility2 plus any
+// optional COM interfaces listed in the template parameter pack.
 //
 // Every virtual method delegates to the handler infrastructure
 // (com::EventHandler / com::QueryHandler / com::DispatchRegistry) so that
 // users never need to touch this class.
 // ---------------------------------------------------------------------------
 
-class AddInServer : public _IDTExtensibility2, public IRibbonExtensibility,
-                public ICustomTaskPaneConsumer // NOLINT
+template<typename... Interfaces>
+class AddInServer : public _IDTExtensibility2,
+                    public mixin::ImplFor<Interfaces>::type... // NOLINT
 {
 public:
     AddInServer() : m_refCount(1)
@@ -83,19 +128,9 @@ public:
             return S_OK;
         }
 
-        if (riid == IID_IRibbonExtensibility)
-        {
-            *ppvObject = static_cast<IRibbonExtensibility*>(this);
-            AddRef();
+        // Try each optional interface via fold expression.
+        if ((tryMatch<Interfaces>(riid, ppvObject) || ...))
             return S_OK;
-        }
-
-        if (riid == IID_ICustomTaskPaneConsumer)
-        {
-            *ppvObject = static_cast<ICustomTaskPaneConsumer*>(this);
-            AddRef();
-            return S_OK;
-        }
 
         *ppvObject = nullptr;
         return E_NOINTERFACE;
@@ -193,34 +228,26 @@ public:
         return S_OK;
     }
 
-    // --- IRibbonExtensibility ---------------------------------------------
-
-    STDMETHODIMP GetCustomUI(BSTR RibbonID, BSTR* RibbonXml) override
-    {
-        if (!RibbonXml) return E_POINTER;
-
-        com::String result = com::OnGetCustomUI::Execute(com::String(RibbonID));
-        if (result.empty()) return E_FAIL;
-
-        *RibbonXml = result.release();
-        return S_OK;
-    }
-
-    // --- ICustomTaskPaneConsumer ------------------------------------------
-
-    STDMETHODIMP CTPFactoryAvailable(IDispatch* CTPFactoryInst) override
-    {
-        com::OnCTPFactoryAvailable::Execute(CTPFactoryInst);
-        return S_OK;
-    }
-
 private:
     LONG       m_refCount;
     IRibbonUI* m_ribbonUI = nullptr;
+
+    // Helper for QueryInterface fold expression.
+    template<typename T>
+    bool tryMatch(REFIID riid, void** ppv)
+    {
+        if (riid == mixin::IIDOf<T>::value)
+        {
+            *ppv = static_cast<T*>(this);
+            AddRef();
+            return true;
+        }
+        return false;
+    }
 };
 
 // ---------------------------------------------------------------------------
-// IClassFactory for Connect
+// IClassFactory for AddInServer
 // ---------------------------------------------------------------------------
 
 class AddInServerFactory : public IClassFactory // NOLINT
@@ -254,18 +281,17 @@ public:
         return ref;
     }
 
-    // IClassFactory
+    // IClassFactory — delegates to the type-erased factory registered
+    // by AddIn<Interfaces...>'s constructor.
     STDMETHODIMP CreateInstance(IUnknown* pUnkOuter, REFIID riid, void** ppv) override
     {
         if (!ppv)      return E_POINTER;
         if (pUnkOuter) return CLASS_E_NOAGGREGATION;
 
-        AddInServer* pConnect = new(std::nothrow) AddInServer();
-        if (!pConnect) return E_OUTOFMEMORY;
+        if (!com::detail::g_createServer)
+            return E_UNEXPECTED;
 
-        const HRESULT hr = pConnect->QueryInterface(riid, ppv);
-        pConnect->Release();
-        return hr;
+        return com::detail::g_createServer(riid, ppv);
     }
 
     STDMETHODIMP LockServer(BOOL fLock) override
@@ -389,7 +415,7 @@ HRESULT STDAPICALLTYPE DllGetClassObject(REFCLSID rclsid, REFIID riid, LPVOID* p
 
     if (rclsid == com::addIn().clsid())
     {
-        AddInServerFactory* pFactory = new(std::nothrow) AddInServerFactory();
+        auto* pFactory = new(std::nothrow) AddInServerFactory();
         if (!pFactory) return E_OUTOFMEMORY;
 
         const HRESULT hr = pFactory->QueryInterface(riid, ppv);

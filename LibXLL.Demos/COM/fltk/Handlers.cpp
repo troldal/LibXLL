@@ -1,11 +1,10 @@
-﻿// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // Content type — FLTK
 // ---------------------------------------------------------------------------
 
 #include "FltkTaskPane.hpp"
 
 #include "ActiveX/TaskPaneControl.hpp"
-#include "AddIn.hpp"
 #include "COM/Macros.hpp"
 #include "Utils/ImageFromPNGBytes.hpp"
 #include "Utils/IsDarkMode.hpp"
@@ -50,7 +49,7 @@ static const bool s_taskPaneHooked =
 // Must match the values passed to xlcom_configure_addin() in CMakeLists.txt.
 // ---------------------------------------------------------------------------
 
-static const com::AddIn s_addin(
+static const com::AddIn<IRibbonExtensibility, ICustomTaskPaneConsumer> s_addin(
     "1E0739E1-A1B5-4AB4-953C-2D8959196A13",
     L"xlCOM.Fltk.Connect",
     L"xlCOM FLTK",
@@ -82,7 +81,7 @@ static IDispatch* g_taskPane = nullptr;
 // OnConnection — fires when Excel loads and connects the add-in.
 // ---------------------------------------------------------------------------
 
-auto onConnection = com::OnConnection(
+XLL_COM_EVENT r_connection = s_addin.on<com::Connection>(
     [](IDispatch* application, ext_ConnectMode connectMode,
        IDispatch* /*addInInst*/, SAFEARRAY** /*custom*/)
     {
@@ -95,13 +94,12 @@ auto onConnection = com::OnConnection(
             g_excelApp = application;
         }
     });
-XLL_COM_REGISTER(onConnection);
 
 // ---------------------------------------------------------------------------
 // OnDisconnection — fires when Excel unloads the add-in.
 // ---------------------------------------------------------------------------
 
-auto onDisconnection = com::OnDisconnection(
+XLL_COM_EVENT r_disconnection = s_addin.on<com::Disconnection>(
     [](ext_DisconnectMode disconnectMode, SAFEARRAY** /*custom*/)
     {
         std::cerr << "[xlCOM-Fltk] OnDisconnection fired. "
@@ -128,14 +126,13 @@ auto onDisconnection = com::OnDisconnection(
         // Clean up GUI framework runtime on disconnect.
         FltkTaskPane::shutdown();
     });
-XLL_COM_REGISTER(onDisconnection);
 
 // ---------------------------------------------------------------------------
 // OnCTPFactoryAvailable — fired by ICustomTaskPaneConsumer::CTPFactoryAvailable.
 // Stores the factory for use in ribbon callbacks.
 // ---------------------------------------------------------------------------
 
-auto onCTPFactoryAvailable = com::OnCTPFactoryAvailable(
+XLL_COM_EVENT r_ctpFactory = s_addin.on<com::CTPFactory>(
     [](IDispatch* factory)
     {
         if (factory)
@@ -144,20 +141,18 @@ auto onCTPFactoryAvailable = com::OnCTPFactoryAvailable(
             g_ctpFactory = factory;
         }
     });
-XLL_COM_REGISTER(onCTPFactoryAvailable);
 
 // ---------------------------------------------------------------------------
 // OnGetCustomUI — returns the RibbonX XML from the embedded resource.
 // ---------------------------------------------------------------------------
 
-auto onGetCustomUI = com::OnGetCustomUI(
+XLL_COM_EVENT r_customUI = s_addin.on<com::GetCustomUI>(
     [](const com::String& /*ribbonId*/) -> com::String
     {
         auto fs   = cmrc::foo::get_filesystem();
         auto file = fs.open("Resources/XML/ribbon.xml");
         return com::String(std::string(file.begin(), file.end()));
     });
-XLL_COM_REGISTER(onGetCustomUI);
 
 // ---------------------------------------------------------------------------
 // IDispatch callbacks — registered by name via DispatchCallback<"Name">.
@@ -165,7 +160,7 @@ XLL_COM_REGISTER(onGetCustomUI);
 // through the DispatchRegistry.
 // ---------------------------------------------------------------------------
 
-auto onButtonClicked = com::DispatchCallback<"OnButtonClicked">(
+XLL_COM_EVENT r_onButtonClicked = s_addin.dispatch<"OnButtonClicked">(
     [](DISPPARAMS*, VARIANT*) -> HRESULT
     {
         if (!g_excelApp) return E_FAIL;
@@ -191,9 +186,8 @@ auto onButtonClicked = com::DispatchCallback<"OnButtonClicked">(
         return g_excelApp->Invoke(dispId, IID_NULL, LOCALE_USER_DEFAULT,
                                    DISPATCH_METHOD, &params, nullptr, nullptr, nullptr);
     });
-XLL_COM_REGISTER(onButtonClicked);
 
-auto onRibbonLoad = com::DispatchCallback<"OnRibbonLoad">(
+XLL_COM_EVENT r_onRibbonLoad = s_addin.dispatch<"OnRibbonLoad">(
     [](DISPPARAMS* pDispParams, VARIANT*) -> HRESULT
     {
         // Office passes the IRibbonUI pointer as the first (and only) argument.
@@ -205,9 +199,8 @@ auto onRibbonLoad = com::DispatchCallback<"OnRibbonLoad">(
         }
         return S_OK;
     });
-XLL_COM_REGISTER(onRibbonLoad);
 
-auto getButtonImage = com::DispatchCallback<"GetButtonImage">(
+XLL_COM_EVENT r_getButtonImage = s_addin.dispatch<"GetButtonImage">(
     [](DISPPARAMS*, VARIANT* pVarResult) -> HRESULT
     {
         if (!pVarResult) return E_POINTER;
@@ -227,7 +220,6 @@ auto getButtonImage = com::DispatchCallback<"GetButtonImage">(
         pVarResult->pdispVal = pPicture;   // caller releases via VARIANT clear
         return S_OK;
     });
-XLL_COM_REGISTER(getButtonImage);
 
 // ---------------------------------------------------------------------------
 // Helpers: interact with a CustomTaskPane IDispatch.
@@ -317,7 +309,7 @@ static HRESULT TaskPane_SetWidth(IDispatch* pPane, int widthPx)
 //   User closes with pane X button      → same as "pane hidden" on next press.
 // ---------------------------------------------------------------------------
 
-auto onTaskPaneClicked = com::DispatchCallback<"OnTaskPaneClicked">(
+XLL_COM_EVENT r_taskPaneClicked = s_addin.dispatch<"OnTaskPaneClicked">(
     [](DISPPARAMS*, VARIANT*) -> HRESULT
     {
         std::cerr << "[xlCOM-Fltk] OnTaskPaneClicked\n";
@@ -409,5 +401,4 @@ auto onTaskPaneClicked = com::DispatchCallback<"OnTaskPaneClicked">(
 
         return hr;
     });
-XLL_COM_REGISTER(onTaskPaneClicked);
 
