@@ -29,6 +29,7 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(
 
 #include "SetStyle.hpp"
 #include "Utils/IsDarkMode.hpp"
+#include "ImGuiRenderGuard.hpp"
 
 #include <cmrc/cmrc.hpp>
 CMRC_DECLARE(foo);
@@ -234,6 +235,22 @@ private:
     // -----------------------------------------------------------------------
     void renderFrame()
     {
+        // Re-entrance guard — although this modal window drives rendering via
+        // its own PeekMessage loop rather than WM_TIMER, it still participates
+        // in the shared flag.  If a task pane or modeless ImGui window happens
+        // to be rendering at the same moment (e.g. its WM_TIMER fires inside
+        // our PeekMessage / DispatchMessage call), the guard prevents a second
+        // concurrent frame from starting on the same thread.
+        //
+        // If the flag is already set, another window's renderFrame() is on the
+        // call stack right now.  Skip this call — we will retry on the next
+        // iteration of the PeekMessage loop.
+        if (ImGuiRenderLock::isLocked()) return;
+
+        // Acquire the render lock — automatically released on any exit from
+        // this function, including early returns and exception unwinds.
+        ImGuiRenderLock lock;
+
         if (m_resizePending && m_swapChain)
         {
             m_resizePending = false;
@@ -249,6 +266,7 @@ private:
         ImGui::SetCurrentContext(m_ctx);
         ImGui_ImplDX11_NewFrame();
         ImGui_ImplWin32_NewFrame();
+
         ImGui::NewFrame();
 
         ImGui::ShowDemoWindow(&m_show);
@@ -349,6 +367,14 @@ private:
                               reinterpret_cast<LONG_PTR>(cs->lpCreateParams));
             return DefWindowProcW(hwnd, msg, wParam, lParam);
         }
+
+        // Context contamination guard — even though this modal window runs its
+        // own PeekMessage loop, DispatchMessage inside that loop can invoke this
+        // WndProc while another ImGui window's Present() is pumping the queue.
+        // ImGuiContextGuard saves the current ImGui context on entry and restores
+        // it on exit, ensuring the SetCurrentContext() call below does not
+        // permanently alter the context seen by the caller.
+        ImGuiContextGuard ctxGuard;
 
         auto* self = reinterpret_cast<ImGuiDemoWindow*>(
             GetWindowLongPtrW(hwnd, GWLP_USERDATA));

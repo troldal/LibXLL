@@ -34,6 +34,7 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(
 
 #include "SetStyle.hpp"
 #include "Utils/IsDarkMode.hpp"
+#include "ImGuiRenderGuard.hpp"
 
 #include <cmrc/cmrc.hpp>
 CMRC_DECLARE(foo);
@@ -239,6 +240,24 @@ private:
     // -----------------------------------------------------------------------
     void renderFrame()
     {
+        // Re-entrance guard — DXGI Present(1, 0) with VSync blocks for up to
+        // ~16 ms waiting for the vertical blank.  During that block the Win32
+        // message pump can dispatch pending messages, including a WM_TIMER for
+        // another ImGui window (e.g. ImGuiTaskPane).  If that timer fires and
+        // calls renderFrame() on the other window while we are still inside our
+        // own frame, two frames would be built concurrently on the same thread
+        // with shared global ImGui state, causing draw-list corruption and
+        // assertion failures.
+        //
+        // If the flag is already set, another window's renderFrame() is on the
+        // call stack right now.  Skip this tick — we render on the next one
+        // (~16 ms later), which is imperceptible.
+        if (ImGuiRenderLock::isLocked()) return;
+
+        // Acquire the render lock — automatically released on any exit from
+        // this function, including early returns and exception unwinds.
+        ImGuiRenderLock lock;
+
         if (m_resizePending && m_swapChain)
         {
             m_resizePending = false;
@@ -254,6 +273,7 @@ private:
         ImGui::SetCurrentContext(m_ctx);
         ImGui_ImplDX11_NewFrame();
         ImGui_ImplWin32_NewFrame();
+
         ImGui::NewFrame();
 
         ImGui::ShowDemoWindow(&m_show);
@@ -364,6 +384,20 @@ private:
                               reinterpret_cast<LONG_PTR>(cs->lpCreateParams));
             return DefWindowProcW(hwnd, msg, wParam, lParam);
         }
+
+        // Context contamination guard — DXGI Present(1, 0) in another window's
+        // renderFrame() can pump the Win32 message queue while blocking for VSync.
+        // If a WM_TIMER or other message is dispatched to this WndProc during that
+        // block, the SetCurrentContext() call below would change the global ImGui
+        // context.  Without a save/restore, when Present() returns in the other
+        // window the global context would point at our window instead of theirs,
+        // causing the other window to render with the wrong HWND, backends, and
+        // draw lists.
+        //
+        // ImGuiContextGuard saves ImGui::GetCurrentContext() here and restores it
+        // in its destructor, so this WndProc is side-effect-free with respect to
+        // the global context — regardless of how it was invoked.
+        ImGuiContextGuard ctxGuard;
 
         auto* self = reinterpret_cast<ImGuiDemoWindow2*>(
             GetWindowLongPtrW(hwnd, GWLP_USERDATA));

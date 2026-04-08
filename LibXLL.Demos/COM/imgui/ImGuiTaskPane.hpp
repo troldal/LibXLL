@@ -39,6 +39,7 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+#include <windowsx.h>
 
 #include "imgui.h"
 #include "imgui_impl_win32.h"
@@ -54,6 +55,7 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(
 
 #include <cmrc/cmrc.hpp>
 #include "SetStyle.hpp"
+#include "ImGuiRenderGuard.hpp"
 #include <iostream>
 
 CMRC_DECLARE(foo);
@@ -316,6 +318,23 @@ private:
     // -----------------------------------------------------------------------
     void renderFrame()
     {
+        // Re-entrance guard — DXGI Present(1, 0) with VSync blocks for up to
+        // ~16 ms waiting for the vertical blank.  During that block the Win32
+        // message pump can dispatch pending messages, including a WM_TIMER for
+        // another ImGui window.  If that timer fires and calls renderFrame() on
+        // the other window while we are still inside our own frame, two frames
+        // would be built concurrently on the same thread with shared global ImGui
+        // state, causing draw-list corruption and assertion failures.
+        //
+        // If the flag is already set, another window's renderFrame() is on the
+        // call stack right now.  Skip this tick — we render on the next one
+        // (~16 ms later), which is imperceptible.
+        if (ImGuiRenderLock::isLocked()) return;
+
+        // Acquire the render lock — automatically released on any exit from
+        // this function, including early returns and exception unwinds.
+        ImGuiRenderLock lock;
+
         // Apply any pending swap-chain resize before rendering.  Deferring
         // ResizeBuffers here means it fires at most once per timer tick
         // (~16 ms) regardless of how many SetObjectRects calls arrived since
@@ -337,6 +356,7 @@ private:
 
         ImGui_ImplDX11_NewFrame();
         ImGui_ImplWin32_NewFrame();
+
         ImGui::NewFrame();
 
         // ---- Fullscreen pane window -----------------------------------------
@@ -376,14 +396,25 @@ private:
         // Normal content — only rendered while the canvas is large enough.
         //if (!tooSmall)
         //{
-            const ImVec2 avail = ImGui::GetContentRegionAvail();
-            const float  btnW  = ImGui::CalcTextSize("Show Message").x
-                               + ImGui::GetStyle().FramePadding.x * 2.0f;
-            const float  btnH  = ImGui::GetFrameHeight();
-            ImGui::SetCursorPos(ImVec2((avail.x - btnW) * 0.5f,
-                                       (avail.y - btnH) * 0.5f));
-            if (HighlightedButton("Show Message"))
+            const ImVec2  avail   = ImGui::GetContentRegionAvail();
+            const float   btnW    = ImGui::CalcTextSize("Show Message").x
+                                  + ImGui::GetStyle().FramePadding.x * 2.0f;
+            const float   btnH    = ImGui::GetFrameHeight();
+            const float   spacing = ImGui::GetStyle().ItemSpacing.y;
+            const float   barH    = ImGui::GetFrameHeight() * 0.5f;
+            const float   totalH  = btnH + spacing + barH;
+            const float   groupY  = (avail.y - totalH) * 0.5f;
+            const float   centerX = (avail.x - btnW) * 0.5f;
+
+            // Button — centred horizontally within the group.
+            ImGui::SetCursorPos(ImVec2(centerX, groupY));
+            if (HighlightedExcelButton("Show Message"))
                 m_pendingMsgBox = true;
+
+            // Indeterminate (marquee) progress bar — same width as the button.
+            ImGui::SetCursorPos(ImVec2(centerX- btnW, groupY + btnH + spacing));
+            ImGui::ProgressBar(-1.0f * static_cast<float>(ImGui::GetTime()),
+                               ImVec2(btnW*3, barH / 3.0));
         //}
 
         ImGui::End();
@@ -398,6 +429,7 @@ private:
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
         m_swapChain->Present(1, 0);  // present with vsync
+
 
         // Defer any modal dialog until AFTER Render()/Present() so that the
         // Win32 message loop inside MessageBoxW can only trigger renderFrame()
@@ -432,6 +464,20 @@ private:
     static LRESULT CALLBACK subclassProc(HWND hwnd, UINT msg,
                                           WPARAM wParam, LPARAM lParam)
     {
+        // Context contamination guard — DXGI Present(1, 0) in another window's
+        // renderFrame() can pump the Win32 message queue while blocking for VSync.
+        // If a WM_TIMER or other message is dispatched to this WndProc during that
+        // block, the SetCurrentContext() call below would change the global ImGui
+        // context.  Without a save/restore, when Present() returns in the other
+        // window the global context would point at our window instead of theirs,
+        // causing the other window to render with the wrong HWND, backends, and
+        // draw lists.
+        //
+        // ImGuiContextGuard saves ImGui::GetCurrentContext() here and restores it
+        // in its destructor, so this WndProc is side-effect-free with respect to
+        // the global context — regardless of how it was invoked.
+        ImGuiContextGuard ctxGuard;
+
         auto* self = reinterpret_cast<ImGuiTaskPane*>(
             GetWindowLongPtrW(hwnd, GWLP_USERDATA));
 

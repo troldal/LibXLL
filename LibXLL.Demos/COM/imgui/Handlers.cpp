@@ -431,6 +431,20 @@ XLL_COM_EVENT onDemoWindowClicked = s_addin.dispatch<"OnDemoWindowClicked">(
     });
 
 // ---------------------------------------------------------------------------
+// OnContextMenuClicked — shows a simple message box from the cell context menu.
+// ---------------------------------------------------------------------------
+
+XLL_COM_EVENT onContextMenuClicked = s_addin.dispatch<"OnContextMenuClicked">(
+    [](DISPPARAMS*, VARIANT*) -> HRESULT
+    {
+        MessageBoxW(nullptr,
+                    L"Hello from xlCOM (Dear ImGui add-in)!",
+                    L"xlCOM Context Menu",
+                    MB_OK | MB_ICONINFORMATION);
+        return S_OK;
+    });
+
+// ---------------------------------------------------------------------------
 // OnDemoWindow2Clicked — opens a modeless 800 x 1200 window running
 // ImGui::ShowDemoWindow.  Excel remains fully interactive.
 // ---------------------------------------------------------------------------
