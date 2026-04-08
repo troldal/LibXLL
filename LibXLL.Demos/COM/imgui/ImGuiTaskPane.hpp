@@ -414,7 +414,7 @@ private:
             // Indeterminate (marquee) progress bar — same width as the button.
             ImGui::SetCursorPos(ImVec2(centerX- btnW, groupY + btnH + spacing));
             ImGui::ProgressBar(-1.0f * static_cast<float>(ImGui::GetTime()),
-                               ImVec2(btnW*3, barH / 3.0));
+                               ImVec2(btnW*3, barH / 2.0));
         //}
 
         ImGui::End();
