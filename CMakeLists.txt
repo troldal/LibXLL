@@ -38,16 +38,6 @@ CPMAddPackage(
 )
 
 CPMAddPackage(
-        NAME Boost
-        VERSION 1.90.0 # Versions less than 1.85.0 may need patches for installation targets.
-        URL https://github.com/boostorg/boost/releases/download/boost-1.90.0/boost-1.90.0-cmake.tar.xz
-        URL_HASH SHA256=aca59f889f0f32028ad88ba6764582b63c916ce5f77b31289ad19421a96c555f
-        SYSTEM YES  # Marks Boost include directories as SYSTEM to suppress warnings from Boost headers.
-        OPTIONS "BOOST_ENABLE_CMAKE ON" "BOOST_SKIP_INSTALL_RULES ON" # Set `OFF` for installation
-        "BUILD_SHARED_LIBS OFF" "BOOST_INCLUDE_LIBRARIES dll\\\;nowide" # Note the escapes!
-)
-
-CPMAddPackage(
         NAME sigslot
         GITHUB_REPOSITORY palacaze/sigslot
         GIT_TAG v1.2.3
@@ -188,7 +178,21 @@ add_subdirectory(LibXLL.Library)
 add_subdirectory(LibXLL.COM)
 
 if(PROJECT_IS_TOP_LEVEL)
-    add_subdirectory(LibXLL.MockXL)
+    option(LIBXLL_ENABLE_MOCKXL
+            "Build LibXLL.MockXL (mock Excel server used by addin tests and demos)"
+            OFF)
+    if(LIBXLL_ENABLE_MOCKXL)
+        CPMAddPackage(
+                NAME Boost
+                VERSION 1.90.0 # Versions less than 1.85.0 may need patches for installation targets.
+                URL https://github.com/boostorg/boost/releases/download/boost-1.90.0/boost-1.90.0-cmake.tar.xz
+                URL_HASH SHA256=aca59f889f0f32028ad88ba6764582b63c916ce5f77b31289ad19421a96c555f
+                SYSTEM YES  # Marks Boost include directories as SYSTEM to suppress warnings from Boost headers.
+                OPTIONS "BOOST_ENABLE_CMAKE ON" "BOOST_SKIP_INSTALL_RULES ON" # Set `OFF` for installation
+                "BUILD_SHARED_LIBS OFF" "BOOST_INCLUDE_LIBRARIES dll\\\;nowide" # Note the escapes!
+        )
+        add_subdirectory(LibXLL.MockXL)
+    endif()
     add_subdirectory(LibXLL.Demos)
     add_subdirectory(LibXLL.Tests)
 

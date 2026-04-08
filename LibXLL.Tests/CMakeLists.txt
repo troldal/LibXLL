@@ -5,4 +5,8 @@ create_project_warnings_target(project_warnings)
 create_hardening_target(project_hardening)
 
 add_subdirectory(UnitTests)
-add_subdirectory(AddinTests)
+
+# AddinTests use MockXL — only built when MockXL is enabled.
+if(LIBXLL_ENABLE_MOCKXL)
+    add_subdirectory(AddinTests)
+endif()

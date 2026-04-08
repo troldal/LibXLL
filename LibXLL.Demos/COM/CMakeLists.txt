@@ -19,8 +19,22 @@ cmrc_add_resource_library(foo-resources ALIAS foo::rc NAMESPACE foo
 # ---------------------------------------------------------------------------
 # Per-framework COM add-in demos — one DLL per GUI framework.
 # ---------------------------------------------------------------------------
-add_subdirectory(imgui)
-add_subdirectory(fltk)
-add_subdirectory(wx)
-add_subdirectory(Qt)
-add_subdirectory(win32)
+if(LIBXLL_DEMOS_IMGUI)
+    add_subdirectory(imgui)
+endif()
+
+if(LIBXLL_DEMOS_FLTK)
+    add_subdirectory(fltk)
+endif()
+
+if(LIBXLL_DEMOS_WX)
+    add_subdirectory(wx)
+endif()
+
+if(LIBXLL_DEMOS_QT)
+    add_subdirectory(Qt)
+endif()
+
+if(LIBXLL_DEMOS_WIN32)
+    add_subdirectory(win32)
+endif()

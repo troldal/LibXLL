@@ -100,15 +100,27 @@ target_link_libraries(xllDemoScalarValidation PUBLIC LibXLL project_warnings pro
 set_target_properties(xllDemoScalarValidation PROPERTIES OUTPUT_NAME "scalar_validation" SUFFIX ".xll" PREFIX "")
 target_compile_definitions(xllDemoScalarValidation PRIVATE NOMINMAX)
 
+# ---------------------------------------------------------------------------
+# Per-framework GUI / COM demo options.
+# ImGui is enabled by default; all other frameworks opt-in.
+# ---------------------------------------------------------------------------
+option(LIBXLL_DEMOS_IMGUI  "Build Dear ImGui demos (GUI XLLs + COM add-in)"  ON)
+option(LIBXLL_DEMOS_FLTK   "Build FLTK demos (GUI XLLs + COM add-in)"        OFF)
+option(LIBXLL_DEMOS_WX     "Build wxWidgets demos (GUI XLLs + COM add-in)"   OFF)
+option(LIBXLL_DEMOS_QT     "Build Qt demos (GUI XLLs + COM add-in)"          OFF)
+option(LIBXLL_DEMOS_WIN32  "Build Win32 COM add-in demo"                      OFF)
+
 add_subdirectory(GUI)
 add_subdirectory(COM)
 
-add_executable(DemoMockExcelScalar Types/DemoMockExcelScalar.cpp)
-target_link_libraries(DemoMockExcelScalar PUBLIC MockXL)
-target_compile_definitions(DemoMockExcelScalar PRIVATE NOMINMAX)
-add_dependencies(DemoMockExcelScalar xllDemoScalarValidation)
-if (NOT WIN32)
-    target_link_options(DemoMockExcelScalar PRIVATE -rdynamic)
+if(LIBXLL_ENABLE_MOCKXL)
+    add_executable(DemoMockExcelScalar Types/DemoMockExcelScalar.cpp)
+    target_link_libraries(DemoMockExcelScalar PUBLIC MockXL)
+    target_compile_definitions(DemoMockExcelScalar PRIVATE NOMINMAX)
+    add_dependencies(DemoMockExcelScalar xllDemoScalarValidation)
+    if (NOT WIN32)
+        target_link_options(DemoMockExcelScalar PRIVATE -rdynamic)
+    endif()
 endif()
 
 
@@ -137,12 +149,14 @@ if (NOT WIN32)
         target_compile_definitions(xllDemoScalarValidation.${sanitizer} PRIVATE NOMINMAX)
         target_enable_sanitizer(xllDemoScalarValidation.${sanitizer} ${sanitizer})
 
-        add_executable(DemoMockExcelScalar.${sanitizer} Types/DemoMockExcelScalar.cpp)
-        target_link_libraries(DemoMockExcelScalar.${sanitizer} PUBLIC MockXL)
-        target_compile_definitions(DemoMockExcelScalar.${sanitizer} PRIVATE NOMINMAX)
-        target_link_options(DemoMockExcelScalar.${sanitizer} PRIVATE -rdynamic)
-        target_enable_sanitizer(DemoMockExcelScalar.${sanitizer} ${sanitizer})
-        add_dependencies(DemoMockExcelScalar.${sanitizer} xllDemoScalarValidation.${sanitizer})
+        if(LIBXLL_ENABLE_MOCKXL)
+            add_executable(DemoMockExcelScalar.${sanitizer} Types/DemoMockExcelScalar.cpp)
+            target_link_libraries(DemoMockExcelScalar.${sanitizer} PUBLIC MockXL)
+            target_compile_definitions(DemoMockExcelScalar.${sanitizer} PRIVATE NOMINMAX)
+            target_link_options(DemoMockExcelScalar.${sanitizer} PRIVATE -rdynamic)
+            target_enable_sanitizer(DemoMockExcelScalar.${sanitizer} ${sanitizer})
+            add_dependencies(DemoMockExcelScalar.${sanitizer} xllDemoScalarValidation.${sanitizer})
+        endif()
     endforeach ()
 
     # ASan build of the deliberate-leak demo.
