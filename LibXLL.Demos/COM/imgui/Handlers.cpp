@@ -3,8 +3,9 @@
 // ---------------------------------------------------------------------------
 
 #include "ImGuiTaskPane.hpp"
-#include "ImGuiDemoWindow.hpp"
-#include "ImGuiDemoWindow2.hpp"
+#include "ImGuiModalWindow.hpp"
+#include "ImGuiModelessWindow.hpp"
+#include <optional>
 
 #include "ActiveX/TaskPaneControl.hpp"
 #include "COM/Macros.hpp"
@@ -22,6 +23,17 @@ thread_local ImGuiContext*   GImGui = NULL;
 // TaskPaneControl instantiation.  Must match the values passed to
 // xlcom_configure_addin() in CMakeLists.txt.
 // ---------------------------------------------------------------------------
+
+struct DemoContent
+{
+    FrameAction renderContent()
+    {
+        bool open = true;
+        ImGui::ShowDemoWindow(&open);
+        return open ? FrameAction::Continue : FrameAction::RequestClose;
+    }
+};
+
 
 struct ImGuiPaneTraits
 {
@@ -83,7 +95,7 @@ static IDispatch* g_taskPane = nullptr;
 // Modeless ImGui demo window — created on first click, toggled thereafter.
 // ---------------------------------------------------------------------------
 
-static ImGuiDemoWindow2* g_demoWindow2 = nullptr;
+static std::optional<ImGuiModelessWindow> g_demoWindow2;
 
 // ---------------------------------------------------------------------------
 // OnConnection — fires when Excel loads and connects the add-in.
@@ -132,11 +144,7 @@ XLL_COM_EVENT onDisconnection = s_addin.on<com::Disconnection>(
         }
 
         // Clean up GUI framework runtime on disconnect.
-        if (g_demoWindow2)
-        {
-            delete g_demoWindow2;
-            g_demoWindow2 = nullptr;
-        }
+        g_demoWindow2.reset();
         ImGuiTaskPane::shutdown();
     });
 
@@ -426,7 +434,7 @@ XLL_COM_EVENT onDemoWindowClicked = s_addin.dispatch<"OnDemoWindowClicked">(
             }
         }
 
-        ImGuiDemoWindow::show(owner);
+        ImGuiModalWindow::show(owner, DemoContent{});
         return S_OK;
     });
 
@@ -485,7 +493,7 @@ XLL_COM_EVENT onDemoWindow2Clicked = s_addin.dispatch<"OnDemoWindow2Clicked">(
             }
         }
 
-        g_demoWindow2 = ImGuiDemoWindow2::create(owner);
-        return g_demoWindow2 ? S_OK : E_FAIL;
+        g_demoWindow2 = ImGuiModelessWindow::create(owner, DemoContent{});
+        return g_demoWindow2.has_value() ? S_OK : E_FAIL;
     });
 

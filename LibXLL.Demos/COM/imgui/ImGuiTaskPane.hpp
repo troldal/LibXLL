@@ -227,27 +227,6 @@ private:
     bool                    m_swapChainOccluded = false;
 
     // -----------------------------------------------------------------------
-    // HighlightedButton — wraps ImGui::Button with the brand accent colour
-    // #37A660 (R=55 G=166 B=96).  Hovered and active variants are computed
-    // by brightening / darkening the base colour slightly.
-    // -----------------------------------------------------------------------
-    static bool HighlightedButton(const char* label, const ImVec2& size = ImVec2(0, 0))
-    {
-        constexpr ImVec4 kBase    { 55.0f/255.0f, 166.0f/255.0f,  96.0f/255.0f, 1.0f };
-        constexpr ImVec4 kHovered { 80.0f/255.0f, 191.0f/255.0f, 121.0f/255.0f, 1.0f };
-        constexpr ImVec4 kActive  { 38.0f/255.0f, 140.0f/255.0f,  75.0f/255.0f, 1.0f };
-        constexpr ImVec4 kText    {  0.0f,          0.0f,           0.0f,         1.0f };
-
-        ImGui::PushStyleColor(ImGuiCol_Text,          kText);
-        ImGui::PushStyleColor(ImGuiCol_Button,        kBase);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, kHovered);
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  kActive);
-        const bool pressed = ImGui::Button(label, size);
-        ImGui::PopStyleColor(4);
-        return pressed;
-    }
-
-    // -----------------------------------------------------------------------
     // createDevice — creates the D3D11 device and DXGI swap chain bound to
     // m_hwnd.  Falls back to the WARP software rasteriser if the hardware
     // adapter rejects the device (e.g. no discrete GPU, RDP session).
@@ -394,49 +373,23 @@ private:
             ImGuiWindowFlags_NoSavedSettings;
         ImGui::Begin("##MainPane", nullptr, kPaneFlags);
 
-        //const bool tooSmall = (io.DisplaySize.x < 400.0f || io.DisplaySize.y < 600.0f);
+        const ImVec2 avail   = ImGui::GetContentRegionAvail();
+        const float  btnW    = ImGui::CalcTextSize("Show Message").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+        const float  btnH    = ImGui::GetFrameHeight();
+        const float  spacing = ImGui::GetStyle().ItemSpacing.y;
+        const float  barH    = ImGui::GetFrameHeight() * 0.5f;
+        const float  totalH  = btnH + spacing + barH;
+        const float  groupY  = (avail.y - totalH) * 0.5f;
+        const float  centerX = (avail.x - btnW) * 0.5f;
 
-        // Open the "too small" popup whenever the canvas shrinks below the
-        // minimum, and keep it open while the condition holds.
-        //if (tooSmall && !ImGui::IsPopupOpen("##TooSmall"))
-        //    ImGui::OpenPopup("##TooSmall");
+        // Button — centred horizontally within the group.
+        ImGui::SetCursorPos(ImVec2(centerX, groupY));
+        if (HighlightedExcelButton("Show Message")) m_pendingMsgBox = true;
 
-        //ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(),
-        //                        ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-        // if (ImGui::BeginPopupModal("##TooSmall", nullptr,
-        //                            ImGuiWindowFlags_AlwaysAutoResize |
-        //                            ImGuiWindowFlags_NoDecoration))
-        // {
-        //     if (!tooSmall)
-        //         ImGui::CloseCurrentPopup();   // canvas grew back — auto-dismiss
-        //     else
-        //         ImGui::Text("Canvas too small!");
-        //     ImGui::EndPopup();
-        // }
+        // Indeterminate (marquee) progress bar — same width as the button.
+        ImGui::SetCursorPos(ImVec2(centerX - btnW, groupY + btnH + spacing));
+        ImGui::ProgressBar(-1.0f * static_cast<float>(ImGui::GetTime()), ImVec2(btnW * 3, barH / 2.0));
 
-        // Normal content — only rendered while the canvas is large enough.
-        //if (!tooSmall)
-        //{
-            const ImVec2  avail   = ImGui::GetContentRegionAvail();
-            const float   btnW    = ImGui::CalcTextSize("Show Message").x
-                                  + ImGui::GetStyle().FramePadding.x * 2.0f;
-            const float   btnH    = ImGui::GetFrameHeight();
-            const float   spacing = ImGui::GetStyle().ItemSpacing.y;
-            const float   barH    = ImGui::GetFrameHeight() * 0.5f;
-            const float   totalH  = btnH + spacing + barH;
-            const float   groupY  = (avail.y - totalH) * 0.5f;
-            const float   centerX = (avail.x - btnW) * 0.5f;
-
-            // Button — centred horizontally within the group.
-            ImGui::SetCursorPos(ImVec2(centerX, groupY));
-            if (HighlightedExcelButton("Show Message"))
-                m_pendingMsgBox = true;
-
-            // Indeterminate (marquee) progress bar — same width as the button.
-            ImGui::SetCursorPos(ImVec2(centerX- btnW, groupY + btnH + spacing));
-            ImGui::ProgressBar(-1.0f * static_cast<float>(ImGui::GetTime()),
-                               ImVec2(btnW*3, barH / 2.0));
-        //}
 
         ImGui::End();
         // --------------------------------------------------------------------
