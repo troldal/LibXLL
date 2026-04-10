@@ -104,7 +104,8 @@ public:
         const float dpiScale = ImGui_ImplWin32_GetDpiScaleForHwnd(m_hwnd);
         ImGuiStyle& style = ImGui::GetStyle();
         style.ScaleAllSizes(dpiScale);
-        style.FontScaleDpi = dpiScale;
+        style.FontScaleDpi      = dpiScale;
+        io.ConfigDpiScaleFonts  = true;
 
         // Load Segoe UI from the system fonts directory if available;
         // fall back to the CMakeRC-embedded Inter Variable Font otherwise.
@@ -219,10 +220,11 @@ private:
     IDXGISwapChain*         m_swapChain = nullptr;
     ID3D11RenderTargetView* m_rtv       = nullptr;
 
-    ImGuiContext*           m_imguiCtx      = nullptr;
-    bool                    m_pendingMsgBox = false;  // deferred dialog — see renderFrame()
-    bool                    m_resizePending = false;  // true when resize() stored new dims
-                                                      // but ResizeBuffers not yet called
+    ImGuiContext*           m_imguiCtx          = nullptr;
+    bool                    m_pendingMsgBox     = false;  // deferred dialog — see renderFrame()
+    bool                    m_resizePending     = false;  // true when resize() stored new dims
+                                                          // but ResizeBuffers not yet called
+    bool                    m_swapChainOccluded = false;
 
     // -----------------------------------------------------------------------
     // HighlightedButton — wraps ImGui::Button with the brand accent colour
@@ -284,6 +286,16 @@ private:
 
         if (FAILED(hr)) return false;
 
+        // Disable DXGI's Alt+Enter fullscreen toggle — we're hosted inside Excel.
+        {
+            IDXGIFactory* factory = nullptr;
+            if (SUCCEEDED(m_swapChain->GetParent(IID_PPV_ARGS(&factory))))
+            {
+                factory->MakeWindowAssociation(m_hwnd, DXGI_MWA_NO_ALT_ENTER);
+                factory->Release();
+            }
+        }
+
         createRenderTarget();
         return true;
     }
@@ -334,6 +346,15 @@ private:
         // Acquire the render lock — automatically released on any exit from
         // this function, including early returns and exception unwinds.
         ImGuiRenderLock lock;
+
+        // Handle window being minimized or screen locked: test-present and
+        // skip the frame until the window is visible again.
+        if (m_swapChainOccluded)
+        {
+            if (m_swapChain->Present(0, DXGI_PRESENT_TEST) == DXGI_STATUS_OCCLUDED)
+                return;
+            m_swapChainOccluded = false;
+        }
 
         // Apply any pending swap-chain resize before rendering.  Deferring
         // ResizeBuffers here means it fires at most once per timer tick
@@ -428,7 +449,7 @@ private:
         m_context->ClearRenderTargetView(m_rtv, kClearColor);
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
-        m_swapChain->Present(1, 0);  // present with vsync
+        m_swapChainOccluded = (m_swapChain->Present(1, 0) == DXGI_STATUS_OCCLUDED);
 
 
         // Defer any modal dialog until AFTER Render()/Present() so that the

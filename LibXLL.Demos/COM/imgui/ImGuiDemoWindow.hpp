@@ -83,9 +83,10 @@ private:
     bool          m_done          = false;
     bool          m_show          = true;  // ShowDemoWindow open flag
 
-    int           m_width         = 1600;
-    int           m_height        = 1200;
-    bool          m_resizePending = false;
+    int           m_width              = 1600;
+    int           m_height             = 1200;
+    bool          m_resizePending      = false;
+    bool          m_swapChainOccluded  = false;
 
     // D3D11 resources
     ID3D11Device*           m_device    = nullptr;
@@ -163,7 +164,8 @@ private:
         const float  dpiScale = ImGui_ImplWin32_GetDpiScaleForHwnd(m_hwnd);
         ImGuiStyle&  style    = ImGui::GetStyle();
         style.ScaleAllSizes(dpiScale);
-        style.FontScaleDpi = dpiScale;
+        style.FontScaleDpi        = dpiScale;
+        io.ConfigDpiScaleFonts    = true;
 
         // Load Segoe UI; fall back to embedded Inter font, then ImGui default.
         {
@@ -251,6 +253,15 @@ private:
         // this function, including early returns and exception unwinds.
         ImGuiRenderLock lock;
 
+        // Handle window being minimized or screen locked: test-present and
+        // skip the frame until the window is visible again.
+        if (m_swapChainOccluded)
+        {
+            if (m_swapChain->Present(0, DXGI_PRESENT_TEST) == DXGI_STATUS_OCCLUDED)
+                return;
+            m_swapChainOccluded = false;
+        }
+
         if (m_resizePending && m_swapChain)
         {
             m_resizePending = false;
@@ -285,7 +296,7 @@ private:
         m_d3dCtx->OMSetRenderTargets(1, &m_rtv, nullptr);
         m_d3dCtx->ClearRenderTargetView(m_rtv, kClear);
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-        m_swapChain->Present(1, 0);
+        m_swapChainOccluded = (m_swapChain->Present(1, 0) == DXGI_STATUS_OCCLUDED);
     }
 
     // -----------------------------------------------------------------------
@@ -322,6 +333,17 @@ private:
                 &sd, &m_swapChain, &m_device, &fl, &m_d3dCtx);
 
         if (FAILED(hr)) return false;
+
+        // Disable DXGI's Alt+Enter fullscreen toggle — we're hosted inside Excel.
+        {
+            IDXGIFactory* factory = nullptr;
+            if (SUCCEEDED(m_swapChain->GetParent(IID_PPV_ARGS(&factory))))
+            {
+                factory->MakeWindowAssociation(m_hwnd, DXGI_MWA_NO_ALT_ENTER);
+                factory->Release();
+            }
+        }
+
         createRenderTarget();
         return true;
     }
