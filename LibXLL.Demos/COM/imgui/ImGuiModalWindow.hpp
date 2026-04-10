@@ -28,22 +28,32 @@ public:
     // show — opens a modal window hosting the given content and blocks until
     // the user closes it.  Returns when the window is destroyed.
     //
-    //   owner   — Excel top-level HWND; disabled for the duration.
-    //   content — any type satisfying WindowContent.
-    //   title   — window title bar text.
-    //   w, h    — initial client size in pixels.
+    //   owner      — Excel top-level HWND; disabled for the duration.
+    //   content    — any type satisfying WindowContent.
+    //   title      — window title bar text.
+    //   w, h       — initial client size in pixels.
+    //   beforeShow — optional callable(HWND); invoked after window creation
+    //                but before ShowWindow (e.g. to tweak Win32 styles).
+    //   afterShow  — optional callable(HWND); invoked after ShowWindow /
+    //                UpdateWindow (e.g. to set focus or apply late tweaks).
     // -----------------------------------------------------------------------
-    template<WindowContent T>
+    template<WindowContent T,
+             std::invocable<HWND> BeforeFn = decltype([](HWND){}),
+             std::invocable<HWND> AfterFn  = decltype([](HWND){})>
     static void show(HWND           owner,
                      T              content,
-                     const wchar_t* title = L"Dear ImGui",
-                     int            w     = 1600,
-                     int            h     = 1200)
+                     const wchar_t* title      = L"Dear ImGui",
+                     int            w          = 1600,
+                     int            h          = 1200,
+                     BeforeFn       beforeShow = {},
+                     AfterFn        afterShow  = {})
     {
         ImGuiModalWindow wnd;
         wnd.m_content = std::make_unique<ContentModel<T>>(std::move(content));
 
         if (!wnd.initBase(nullptr, 0, title, w, h)) return;
+
+        beforeShow(wnd.m_hwnd);
 
         // Modal semantics: parent / owner + disable.
         if (owner && IsWindow(owner))
@@ -66,6 +76,8 @@ public:
 
         ShowWindow(wnd.m_hwnd, SW_SHOW);
         UpdateWindow(wnd.m_hwnd);
+
+        afterShow(wnd.m_hwnd);
 
         wnd.runModal();
 

@@ -22,6 +22,7 @@ target_link_libraries(xlCOM-ImGui PRIVATE
     LibXLL.COM      # COM server boilerplate (INTERFACE library)
     stb::stb        # stb_image — header-only PNG decoder
     imgui           # Dear ImGui core
+    picosha2        # PicoSHA2 — header-only SHA-256
     d3d11           # Direct3D 11 — swap chain / device / context
     dxgi            # DXGI — adapter / swap chain creation
     d3dcompiler     # D3DCompile — shader compilation (imgui_impl_dx11)

@@ -49,6 +49,12 @@ CPMAddPackage(
         GIT_TAG master
 )
 
+CPMAddPackage(
+        NAME picosha2
+        GITHUB_REPOSITORY okdshin/PicoSHA2
+        GIT_TAG v1.0.1
+)
+
 # stb ships no CMakeLists.txt — wrap it in an INTERFACE target manually.
 if(stb_ADDED)
     add_library(stb INTERFACE)

@@ -6,6 +6,7 @@
 #include "ImGuiTaskPaneContent.hpp"
 #include "ImGuiModalWindow.hpp"
 #include "ImGuiModelessWindow.hpp"
+#include "LicenseActivationContent.hpp"
 #include <optional>
 
 #include "ActiveX/TaskPaneControl.hpp"
@@ -435,7 +436,23 @@ XLL_COM_EVENT onDemoWindowClicked = s_addin.dispatch<"OnDemoWindowClicked">(
             }
         }
 
-        ImGuiModalWindow::show(owner, DemoContent{});
+        HDC        hdc   = GetDC(owner);
+        const int  dpi   = GetDeviceCaps(hdc, LOGPIXELSX);
+        ReleaseDC(owner, hdc);
+        const float scale = static_cast<float>(dpi) / 96.0f;
+        ImGuiModalWindow::show(owner, LicenseActivationContent{},
+                               L"License Activation",
+                               static_cast<int>(720 * scale),
+                               static_cast<int>(630 * scale),
+                               [](HWND hwnd)
+                               {
+                                   // Fixed-size dialog — remove resize grip and maximise button.
+                                   LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+                                   style &= ~static_cast<LONG_PTR>(WS_THICKFRAME | WS_MAXIMIZEBOX);
+                                   SetWindowLongPtrW(hwnd, GWL_STYLE, style);
+                                   SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
+                                                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+                               });
         return S_OK;
     });
 
