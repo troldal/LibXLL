@@ -46,7 +46,13 @@ struct TaskPaneDemoContent
 
         // Button — centred horizontally within the group.
         ImGui::SetCursorPos(ImVec2(centerX, groupY));
-        if (HighlightedExcelButton("Show Message")) m_pendingMsgBox = true;
+        if (HighlightedExcelButton("Show Message"))
+        {
+            MessageBoxW(nullptr,
+            L"Hello from the ImGui task pane!",
+            L"XLThermo",
+            MB_OK | MB_ICONINFORMATION);
+        }
 
         // Indeterminate (marquee) progress bar — same width as the button.
         ImGui::SetCursorPos(ImVec2(centerX - btnW, groupY + btnH + spacing));
@@ -57,23 +63,5 @@ struct TaskPaneDemoContent
 
         return FrameAction::Continue;
     }
-
-    // Called after Render()/Present() so that the Win32 message loop inside
-    // MessageBoxW can only trigger renderFrame() for a fresh new frame — not
-    // re-enter while a frame is still open.
-    void postRender()
-    {
-        if (m_pendingMsgBox)
-        {
-            m_pendingMsgBox = false;
-            MessageBoxW(nullptr,
-                        L"Hello from the ImGui task pane!",
-                        L"XLThermo",
-                        MB_OK | MB_ICONINFORMATION);
-        }
-    }
-
-private:
-    bool m_pendingMsgBox = false;
 };
 
