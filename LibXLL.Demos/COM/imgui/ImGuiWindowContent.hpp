@@ -26,6 +26,10 @@
 
 #pragma once
 
+#include <concepts>
+#include <memory>
+#include <utility>
+
 // ---------------------------------------------------------------------------
 // FrameAction — returned from renderContent() to signal the window.
 // ---------------------------------------------------------------------------
@@ -51,6 +55,7 @@ struct ContentConcept
     virtual void        onDpiChanged(float) = 0;
     virtual void        onActivateApp(bool) = 0;
     virtual void        onClose()           = 0;
+    virtual void        postRender()        = 0;
 };
 
 // ---------------------------------------------------------------------------
@@ -80,5 +85,10 @@ struct ContentModel final : ContentConcept
     {
         if constexpr (requires { m_value.onClose(); })
             m_value.onClose();
+    }
+    void postRender()               override
+    {
+        if constexpr (requires { m_value.postRender(); })
+            m_value.postRender();
     }
 };

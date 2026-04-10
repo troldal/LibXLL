@@ -1,13 +1,28 @@
 // ---------------------------------------------------------------------------
 // ImGuiTaskPane.hpp — Dear ImGui (Win32 + DirectX 11) content implementation
-//                     for TaskPaneControl.
+//                     for TaskPaneControl, using type-erased WindowContent.
 //
-// This class satisfies the Content concept required by TaskPaneControl<Content>:
+// This class template satisfies the Content concept required by
+// TaskPaneControl<Content>:
 //
 //   - Constructible with (HWND parent, int width, int height)
 //   - Has void resize(int width, int height)
 //   - Has static void shutdown()
 //   - Destructor handles cleanup
+//
+// The template parameter T must satisfy the WindowContent concept defined in
+// ImGuiWindowContent.hpp (i.e. it must have a renderContent() method that
+// returns FrameAction).  Optional hooks — onClose(), onDpiChanged(float),
+// onActivateApp(bool), postRender() — are detected at compile time and
+// called when present.
+//
+// SHARED INFRASTRUCTURE
+// ---------------------
+// The D3D11 device, device context, and ImFontAtlas are shared with all
+// ImGuiWindowBase-derived windows (ImGuiModalWindow, ImGuiModelessWindow)
+// via static members in ImGuiWindowBase.  ImGuiTaskPane is declared as a
+// friend of ImGuiWindowBase so that it can access the shared statics
+// directly.
 //
 // RENDERING STRATEGY
 // ------------------
@@ -24,8 +39,9 @@
 // IMGUI CONTEXT
 // -------------
 // A per-instance ImGuiContext is created in the constructor and activated
-// with ImGui::SetCurrentContext() before every ImGui call.  This allows
-// multiple panes (if any) to coexist without sharing context state.
+// with ImGui::SetCurrentContext() before every ImGui call.  The shared
+// ImFontAtlas is passed to ImGui::CreateContext() so that fonts are loaded
+// once and reused across all windows and task panes.
 //
 // THREADING
 // ---------
@@ -42,6 +58,7 @@
 #include <windowsx.h>
 
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx11.h"
 #include <d3d11.h>
@@ -53,13 +70,15 @@
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(
     HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
-#include <cmrc/cmrc.hpp>
 #include "SetStyle.hpp"
+#include "Utils/IsDarkMode.hpp"
 #include "ImGuiRenderGuard.hpp"
+#include "ImGuiWindowContent.hpp"
+#include "ImGuiWindowBase.hpp"
 #include <iostream>
+#include <memory>
 
-CMRC_DECLARE(foo);
-
+template<WindowContent T>
 class ImGuiTaskPane
 {
 public:
@@ -73,63 +92,55 @@ public:
     static void shutdown() { /* per-instance cleanup only */ }
 
     // -----------------------------------------------------------------------
-    // Constructor — creates the D3D11 device and swap chain on parentHwnd,
-    // initialises Dear ImGui with the Win32 and DX11 backends, and subclasses
-    // parentHwnd to intercept Win32 messages.  A WM_TIMER fires every ~16 ms
-    // (~60 fps) to drive continuous rendering.
+    // Constructor — creates a per-window swap chain on the shared D3D11
+    // device, initialises Dear ImGui with the Win32 and DX11 backends, and
+    // subclasses parentHwnd to intercept Win32 messages.  A WM_TIMER fires
+    // every ~16 ms (~60 fps) to drive continuous rendering.
+    //
+    // The type-erased content object (ContentModel<T>) is default-constructed
+    // from T{} and stored as a unique_ptr<ContentConcept>.
     // -----------------------------------------------------------------------
     ImGuiTaskPane(HWND parentHwnd, int w, int h)
         : m_hwnd(parentHwnd)
         , m_width(w > 0 ? w : 1)
         , m_height(h > 0 ? h : 1)
     {
-        if (!createDevice())
+        if (!ensureDeviceAndSwapChain())
         {
-            std::cerr << "[xlCOM] ImGuiTaskPane: D3D11 device creation failed\n";
+            std::cerr << "[xlCOM] ImGuiTaskPane: D3D11 device/swap-chain creation failed\n";
             return;
         }
 
-        // Create a per-pane ImGui context so that multiple panes can coexist.
+        // First window/pane: create the shared atlas and load fonts into it.
+        if (ImGuiWindowBase::s_windowCount++ == 0)
+            ImGuiWindowBase::initSharedAtlas();
+
+        // Create a per-pane ImGui context with the shared atlas so that
+        // fonts are loaded once and shared by every window and pane.
         IMGUI_CHECKVERSION();
-        m_imguiCtx = ImGui::CreateContext();
-        ImGui::SetCurrentContext(m_imguiCtx);
+        m_ctx = ImGui::CreateContext(ImGuiWindowBase::s_sharedAtlas);
+        ImGui::SetCurrentContext(m_ctx);
 
         ImGuiIO& io = ImGui::GetIO();
-        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+        io.ConfigFlags        |= ImGuiConfigFlags_NavEnableKeyboard;
+        io.IniFilename         = nullptr;
+        io.ConfigDpiScaleFonts = true;
 
-        // Apply the Rest Dark colour scheme.
-        SetStyleExcelDark();
+        // Apply the colour scheme matching the system dark/light preference.
+        isDarkMode() ? SetStyleExcelDark() : SetStyleExcelLight();
 
         // Scale the style for the display DPI.
         const float dpiScale = ImGui_ImplWin32_GetDpiScaleForHwnd(m_hwnd);
         ImGuiStyle& style = ImGui::GetStyle();
         style.ScaleAllSizes(dpiScale);
-        style.FontScaleDpi      = dpiScale;
-        io.ConfigDpiScaleFonts  = true;
-
-        // Load Segoe UI from the system fonts directory if available;
-        // fall back to the CMakeRC-embedded Inter Variable Font otherwise.
-        {
-            constexpr const char* kSegoeUI = "C:\\Windows\\Fonts\\segoeui.ttf";
-            const bool segoeExists = (GetFileAttributesA(kSegoeUI) != INVALID_FILE_ATTRIBUTES);
-            ImFont* font = segoeExists ? io.Fonts->AddFontFromFileTTF(kSegoeUI, 18.0f) : nullptr;
-            if (!font)
-            {
-                auto fs   = cmrc::foo::get_filesystem();
-                auto file = fs.open("Resources/Fonts/Inter-VariableFont.ttf");
-                ImFontConfig cfg;
-                cfg.FontDataOwnedByAtlas = false;   // data lives in the static CMakeRC segment
-                io.Fonts->AddFontFromMemoryTTF(
-                    const_cast<void*>(static_cast<const void*>(file.begin())),
-                    static_cast<int>(file.size()),
-                    16.0f,
-                    &cfg);
-            }
-        }
+        style.FontScaleDpi = dpiScale;
 
         // Initialise platform and renderer backends.
         ImGui_ImplWin32_Init(m_hwnd);
-        ImGui_ImplDX11_Init(m_device, m_context);
+        ImGui_ImplDX11_Init(ImGuiWindowBase::s_device, ImGuiWindowBase::s_d3dDevCtx);
+
+        // Create the type-erased content object.
+        m_content = std::make_unique<ContentModel<T>>(T{});
 
         // Subclass parentHwnd so that WM_PAINT, WM_SIZE, WM_TIMER, and all
         // input messages can be intercepted.  Store `this` in GWLP_USERDATA
@@ -162,11 +173,14 @@ public:
     }
 
     // -----------------------------------------------------------------------
-    // Destructor — shuts down ImGui backends, releases D3D11 resources, and
-    // restores the original WndProc on the container HWND.
+    // Destructor — shuts down ImGui backends, releases the per-window swap
+    // chain, and restores the original WndProc on the container HWND.
     //
     // The timer is killed first so no WM_TIMER callbacks arrive after the
     // D3D11 or ImGui state has been torn down.
+    //
+    // When this is the last window/pane, the shared D3D11 device, device
+    // context, and font atlas are released.
     // -----------------------------------------------------------------------
     ~ImGuiTaskPane()
     {
@@ -182,21 +196,43 @@ public:
             SetWindowLongPtrW(m_hwnd, GWLP_USERDATA, 0);
         }
 
+        // Destroy the content before tearing down ImGui/D3D11.
+        m_content.reset();
+
         // Shut down ImGui backends, then destroy the per-pane context.
-        if (m_imguiCtx)
+        bool wasLastWindow = false;
+        if (m_ctx)
         {
-            ImGui::SetCurrentContext(m_imguiCtx);
+            ImGui::SetCurrentContext(m_ctx);
             ImGui_ImplDX11_Shutdown();
             ImGui_ImplWin32_Shutdown();
-            ImGui::DestroyContext(m_imguiCtx);
-            m_imguiCtx = nullptr;
+            ImGui::DestroyContext(m_ctx);
+            m_ctx = nullptr;
+
+            wasLastWindow = (--ImGuiWindowBase::s_windowCount == 0);
         }
 
-        // Release D3D11 resources in reverse order of creation.
+        // Release per-window D3D11 resources.
         cleanupRenderTarget();
         if (m_swapChain) { m_swapChain->Release(); m_swapChain = nullptr; }
-        if (m_context)   { m_context->Release();   m_context   = nullptr; }
-        if (m_device)    { m_device->Release();    m_device    = nullptr; }
+
+        // When this is the last window/pane, release the shared resources.
+        if (wasLastWindow)
+        {
+            ImGuiWindowBase::s_sharedAtlas       = nullptr;
+            ImGuiWindowBase::s_atlasFrameCounter = 0;
+
+            if (ImGuiWindowBase::s_d3dDevCtx)
+            {
+                ImGuiWindowBase::s_d3dDevCtx->Release();
+                ImGuiWindowBase::s_d3dDevCtx = nullptr;
+            }
+            if (ImGuiWindowBase::s_device)
+            {
+                ImGuiWindowBase::s_device->Release();
+                ImGuiWindowBase::s_device = nullptr;
+            }
+        }
     }
 
     // Non-copyable, non-movable (raw COM pointer ownership).
@@ -215,65 +251,77 @@ private:
     int     m_width       = 1;
     int     m_height      = 1;
 
-    ID3D11Device*           m_device    = nullptr;
-    ID3D11DeviceContext*    m_context   = nullptr;
     IDXGISwapChain*         m_swapChain = nullptr;
     ID3D11RenderTargetView* m_rtv       = nullptr;
 
-    ImGuiContext*           m_imguiCtx          = nullptr;
-    bool                    m_pendingMsgBox     = false;  // deferred dialog — see renderFrame()
-    bool                    m_resizePending     = false;  // true when resize() stored new dims
-                                                          // but ResizeBuffers not yet called
+    ImGuiContext*           m_ctx               = nullptr;
+    bool                    m_resizePending     = false;
     bool                    m_swapChainOccluded = false;
 
+    // Type-erased content -------------------------------------------------
+    std::unique_ptr<ContentConcept> m_content;
+
     // -----------------------------------------------------------------------
-    // createDevice — creates the D3D11 device and DXGI swap chain bound to
-    // m_hwnd.  Falls back to the WARP software rasteriser if the hardware
-    // adapter rejects the device (e.g. no discrete GPU, RDP session).
+    // ensureDeviceAndSwapChain — creates the shared D3D11 device (if it does
+    // not yet exist) and a per-window DXGI swap chain bound to m_hwnd.
+    // Falls back to the WARP software rasteriser if the hardware adapter
+    // rejects the device.
     // -----------------------------------------------------------------------
-    bool createDevice()
+    bool ensureDeviceAndSwapChain()
     {
-        DXGI_SWAP_CHAIN_DESC sd                          = {};
-        sd.BufferCount                                   = 2;
-        sd.BufferDesc.Format                             = DXGI_FORMAT_R8G8B8A8_UNORM;
-        sd.BufferDesc.RefreshRate.Numerator              = 60;
-        sd.BufferDesc.RefreshRate.Denominator            = 1;
-        sd.Flags                                         = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-        sd.BufferUsage                                   = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-        sd.OutputWindow                                  = m_hwnd;
-        sd.SampleDesc.Count                              = 1;
-        sd.SampleDesc.Quality                            = 0;
-        sd.Windowed                                      = TRUE;
-        sd.SwapEffect                                    = DXGI_SWAP_EFFECT_DISCARD;
+        // Create the shared D3D11 device on the first call.
+        if (!ImGuiWindowBase::s_device)
+        {
+            constexpr D3D_FEATURE_LEVEL kLevels[] = {
+                D3D_FEATURE_LEVEL_11_0,
+                D3D_FEATURE_LEVEL_10_0,
+            };
+            D3D_FEATURE_LEVEL fl = {};
 
-        const D3D_FEATURE_LEVEL featureLevels[] = {
-            D3D_FEATURE_LEVEL_11_0,
-            D3D_FEATURE_LEVEL_10_0,
-        };
-        D3D_FEATURE_LEVEL featureLevel = {};
+            HRESULT hr = D3D11CreateDevice(
+                nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0,
+                kLevels, 2, D3D11_SDK_VERSION,
+                &ImGuiWindowBase::s_device, &fl, &ImGuiWindowBase::s_d3dDevCtx);
 
-        HRESULT hr = D3D11CreateDeviceAndSwapChain(
-            nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0,
-            featureLevels, 2, D3D11_SDK_VERSION,
-            &sd, &m_swapChain, &m_device, &featureLevel, &m_context);
+            if (hr == DXGI_ERROR_UNSUPPORTED)
+                hr = D3D11CreateDevice(
+                    nullptr, D3D_DRIVER_TYPE_WARP, nullptr, 0,
+                    kLevels, 2, D3D11_SDK_VERSION,
+                    &ImGuiWindowBase::s_device, &fl, &ImGuiWindowBase::s_d3dDevCtx);
 
-        if (hr == DXGI_ERROR_UNSUPPORTED)  // fall back to software rasteriser
-            hr = D3D11CreateDeviceAndSwapChain(
-                nullptr, D3D_DRIVER_TYPE_WARP, nullptr, 0,
-                featureLevels, 2, D3D11_SDK_VERSION,
-                &sd, &m_swapChain, &m_device, &featureLevel, &m_context);
+            if (FAILED(hr)) return false;
+        }
+
+        // Create a per-window swap chain on the shared device.
+        DXGI_SWAP_CHAIN_DESC sd   = {};
+        sd.BufferCount            = 2;
+        sd.BufferDesc.Format      = DXGI_FORMAT_R8G8B8A8_UNORM;
+        sd.BufferDesc.RefreshRate  = { 60, 1 };
+        sd.Flags                  = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+        sd.BufferUsage            = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+        sd.OutputWindow           = m_hwnd;
+        sd.SampleDesc             = { 1, 0 };
+        sd.Windowed               = TRUE;
+        sd.SwapEffect             = DXGI_SWAP_EFFECT_DISCARD;
+
+        IDXGIDevice*  dxgiDevice  = nullptr;
+        IDXGIAdapter* dxgiAdapter = nullptr;
+        IDXGIFactory* dxgiFactory = nullptr;
+
+        HRESULT hr = ImGuiWindowBase::s_device->QueryInterface(IID_PPV_ARGS(&dxgiDevice));
+        if (SUCCEEDED(hr)) hr = dxgiDevice->GetAdapter(&dxgiAdapter);
+        if (SUCCEEDED(hr)) hr = dxgiAdapter->GetParent(IID_PPV_ARGS(&dxgiFactory));
+        if (SUCCEEDED(hr)) hr = dxgiFactory->CreateSwapChain(ImGuiWindowBase::s_device, &sd, &m_swapChain);
+
+        // Disable DXGI's Alt+Enter fullscreen toggle — we're hosted in Excel.
+        if (SUCCEEDED(hr))
+            dxgiFactory->MakeWindowAssociation(m_hwnd, DXGI_MWA_NO_ALT_ENTER);
+
+        if (dxgiFactory) dxgiFactory->Release();
+        if (dxgiAdapter) dxgiAdapter->Release();
+        if (dxgiDevice)  dxgiDevice->Release();
 
         if (FAILED(hr)) return false;
-
-        // Disable DXGI's Alt+Enter fullscreen toggle — we're hosted inside Excel.
-        {
-            IDXGIFactory* factory = nullptr;
-            if (SUCCEEDED(m_swapChain->GetParent(IID_PPV_ARGS(&factory))))
-            {
-                factory->MakeWindowAssociation(m_hwnd, DXGI_MWA_NO_ALT_ENTER);
-                factory->Release();
-            }
-        }
 
         createRenderTarget();
         return true;
@@ -291,7 +339,7 @@ private:
         m_swapChain->GetBuffer(0, IID_PPV_ARGS(&pBack));
         if (pBack)
         {
-            m_device->CreateRenderTargetView(pBack, nullptr, &m_rtv);
+            ImGuiWindowBase::s_device->CreateRenderTargetView(pBack, nullptr, &m_rtv);
             pBack->Release();
         }
     }
@@ -306,6 +354,7 @@ private:
     //
     // Called from the WM_TIMER handler (~60 fps) for continuous animation
     // and from the WM_PAINT handler for forced synchronous redraws.
+    // Delegates all UI building to the type-erased content object.
     // -----------------------------------------------------------------------
     void renderFrame()
     {
@@ -350,72 +399,49 @@ private:
             createRenderTarget();
         }
 
-        if (!m_device || !m_rtv || !m_imguiCtx) return;
+        if (!ImGuiWindowBase::s_device || !m_rtv || !m_ctx || !m_content) return;
 
-        ImGui::SetCurrentContext(m_imguiCtx);
+        ImGui::SetCurrentContext(m_ctx);
+
+        // The shared atlas is not owned by any context, so ImGui will not
+        // call ImFontAtlasUpdateNewFrame() automatically.  We must do it
+        // ourselves before NewFrame().
+        if (ImGuiWindowBase::s_sharedAtlas)
+        {
+            const bool has_textures =
+                (ImGui::GetIO().BackendFlags & ImGuiBackendFlags_RendererHasTextures) != 0;
+            ImFontAtlasUpdateNewFrame(ImGuiWindowBase::s_sharedAtlas,
+                                      ++ImGuiWindowBase::s_atlasFrameCounter,
+                                      has_textures);
+        }
 
         ImGui_ImplDX11_NewFrame();
         ImGui_ImplWin32_NewFrame();
 
         ImGui::NewFrame();
 
-        // ---- Fullscreen pane window -----------------------------------------
-        const ImGuiIO& io = ImGui::GetIO();
-        ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
-        ImGui::SetNextWindowSize(io.DisplaySize);
-        constexpr ImGuiWindowFlags kPaneFlags =
-            ImGuiWindowFlags_NoTitleBar          |
-            ImGuiWindowFlags_NoResize            |
-            ImGuiWindowFlags_NoMove              |
-            ImGuiWindowFlags_NoScrollbar         |
-            ImGuiWindowFlags_NoCollapse          |
-            ImGuiWindowFlags_NoBringToFrontOnFocus |
-            ImGuiWindowFlags_NoSavedSettings;
-        ImGui::Begin("##MainPane", nullptr, kPaneFlags);
-
-        const ImVec2 avail   = ImGui::GetContentRegionAvail();
-        const float  btnW    = ImGui::CalcTextSize("Show Message").x + ImGui::GetStyle().FramePadding.x * 2.0f;
-        const float  btnH    = ImGui::GetFrameHeight();
-        const float  spacing = ImGui::GetStyle().ItemSpacing.y;
-        const float  barH    = ImGui::GetFrameHeight() * 0.5f;
-        const float  totalH  = btnH + spacing + barH;
-        const float  groupY  = (avail.y - totalH) * 0.5f;
-        const float  centerX = (avail.x - btnW) * 0.5f;
-
-        // Button — centred horizontally within the group.
-        ImGui::SetCursorPos(ImVec2(centerX, groupY));
-        if (HighlightedExcelButton("Show Message")) m_pendingMsgBox = true;
-
-        // Indeterminate (marquee) progress bar — same width as the button.
-        ImGui::SetCursorPos(ImVec2(centerX - btnW, groupY + btnH + spacing));
-        ImGui::ProgressBar(-1.0f * static_cast<float>(ImGui::GetTime()), ImVec2(btnW * 3, barH / 2.0));
-
-
-        ImGui::End();
-        // --------------------------------------------------------------------
+        // Delegate all UI building to the type-erased content object.
+        m_content->renderContent();
 
         ImGui::Render();
 
-        // Clear colour matches ImGuiCol_WindowBg from SetStyleRestDark.
-        constexpr float kClearColor[] = { 0.09411765f, 0.09411765f, 0.09411765f, 1.0f };
-        m_context->OMSetRenderTargets(1, &m_rtv, nullptr);
-        m_context->ClearRenderTargetView(m_rtv, kClearColor);
+        // Clear colour matches the current theme.
+        const bool  dark     = isDarkMode();
+        const float kClear[] = {
+            dark ? 0.1608f : 1.0f,
+            dark ? 0.1608f : 1.0f,
+            dark ? 0.1608f : 1.0f,
+            1.0f
+        };
+        ImGuiWindowBase::s_d3dDevCtx->OMSetRenderTargets(1, &m_rtv, nullptr);
+        ImGuiWindowBase::s_d3dDevCtx->ClearRenderTargetView(m_rtv, kClear);
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
         m_swapChainOccluded = (m_swapChain->Present(1, 0) == DXGI_STATUS_OCCLUDED);
 
-
-        // Defer any modal dialog until AFTER Render()/Present() so that the
-        // Win32 message loop inside MessageBoxW can only trigger renderFrame()
-        // for a fresh new frame — not re-enter while a frame is still open.
-        if (m_pendingMsgBox)
-        {
-            m_pendingMsgBox = false;
-            MessageBoxW(m_hwnd,
-                        L"Hello from the ImGui task pane!",
-                        L"XLThermo",
-                        MB_OK | MB_ICONINFORMATION);
-        }
+        // Let content run deferred post-render actions (e.g. modal dialogs)
+        // while the last frame is fully presented.
+        m_content->postRender();
     }
 
     // -----------------------------------------------------------------------
@@ -456,9 +482,9 @@ private:
             GetWindowLongPtrW(hwnd, GWLP_USERDATA));
 
         // Forward to ImGui's Win32 backend before any custom handling.
-        if (self && self->m_imguiCtx)
+        if (self && self->m_ctx)
         {
-            ImGui::SetCurrentContext(self->m_imguiCtx);
+            ImGui::SetCurrentContext(self->m_ctx);
             if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wParam, lParam))
                 return TRUE;
         }

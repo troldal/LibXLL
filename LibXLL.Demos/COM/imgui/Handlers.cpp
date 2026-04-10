@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------------
 
 #include "ImGuiTaskPane.hpp"
+#include "ImGuiTaskPaneContent.hpp"
 #include "ImGuiModalWindow.hpp"
 #include "ImGuiModelessWindow.hpp"
 #include <optional>
@@ -47,8 +48,8 @@ struct ImGuiPaneTraits
 // This causes the compiler to emit the full COM class and factory in this TU.
 // ---------------------------------------------------------------------------
 
-template class TaskPaneControl<ImGuiTaskPane, ImGuiPaneTraits>;
-template class TaskPaneControlFactory<ImGuiTaskPane, ImGuiPaneTraits>;
+template class TaskPaneControl<ImGuiTaskPane<TaskPaneDemoContent>, ImGuiPaneTraits>;
+template class TaskPaneControlFactory<ImGuiTaskPane<TaskPaneDemoContent>, ImGuiPaneTraits>;
 
 // ---------------------------------------------------------------------------
 // Install COM server hooks so that DllGetClassObject, DllRegisterServer, and
@@ -57,7 +58,7 @@ template class TaskPaneControlFactory<ImGuiTaskPane, ImGuiPaneTraits>;
 // ---------------------------------------------------------------------------
 
 static const bool s_taskPaneHooked =
-    detail::registerTaskPaneHooks<ImGuiTaskPane, ImGuiPaneTraits>();
+    detail::registerTaskPaneHooks<ImGuiTaskPane<TaskPaneDemoContent>, ImGuiPaneTraits>();
 
 // ---------------------------------------------------------------------------
 // Add-in COM identity — CLSID, ProgID, friendly name, and description.
@@ -145,7 +146,7 @@ XLL_COM_EVENT onDisconnection = s_addin.on<com::Disconnection>(
 
         // Clean up GUI framework runtime on disconnect.
         g_demoWindow2.reset();
-        ImGuiTaskPane::shutdown();
+        ImGuiTaskPane<TaskPaneDemoContent>::shutdown();
     });
 
 // ---------------------------------------------------------------------------

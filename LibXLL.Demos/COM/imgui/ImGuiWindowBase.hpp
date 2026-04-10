@@ -50,6 +50,8 @@ CMRC_DECLARE(foo);
 // ---------------------------------------------------------------------------
 class ImGuiWindowBase
 {
+    template<WindowContent> friend class ImGuiTaskPane;
+
 public:
     ImGuiWindowBase(const ImGuiWindowBase&)            = delete;
     ImGuiWindowBase& operator=(const ImGuiWindowBase&) = delete;
@@ -283,6 +285,10 @@ protected:
         s_d3dDevCtx->ClearRenderTargetView(m_rtv, kClear);
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
         m_swapChainOccluded = (m_swapChain->Present(1, 0) == DXGI_STATUS_OCCLUDED);
+
+        // Let content run deferred post-render actions (e.g. modal dialogs)
+        // while the last frame is fully presented.
+        if (m_content) m_content->postRender();
 
         // Act on the close request after the frame is fully presented so
         // the last rendered frame is visible before the window closes/hides.
