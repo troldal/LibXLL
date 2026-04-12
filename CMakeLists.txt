@@ -66,26 +66,29 @@ option(IMGUI_USE_THREAD_LOCAL_CONTEXT_TLS
         "Append a thread-local GImGui override to imconfig.h at configure time"
         ON)
 
-CPMFindPackage(
-        NAME imgui
-        GIT_TAG v1.92.7-docking
-        GITHUB_REPOSITORY ocornut/imgui
-        DOWNLOAD_ONLY TRUE
+# These options are read by the community imgui CMakeLists.txt that imguiex
+# injects, so they must be set BEFORE CPMAddPackage(imguiex) processes imgui.
+set(IMGUI_EXAMPLES TRUE)
+set(IMGUI_DEMO TRUE)
+set(IMGUI_ENABLE_STDLIB_SUPPORT TRUE)
+set(IMGUI_IMPL_SDL    OFF) # We use Win32 + Direct3D backends.
+set(IMGUI_IMPL_GLFW   OFF)
+set(IMGUI_IMPL_GLUT   OFF)
+set(IMGUI_IMPL_VULKAN OFF)
+set(IMGUIEX_ENABLE_FREETYPE ON)
+
+CPMAddPackage(
+        NAME imguiex
+        GITHUB_REPOSITORY troldal/ImGuiEx
+        GIT_TAG main
 )
 
-# CMakeLists.txt from https://gist.githubusercontent.com/rokups/f771217b2d530d170db5cb1e08e9a8f4
-file(
-        DOWNLOAD
-        "https://gist.githubusercontent.com/rokups/f771217b2d530d170db5cb1e08e9a8f4/raw/4c2c14374ab878ca2f45daabfed4c156468e4e27/CMakeLists.txt"
-        "${imgui_SOURCE_DIR}/CMakeLists.txt"
-        EXPECTED_HASH SHA256=fd62f69364ce13a4f7633a9b50ae6672c466bcc44be60c69c45c0c6e225bb086
-)
-
-# Append thread-local context override to imconfig.h when ImGui is fetched.
-# The block is wrapped in #ifdef so it only takes effect when the compile
-# definition IMGUI_USE_THREAD_LOCAL_CONTEXT_TLS is set.
+# imgui is fetched by imguiex via FetchContent (not CPM), so imgui_ADDED is
+# never set.  Use imgui_SOURCE_DIR (populated globally by FetchContent) instead.
+# Append the thread-local context override to imconfig.h after imguiex has
+# populated imgui so that imgui_SOURCE_DIR is available.
 # A sentinel macro prevents duplicate appends on repeated configure runs.
-if(IMGUI_USE_THREAD_LOCAL_CONTEXT_TLS AND imgui_ADDED)
+if(IMGUI_USE_THREAD_LOCAL_CONTEXT_TLS AND imgui_SOURCE_DIR)
     set(_imconfig "${imgui_SOURCE_DIR}/imconfig.h")
     file(READ "${_imconfig}" _imconfig_content)
     if(NOT _imconfig_content MATCHES "IMGUI_TLS_CONTEXT_OVERRIDE")
@@ -107,20 +110,8 @@ if(IMGUI_USE_THREAD_LOCAL_CONTEXT_TLS AND imgui_ADDED)
     unset(_imconfig_content)
 endif()
 
-# Options
-set(IMGUI_EXAMPLES TRUE)
-set(IMGUI_DEMO TRUE)
-set(IMGUI_ENABLE_STDLIB_SUPPORT TRUE)
-set(IMGUI_IMPL_SDL OFF) # We use Win32 + Direct3D backends, so disable the SDL backend.
-set(IMGUI_IMPL_GLFW OFF) # We use Win32 + Direct3D backends, so disable the GLFW backend.
-set(IMGUI_IMPL_GLUT OFF) # We use Win32 + Direct3D backends, so disable the GLUT backend.
-set(IMGUI_IMPL_VULKAN OFF) # We use Direct3D 11, so disable the Vulkan backend.
-# FreeType disabled — Clang-CL cannot compile ftver.rc via cmcldeps
-set(IMGUI_ENABLE_FREETYPE OFF CACHE BOOL "" FORCE)
-set(FREETYPE_FOUND FALSE)
-
-# Add subdirectory
-add_subdirectory(${imgui_SOURCE_DIR} EXCLUDE_FROM_ALL SYSTEM)
+# imgui is already added by imguiex's own FetchContent + add_subdirectory —
+# do NOT call add_subdirectory again, which would create a duplicate target.
 
 
 if (WIN32)
