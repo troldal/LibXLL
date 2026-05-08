@@ -17,10 +17,10 @@ endif()
 # Fetch dependencies
 #==============================================================================
 
-if (WIN32)
-    set(CPM_FXT_SOURCE "D:/Dev/XLThermo/FXT")
+if (WIN32 OR EMSCRIPTEN)
+    set(CPM_FXT_SOURCE "C:/Dev/XLThermo/FXT")
 else ()
-    set(CPM_FXT_SOURCE "/mnt/d/Dev/XLThermo/FXT")
+    set(CPM_FXT_SOURCE "/mnt/c/Dev/XLThermo/FXT")
 endif ()
 
 CPMAddPackage(
@@ -68,7 +68,9 @@ option(IMGUI_USE_THREAD_LOCAL_CONTEXT_TLS
 
 # These options are read by the community imgui CMakeLists.txt that imguiex
 # injects, so they must be set BEFORE CPMAddPackage(imguiex) processes imgui.
-set(IMGUI_EXAMPLES TRUE)
+if(NOT EMSCRIPTEN)
+    set(IMGUI_EXAMPLES TRUE)
+endif()
 set(IMGUI_DEMO TRUE)
 set(IMGUI_ENABLE_STDLIB_SUPPORT TRUE)
 set(IMGUI_IMPL_SDL    OFF) # We use Win32 + Direct3D backends.
@@ -172,7 +174,9 @@ if (WIN32)
 endif()
 
 add_subdirectory(LibXLL.Library)
-add_subdirectory(LibXLL.COM)
+if(WIN32)
+    add_subdirectory(LibXLL.COM)
+endif()
 
 if(PROJECT_IS_TOP_LEVEL)
     option(LIBXLL_ENABLE_MOCKXL
