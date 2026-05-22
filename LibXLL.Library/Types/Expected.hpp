@@ -2218,6 +2218,59 @@ namespace xll
     }
 
     /**
+     * @brief Creates a higher-order function for extracting a value from an Expected object
+     *        with a fallback default.
+     *
+     * Returns a closure that calls the `.value_or()` member on the Expected it receives.
+     * This terminates a monadic pipeline by collapsing the Expected into a plain value —
+     * the success value if the Expected holds one, or @p default_value if it is in an
+     * error state.
+     *
+     * @tparam TDefault The type of the fallback value.  Must be convertible to the
+     *                  Expected's @c value_type.
+     *
+     * @param default_value The value to return when the Expected is in an error state.
+     *
+     * @return A higher-order function that takes an Expected object and returns
+     *         @c ex.value_or(default_value).
+     *
+     * @note This is a *terminal* operation — the returned lambda produces a plain value,
+     *       not another Expected, so it must appear as the last stage of a pipeline.
+     * @note Turning @c ex.value_or(d) into @c ex | value_or(d) keeps the pipeline style
+     *       consistent even at the point where the monad is unwrapped.
+     * @note The returned lambda uses perfect forwarding, so rvalue Expected objects are
+     *       moved rather than copied.
+     *
+     * @see Expected::value_or
+     * @see operator|
+     * @see and_then for earlier pipeline stages that stay within the Expected monad
+     *
+     * @example
+     * @code
+     * xll::Expected<xll::Number> ex = xll::Error::Value;
+     *
+     * // OOP style
+     * double v1 = ex.value_or(0.0);
+     *
+     * // Pipe style — identical semantics
+     * double v2 = ex | value_or(0.0);
+     *
+     * // Terminating a longer pipeline
+     * double result = create_expected("P")
+     *     | and_then(compute_pressure)
+     *     | value_or(xll::ErrValue);
+     * @endcode
+     */
+    template<typename TDefault>
+    [[nodiscard]]
+    constexpr auto value_or(TDefault&& default_value)
+    {
+        return [d = std::forward<TDefault>(default_value)]<typename Self>(Self&& ex) {
+            return std::forward<Self>(ex).value_or(d);
+        };
+    }
+
+    /**
      * @brief Creates a higher-order function for converting Expected objects to fxt::expected.
      *
      * This function returns a closure that converts an xll::Expected object to a fxt::expected type.
