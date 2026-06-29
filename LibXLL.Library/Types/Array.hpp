@@ -526,7 +526,7 @@ namespace xll
                 //}
             }
             else {
-                ensure(false, "xll::Array: unsupported xltype in copy constructor");
+                XLL_ENSURE(false, "xll::Array: unsupported xltype in copy constructor");
             }
         }
 
@@ -561,11 +561,11 @@ namespace xll
                     other.xltype      = xltypeNil;
                 }
                 else {
-                    ensure(false, "xll::Array: unsupported xltype in move constructor");
+                    XLL_ENSURE(false, "xll::Array: unsupported xltype in move constructor");
                 }
             }
             else {
-                ensure(false, "xll::Array: unsupported xltype in move constructor");
+                XLL_ENSURE(false, "xll::Array: unsupported xltype in move constructor");
             }
         }
 
@@ -678,11 +678,11 @@ namespace xll
                     other.xltype      = xltypeNil;
                 }
                 else {
-                    ensure(false, "xll::Array: unsupported xltype in move assignment");
+                    XLL_ENSURE(false, "xll::Array: unsupported xltype in move assignment");
                 }
             }
             else {
-                ensure(false, "xll::Array: unsupported xltype in move assignment");
+                XLL_ENSURE(false, "xll::Array: unsupported xltype in move assignment");
             }
             return *this;
         }
@@ -855,7 +855,7 @@ namespace xll
         {
             if constexpr (requires { TValue::excel_type; })
                 if (xltype == static_cast<xltype_t>(TValue::excel_type)) return static_cast<TValue*>(static_cast<XLOPER12*>(this));
-            ensure(xltype == xltypeMulti, "Array is not valid");
+            XLL_ENSURE(xltype == xltypeMulti, "Array is not valid");
             return static_cast<TValue*>(static_cast<XLOPER12*>(val.array.lparray));
         }
 
@@ -868,7 +868,7 @@ namespace xll
         {
             if constexpr (requires { TValue::excel_type; })
                 if (xltype == static_cast<xltype_t>(TValue::excel_type)) return static_cast<const TValue*>(static_cast<const XLOPER12*>(this));
-            ensure(xltype == xltypeMulti, "Array is not valid");
+            XLL_ENSURE(xltype == xltypeMulti, "Array is not valid");
             return static_cast<TValue const*>(static_cast<XLOPER12 const*>(val.array.lparray));
         }
 
@@ -881,7 +881,7 @@ namespace xll
         {
             if constexpr (requires { TValue::excel_type; })
                 if (xltype == static_cast<xltype_t>(TValue::excel_type)) return static_cast<TValue*>(static_cast<XLOPER12*>(this)) + 1;
-            ensure(xltype == xltypeMulti, "Array is not valid");
+            XLL_ENSURE(xltype == xltypeMulti, "Array is not valid");
             return static_cast<TValue*>(static_cast<XLOPER12*>(val.array.lparray)) + size();
         }
 
@@ -895,7 +895,7 @@ namespace xll
             if constexpr (requires { TValue::excel_type; })
                 if (xltype == static_cast<xltype_t>(TValue::excel_type))
                     return static_cast<const TValue*>(static_cast<const XLOPER12*>(this)) + 1;
-            ensure(xltype == xltypeMulti, "Array is not valid");
+            XLL_ENSURE(xltype == xltypeMulti, "Array is not valid");
             return static_cast<TValue const*>(static_cast<XLOPER12 const*>(val.array.lparray)) + size();
         }
 
@@ -976,7 +976,7 @@ namespace xll
         {
             using QualifiedValue = std::conditional_t<std::is_const_v<std::remove_reference_t<Self>>, const TValue, TValue>;
 
-            ensure(self.xltype == xltypeMulti || is_scalar_xltype(self.xltype), "Array is not valid");
+            XLL_ENSURE(self.xltype == xltypeMulti || is_scalar_xltype(self.xltype), "Array is not valid");
             const size_t sz = self.size();
             if (index >= sz) throw std::out_of_range("Array index out of range");
 
@@ -1016,7 +1016,7 @@ namespace xll
         {
             using QualifiedValue = std::conditional_t<std::is_const_v<std::remove_reference_t<Self>>, const TValue, TValue>;
 
-            ensure(self.xltype == xltypeMulti || is_scalar_xltype(self.xltype), "Array is not valid");
+            XLL_ENSURE(self.xltype == xltypeMulti || is_scalar_xltype(self.xltype), "Array is not valid");
 
             if constexpr (requires { TValue::excel_type; }) {
                 if (self.xltype == static_cast<xltype_t>(TValue::excel_type)) {

@@ -1021,7 +1021,7 @@ namespace xll
         [[nodiscard]]
         constexpr const TValue* operator->() const noexcept
         {
-            ensure(has_value() && "operator-> called on Expected in error state");
+            XLL_ENSURE(has_value() && "operator-> called on Expected in error state");
             // Use std::launder to get valid pointer to the TValue object created via std::construct_at
             return std::launder(reinterpret_cast<const TValue*>(this));
         }
@@ -1036,7 +1036,7 @@ namespace xll
         [[nodiscard]]
         constexpr TValue* operator->() noexcept
         {
-            ensure(has_value() && "operator-> called on Expected in error state");
+            XLL_ENSURE(has_value() && "operator-> called on Expected in error state");
             // Use std::launder to get valid pointer to the TValue object created via std::construct_at
             return std::launder(reinterpret_cast<TValue*>(this));
         }

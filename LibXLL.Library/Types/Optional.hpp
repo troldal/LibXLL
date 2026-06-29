@@ -461,7 +461,7 @@ namespace xll
         [[nodiscard]]
         constexpr auto&& operator*(this Self&& self)
         {
-            ensure(self.has_value(), "Dereferencing a disengaged xll::Optional");
+            XLL_ENSURE(self.has_value(), "Dereferencing a disengaged xll::Optional");
             using QualifiedValue = std::conditional_t<
                 std::is_const_v<std::remove_reference_t<Self>>,
                 const TValue,
@@ -477,14 +477,14 @@ namespace xll
         [[nodiscard]]
         constexpr const TValue* operator->() const noexcept
         {
-            ensure(has_value(), "operator-> called on a disengaged xll::Optional");
+            XLL_ENSURE(has_value(), "operator-> called on a disengaged xll::Optional");
             return std::launder(reinterpret_cast<const TValue*>(this));
         }
 
         [[nodiscard]]
         constexpr TValue* operator->() noexcept
         {
-            ensure(has_value(), "operator-> called on a disengaged xll::Optional");
+            XLL_ENSURE(has_value(), "operator-> called on a disengaged xll::Optional");
             return std::launder(reinterpret_cast<TValue*>(this));
         }
 

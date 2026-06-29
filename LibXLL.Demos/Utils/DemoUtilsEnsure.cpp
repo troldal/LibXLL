@@ -9,14 +9,14 @@
 void test_basic_ensure() {
     std::cout << "Testing basic ensure with valid condition...\n";
     int x = 10;
-    ensure(x > 0);
+    XLL_ENSURE(x > 0);
     std::cout << "  ✓ Passed: x > 0\n\n";
 }
 
 void test_ensure_with_message() {
     std::cout << "Testing ensure with custom message...\n";
     int balance = 100;
-    ensure(balance >= 0, "Account balance cannot be negative");
+    XLL_ENSURE(balance >= 0, "Account balance cannot be negative");
     std::cout << "  ✓ Passed: balance >= 0\n\n";
 }
 
@@ -24,7 +24,7 @@ void test_failing_ensure() {
     std::cout << "Testing failing ensure (will throw exception)...\n";
     try {
         int value = -5;
-        ensure(value >= 0, "Value must be non-negative");
+        XLL_ENSURE(value >= 0, "Value must be non-negative");
         std::cout << "  This line should not be reached\n";
     } catch (const std::runtime_error& e) {
         std::cout << "  ✓ Exception caught as expected:\n";
@@ -35,14 +35,14 @@ void test_failing_ensure() {
 void test_complex_condition() {
     std::cout << "Testing ensure with complex condition...\n";
     int x = 5, y = 10;
-    ensure(x < y && y < 20);
+    XLL_ENSURE(x < y && y < 20);
     std::cout << "  ✓ Passed: x < y && y < 20\n\n";
 }
 
 void test_pointer_check() {
     std::cout << "Testing ensure with pointer check...\n";
     int* ptr = new int(42);
-    ensure(ptr != nullptr, "Pointer must not be null");
+    XLL_ENSURE(ptr != nullptr, "Pointer must not be null");
     std::cout << "  ✓ Passed: ptr != nullptr\n";
     std::cout << "  Value: " << *ptr << "\n\n";
     delete ptr;
@@ -51,7 +51,7 @@ void test_pointer_check() {
 void test_string_comparison() {
     std::cout << "Testing ensure with string comparison...\n";
     std::string name = "Alice";
-    ensure(!name.empty(), "Name cannot be empty");
+    XLL_ENSURE(!name.empty(), "Name cannot be empty");
     std::cout << "  ✓ Passed: !name.empty()\n";
     std::cout << "  Name: " << name << "\n\n";
 }
@@ -62,7 +62,7 @@ void test_multiple_failures() {
     // Test 1: Division by zero check
     try {
         int divisor = 0;
-        ensure(divisor != 0, "Cannot divide by zero");
+        XLL_ENSURE(divisor != 0, "Cannot divide by zero");
     } catch (const std::runtime_error& e) {
         std::cout << "  ✓ Test 1 caught: " << e.what() << "\n";
     }
@@ -71,7 +71,7 @@ void test_multiple_failures() {
     try {
         int index = 100;
         int size = 10;
-        ensure(index < size, "Index out of bounds");
+        XLL_ENSURE(index < size, "Index out of bounds");
     } catch (const std::runtime_error& e) {
         std::cout << "  ✓ Test 2 caught: " << e.what() << "\n";
     }
@@ -79,7 +79,7 @@ void test_multiple_failures() {
     // Test 3: Without custom message
     try {
         bool condition = false;
-        ensure(condition);
+        XLL_ENSURE(condition);
     } catch (const std::runtime_error& e) {
         std::cout << "  ✓ Test 3 caught: " << e.what() << "\n\n";
     }

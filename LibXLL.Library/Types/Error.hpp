@@ -215,7 +215,7 @@ namespace xll
         [[nodiscard]]
         constexpr int error_index() const
         {
-            ensure(xltype == xltypeErr);
+            XLL_ENSURE(xltype == xltypeErr);
             switch (val.err) {
                 case xlerrNull:
                     return 0;
@@ -256,7 +256,7 @@ namespace xll
         [[nodiscard]]
         constexpr int error_id() const
         {
-            ensure(xltype == xltypeErr);
+            XLL_ENSURE(xltype == xltypeErr);
             return val.err;
         }
 
@@ -282,8 +282,8 @@ namespace xll
          */
         constexpr friend bool operator==(const xll::Error& lhs, const xll::Error& rhs)
         {
-            ensure(lhs.is_valid());
-            ensure(rhs.is_valid());
+            XLL_ENSURE(lhs.is_valid());
+            XLL_ENSURE(rhs.is_valid());
             return lhs.value() == rhs.value();
         }
 

@@ -161,7 +161,7 @@ namespace xll
          */
         constexpr explicit String(const XLOPER12& v) : Base()
         {
-            ensure(base_xltype(v.xltype) == xltypeStr, "XLOPER12 type not convertible to String");
+            XLL_ENSURE(base_xltype(v.xltype) == xltypeStr, "XLOPER12 type not convertible to String");
             value() = make_string(to_string(v.val.str)).release();
         }
 
@@ -182,8 +182,8 @@ namespace xll
          */
         constexpr String(const String& other) : Base() // NOLINT
         {
-            ensure(other.is_valid());
-            ensure(base_xltype(xltype) == base_xltype(other.xltype));
+            XLL_ENSURE(other.is_valid());
+            XLL_ENSURE(base_xltype(xltype) == base_xltype(other.xltype));
             value() = make_string(to_string(other.val.str)).release();
         }
 
@@ -251,9 +251,9 @@ namespace xll
         {
             if (this == &other) return *this;
 
-            ensure(is_valid());
-            ensure(other.is_valid());
-            ensure(base_xltype(xltype) == base_xltype(other.xltype));
+            XLL_ENSURE(is_valid());
+            XLL_ENSURE(other.is_valid());
+            XLL_ENSURE(base_xltype(xltype) == base_xltype(other.xltype));
 
             using xll::impl::swap;
             auto lhs = other;
@@ -339,8 +339,8 @@ namespace xll
          */
         constexpr friend String operator+(const String& lhs, const String& rhs)
         {
-            ensure(lhs.is_valid());
-            ensure(rhs.is_valid());
+            XLL_ENSURE(lhs.is_valid());
+            XLL_ENSURE(rhs.is_valid());
             const std::string result = to_string(lhs.value()) + to_string(rhs.value());
             return String(result); // NOLINT
         }
@@ -367,7 +367,7 @@ namespace xll
                      std::convertible_to<TOther, std::string>
         constexpr friend String operator+(const String& lhs, TOther&& rhs)
         {
-            ensure(lhs.is_valid());
+            XLL_ENSURE(lhs.is_valid());
             const std::string result = to_string(lhs.value()) + std::string(std::forward<TOther>(rhs));
             return String(result); // NOLINT
         }
@@ -392,7 +392,7 @@ namespace xll
                      std::convertible_to<TOther, std::string>
         constexpr friend String operator+(TOther&& lhs, const String& rhs)
         {
-            ensure(rhs.is_valid());
+            XLL_ENSURE(rhs.is_valid());
             const std::string result = std::string(std::forward<TOther>(lhs)) + to_string(rhs.value());
             return String(result); // NOLINT
         }
@@ -415,7 +415,7 @@ namespace xll
          */
         friend std::ostream& operator<<(std::ostream& os, const String& str)
         {
-            ensure(str.is_valid());
+            XLL_ENSURE(str.is_valid());
             os << to_string(str.val.str);
             return os;
         }
@@ -438,7 +438,7 @@ namespace xll
          */
         [[nodiscard]] constexpr bool empty() const
         {
-            ensure(is_valid());
+            XLL_ENSURE(is_valid());
             if (val.str == nullptr) return true;
             return val.str[0] == 0;
             //return std::wstring_view(&val.str[1]).empty();
@@ -461,7 +461,7 @@ namespace xll
          */
         [[nodiscard]] constexpr size_t size() const
         {
-            ensure(is_valid());
+            XLL_ENSURE(is_valid());
             if (val.str == nullptr) return 0;
             return static_cast<size_t>(val.str[0]);
             //return std::wstring_view(&val.str[1]).size();

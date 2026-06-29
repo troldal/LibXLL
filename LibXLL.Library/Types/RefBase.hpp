@@ -70,14 +70,14 @@ namespace xll::impl
         /// Read-only access to the i-th XLREF12 block (0-based).
         [[nodiscard]] const XLREF12& ref(WORD i = 0) const
         {
-            ensure(i < count(), "ref index out of range");
+            XLL_ENSURE(i < count(), "ref index out of range");
             return derived().ref_impl(i);
         }
 
         /// Read-write access to the i-th XLREF12 block (0-based).
         XLREF12& ref(WORD i = 0)
         {
-            ensure(i < count(), "ref index out of range");
+            XLL_ENSURE(i < count(), "ref index out of range");
             return derived().ref_impl(i);
         }
 

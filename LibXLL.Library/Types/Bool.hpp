@@ -114,7 +114,7 @@ namespace xll
          */
         constexpr friend bool operator==(const Bool& lhs, bool rhs)
         {
-            ensure(lhs.is_valid());
+            XLL_ENSURE(lhs.is_valid());
             return static_cast<bool>(lhs.value()) == rhs;
         }
     };

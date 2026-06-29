@@ -320,7 +320,7 @@ namespace xll::impl
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>>
             : Base()
         {
-            ensure(base_xltype(v.xltype) == static_cast<decltype(xltype)>(XLType), "XLOPER12 type not convertible to type");
+            XLL_ENSURE(base_xltype(v.xltype) == static_cast<decltype(xltype)>(XLType), "XLOPER12 type not convertible to type");
             xltype = v.xltype;
             val    = v.val;
         }
@@ -346,8 +346,8 @@ namespace xll::impl
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>>
             : Base()
         {
-            ensure(other.is_valid());
-            ensure(base_xltype(xltype) == base_xltype(other.xltype));
+            XLL_ENSURE(other.is_valid());
+            XLL_ENSURE(base_xltype(xltype) == base_xltype(other.xltype));
             value() = other.value();
         }
 
@@ -430,7 +430,7 @@ namespace xll::impl
             requires contains_value<ThisValueType, OtherTypes...>
         constexpr Base(const Base<TThisDerived, ThisValueType, Others...>& other) : Base()    // NOLINT
         {
-            ensure(other.is_valid());
+            XLL_ENSURE(other.is_valid());
             value() = other.template to<value_type>();
         }
 
@@ -453,9 +453,9 @@ namespace xll::impl
         constexpr Base& operator=(const Base& other) {
             if (this == &other) return *this;
 
-            ensure(is_valid());
-            ensure(other.is_valid());
-            ensure(base_xltype(xltype) == base_xltype(other.xltype));
+            XLL_ENSURE(is_valid());
+            XLL_ENSURE(other.is_valid());
+            XLL_ENSURE(base_xltype(xltype) == base_xltype(other.xltype));
 
             val = other.val;  // Simple POD copy
             return *this;
@@ -516,7 +516,7 @@ namespace xll::impl
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && std::convertible_to<TValue, value_type>
         constexpr Base& operator=(TValue v)
         {
-            ensure(is_valid());
+            XLL_ENSURE(is_valid());
             value() = v;
             return *this;
         }
@@ -548,8 +548,8 @@ namespace xll::impl
             requires contains_value<ThisValueType, OtherTypes...>
         constexpr Base& operator=(const Base<TThisDerived, ThisValueType, Others...>& v)
         {
-            ensure(is_valid());
-            ensure(v.is_valid());
+            XLL_ENSURE(is_valid());
+            XLL_ENSURE(v.is_valid());
 
             value() = v.template to<value_type>();
             return *this;
@@ -584,7 +584,7 @@ namespace xll::impl
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && (XLType != xltypeErr) && (!std::is_fundamental_v<TOther>) &&
                      (std::convertible_to<TOther, TDerived> || contains_value<TOther::excel_type, OtherTypes...>)
         {
-            ensure(lhs.is_valid());
+            XLL_ENSURE(lhs.is_valid());
             using result_t = std::common_type_t<value_type, typename TOther::value_type>;
             return static_cast<result_t>(lhs.value()) == static_cast<result_t>(rhs);
         }
@@ -613,7 +613,7 @@ namespace xll::impl
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && std::is_fundamental_v<TValue> &&
                      (XLType != xltypeErr) && std::convertible_to<TValue, value_type>
         {
-            ensure(lhs.is_valid());
+            XLL_ENSURE(lhs.is_valid());
             return lhs.value() == rhs;
         }
 
@@ -645,7 +645,7 @@ namespace xll::impl
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && (XLType != xltypeErr) && (!std::is_fundamental_v<TOther>) &&
                      (std::convertible_to<TOther, TDerived> || contains_value<TOther::excel_type, OtherTypes...>)
         {
-            ensure(lhs.is_valid());
+            XLL_ENSURE(lhs.is_valid());
             using result_t = std::common_type_t<value_type, typename TOther::value_type>;
             return static_cast<result_t>(lhs.value()) <=> static_cast<result_t>(rhs);
         }
@@ -671,7 +671,7 @@ namespace xll::impl
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && std::is_fundamental_v<TValue> &&
                      (XLType != xltypeErr) && std::convertible_to<TValue, value_type>
         {
-            ensure(lhs.is_valid());
+            XLL_ENSURE(lhs.is_valid());
             return lhs.value() <=> rhs;
         }
 
@@ -694,7 +694,7 @@ namespace xll::impl
         constexpr friend TDerived operator+(const TDerived& v)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && (XLType != xltypeErr)
         {
-            ensure(v.is_valid());
+            XLL_ENSURE(v.is_valid());
             return TDerived(+v.value());
         }
 
@@ -714,7 +714,7 @@ namespace xll::impl
         constexpr friend TDerived operator-(const TDerived& v)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && (XLType != xltypeErr)
         {
-            ensure(v.is_valid());
+            XLL_ENSURE(v.is_valid());
             return TDerived(-v.value());
         }
 
@@ -744,7 +744,7 @@ namespace xll::impl
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && (XLType != xltypeErr) && (!std::is_fundamental_v<TOther>) &&
                      (std::convertible_to<TOther, TDerived> || contains_value<TOther::excel_type, OtherTypes...>)
         {
-            ensure(lhs.is_valid());
+            XLL_ENSURE(lhs.is_valid());
             using result_t = std::common_type_t<value_type, typename TOther::value_type>;
             return TDerived(static_cast<result_t>(lhs.value()) + static_cast<result_t>(rhs));
         }
@@ -768,7 +768,7 @@ namespace xll::impl
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && std::is_fundamental_v<TValue> &&
                      (XLType != xltypeErr) && std::convertible_to<TValue, value_type>
         {
-            ensure(lhs.is_valid());
+            XLL_ENSURE(lhs.is_valid());
             using result_t = std::common_type_t<value_type, TValue>;
             return TDerived(static_cast<result_t>(lhs.value()) + static_cast<result_t>(rhs));
         }
@@ -788,7 +788,7 @@ namespace xll::impl
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && (XLType != xltypeErr) && (!std::is_fundamental_v<TOther>) &&
                      (std::convertible_to<TOther, TDerived> || contains_value<TOther::excel_type, OtherTypes...>)
         {
-            ensure(lhs.is_valid());
+            XLL_ENSURE(lhs.is_valid());
             using result_t = std::common_type_t<value_type, typename TOther::value_type>;
             return TDerived(static_cast<result_t>(lhs.value()) - static_cast<result_t>(rhs));
         }
@@ -807,7 +807,7 @@ namespace xll::impl
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && std::is_fundamental_v<TValue> &&
                      (XLType != xltypeErr) && std::convertible_to<TValue, value_type>
         {
-            ensure(lhs.is_valid());
+            XLL_ENSURE(lhs.is_valid());
             using result_t = std::common_type_t<value_type, TValue>;
             return TDerived(static_cast<result_t>(lhs.value()) - static_cast<result_t>(rhs));
         }
@@ -826,7 +826,7 @@ namespace xll::impl
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && (XLType != xltypeErr) && (!std::is_fundamental_v<TOther>) &&
                      (std::convertible_to<TOther, TDerived> || contains_value<TOther::excel_type, OtherTypes...>)
         {
-            ensure(lhs.is_valid());
+            XLL_ENSURE(lhs.is_valid());
             using result_t = std::common_type_t<value_type, typename TOther::value_type>;
             return TDerived(static_cast<result_t>(lhs.value()) * static_cast<result_t>(rhs));
         }
@@ -843,7 +843,7 @@ namespace xll::impl
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && std::is_fundamental_v<TValue> &&
                      (XLType != xltypeErr) && std::convertible_to<TValue, value_type>
         {
-            ensure(lhs.is_valid());
+            XLL_ENSURE(lhs.is_valid());
             using result_t = std::common_type_t<value_type, TValue>;
             return TDerived(static_cast<result_t>(lhs.value()) * static_cast<result_t>(rhs));
         }
@@ -863,7 +863,7 @@ namespace xll::impl
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && (XLType != xltypeErr) && (!std::is_fundamental_v<TOther>) &&
                      (std::convertible_to<TOther, TDerived> || contains_value<TOther::excel_type, OtherTypes...>)
         {
-            ensure(lhs.is_valid());
+            XLL_ENSURE(lhs.is_valid());
             using result_t = std::common_type_t<value_type, typename TOther::value_type>;
             return TDerived(static_cast<result_t>(lhs.value()) / static_cast<result_t>(rhs));
         }
@@ -882,7 +882,7 @@ namespace xll::impl
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && std::is_fundamental_v<TValue> &&
                      (XLType != xltypeErr) && std::convertible_to<TValue, value_type>
         {
-            ensure(lhs.is_valid());
+            XLL_ENSURE(lhs.is_valid());
             using result_t = std::common_type_t<value_type, TValue>;
             return TDerived(static_cast<result_t>(lhs.value()) / static_cast<result_t>(rhs));
         }
@@ -904,7 +904,7 @@ namespace xll::impl
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && (XLType != xltypeErr) && (!std::is_fundamental_v<TOther>) &&
                      (std::convertible_to<TOther, TDerived> || contains_value<TOther::excel_type, OtherTypes...>)
         {
-            ensure(is_valid());
+            XLL_ENSURE(is_valid());
             using result_t = std::common_type_t<value_type, typename TOther::value_type>;
             value()        = static_cast<result_t>(value()) + static_cast<result_t>(rhs);
             return derived();
@@ -923,7 +923,7 @@ namespace xll::impl
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && std::is_fundamental_v<TValue> &&
                      (XLType != xltypeErr) && std::convertible_to<TValue, value_type>
         {
-            ensure(is_valid());
+            XLL_ENSURE(is_valid());
             using result_t = std::common_type_t<value_type, TValue>;
             value()        = static_cast<result_t>(value()) + static_cast<result_t>(rhs);
             return derived();
@@ -940,7 +940,7 @@ namespace xll::impl
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && (XLType != xltypeErr) && (!std::is_fundamental_v<TOther>) &&
                      (std::convertible_to<TOther, TDerived> || contains_value<TOther::excel_type, OtherTypes...>)
         {
-            ensure(is_valid());
+            XLL_ENSURE(is_valid());
             using result_t = std::common_type_t<value_type, typename TOther::value_type>;
             value()        = static_cast<result_t>(value()) - static_cast<result_t>(rhs);
             return derived();
@@ -957,7 +957,7 @@ namespace xll::impl
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && std::is_fundamental_v<TValue> &&
                      (XLType != xltypeErr) && std::convertible_to<TValue, value_type>
         {
-            ensure(is_valid());
+            XLL_ENSURE(is_valid());
             using result_t = std::common_type_t<value_type, TValue>;
             value()        = static_cast<result_t>(value()) - static_cast<result_t>(rhs);
             return derived();
@@ -974,7 +974,7 @@ namespace xll::impl
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && (XLType != xltypeErr) && (!std::is_fundamental_v<TOther>) &&
                      (std::convertible_to<TOther, TDerived> || contains_value<TOther::excel_type, OtherTypes...>)
         {
-            ensure(is_valid());
+            XLL_ENSURE(is_valid());
             using result_t = std::common_type_t<value_type, typename TOther::value_type>;
             value()        = static_cast<result_t>(value()) * static_cast<result_t>(rhs);
             return derived();
@@ -991,7 +991,7 @@ namespace xll::impl
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && std::is_fundamental_v<TValue> &&
                      (XLType != xltypeErr) && std::convertible_to<TValue, value_type>
         {
-            ensure(is_valid());
+            XLL_ENSURE(is_valid());
             using result_t = std::common_type_t<value_type, TValue>;
             value()        = static_cast<result_t>(value()) * static_cast<result_t>(rhs);
             return derived();
@@ -1010,7 +1010,7 @@ namespace xll::impl
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && (XLType != xltypeErr) && (!std::is_fundamental_v<TOther>) &&
                      (std::convertible_to<TOther, TDerived> || contains_value<TOther::excel_type, OtherTypes...>)
         {
-            ensure(is_valid());
+            XLL_ENSURE(is_valid());
             using result_t = std::common_type_t<value_type, typename TOther::value_type>;
             value()        = static_cast<result_t>(value()) / static_cast<result_t>(rhs);
             return derived();
@@ -1029,7 +1029,7 @@ namespace xll::impl
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>> && std::is_fundamental_v<TValue> &&
                      (XLType != xltypeErr) && std::convertible_to<TValue, value_type>
         {
-            ensure(is_valid());
+            XLL_ENSURE(is_valid());
             using result_t = std::common_type_t<value_type, TValue>;
             value()        = static_cast<result_t>(value()) / static_cast<result_t>(rhs);
             return derived();
@@ -1065,7 +1065,7 @@ namespace xll::impl
             requires std::is_arithmetic_v<T> && std::is_arithmetic_v<std::remove_cvref_t<value_type>> &&
                      std::convertible_to<value_type, T> && (not std::same_as<T, bool>)
         {
-            ensure(is_valid());
+            XLL_ENSURE(is_valid());
             return static_cast<T>(value());
         }
 
@@ -1091,7 +1091,7 @@ namespace xll::impl
          */
         constexpr explicit operator bool() const
         {
-            ensure(is_valid());
+            XLL_ENSURE(is_valid());
             return static_cast<bool>(value());
         }
 
@@ -1118,7 +1118,7 @@ namespace xll::impl
         friend std::ostream& operator<<(std::ostream& os, const Base& v)
             requires std::is_arithmetic_v<std::remove_cvref_t<value_type>>
         {
-            ensure(v.is_valid());
+            XLL_ENSURE(v.is_valid());
             os << v.value();
             return os;
         }

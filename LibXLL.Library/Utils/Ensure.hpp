@@ -57,6 +57,6 @@ namespace xll::detail {
 
 // Public API - Use this macro for runtime assertions
 // Usage: ensure(condition) or ensure(condition, "error message")
-#define ensure(...) \
+#define XLL_ENSURE(...) \
     XLL_ENSURE_EXPAND_(XLL_ENSURE_GET_MACRO_(__VA_ARGS__)(__VA_ARGS__))
 

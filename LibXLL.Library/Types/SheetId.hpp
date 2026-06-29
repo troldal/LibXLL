@@ -105,9 +105,9 @@ namespace xll
          */
         explicit SheetId(const XLOPER12& op) : SheetId()
         {
-            ensure((op.xltype & TYPE_MASK) == xltypeRef,
+            XLL_ENSURE((op.xltype & TYPE_MASK) == xltypeRef,
                    "SheetId: source XLOPER12 is not xltypeRef");
-            ensure(op.val.mref.lpmref == nullptr,
+            XLL_ENSURE(op.val.mref.lpmref == nullptr,
                    "SheetId: source xltypeRef has a non-null lpmref — use xll::MultiRef instead");
             val.mref.idSheet = op.val.mref.idSheet;
         }
